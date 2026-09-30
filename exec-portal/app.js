@@ -1,5 +1,10 @@
 // CSS Exec Portal v0.1 — sign in, search members, view a member. Read-only.
 
+// ?mode=scanner = the stripped-down door scanner (phones open it by themselves; ?full=1 skips that)
+const PARAMS = new URLSearchParams(location.search);
+const SCANNER_MODE = PARAMS.get("mode") === "scanner";
+const FORCE_FULL = PARAMS.get("full") === "1";
+
 const state = {
   token: sessionStorage.getItem("css_token") || "",
   name: sessionStorage.getItem("css_name") || "",
@@ -129,10 +134,11 @@ function showApp() {
   $("who-name").textContent = state.name;
   $("admin-badge").hidden = state.role !== "admin";
   $("settings-tab-button").hidden = state.role !== "admin";
+  $("activity-tab-button").hidden = state.role !== "admin";
   showSearch();
   // Phones are for the door: open straight to the Door tab.
   // (The tab code loads after this file, so on first load wait until every script has run.)
-  if (!isPhone()) return $("search-input").focus();
+  if (!SCANNER_MODE && !isPhone()) return $("search-input").focus();
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", () => switchTab("door"));
   else switchTab("door");
 }
@@ -244,6 +250,11 @@ function escapeHtml(value) {
 
 // ---- Start ------------------------------------------------------------------
 
+/** A number with a label, for the summary strips on Payments and Attendees. `attention` adds an accent edge. */
+function statTile(label, value, note, attention) {
+  return `<div class="tile${attention ? " attention" : ""}"><div class="tile-num">${value}</div><div class="tile-label">${label}</div>${note ? `<div class="tile-note">${note}</div>` : ""}</div>`;
+}
+
 function fillText() {
   document.querySelectorAll("[data-t]").forEach((el) => { el.textContent = T[el.dataset.t]; });
   $("search-input").placeholder = T.searchPlaceholder;
@@ -256,7 +267,14 @@ function fillText() {
 }
 
 function start() {
+  if (isPhone() && !SCANNER_MODE && !FORCE_FULL) { location.replace("?mode=scanner"); return; }   // phones = scanner
   fillText();
+  document.body.classList.toggle("scanner-mode", SCANNER_MODE);
+  if (SCANNER_MODE) {
+    $("brand").textContent = T.scannerTitle;
+    $("full-portal-link").hidden = false;
+    document.title = T.scannerTitle;
+  }
   document.body.classList.toggle("phone", isPhone());
   if (!API_URL) {
     $("demo-banner").textContent = T.demoBanner;

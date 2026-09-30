@@ -33,6 +33,7 @@ Open the **web app URL** (README section 2) in a browser.
 | Event picture shows as a green box with the event name | The picture link is broken (file deleted/moved in Drive) | Events → Edit → upload the picture again → Save |
 | Public page stuck, then says "Something went wrong" | Google was slow or down (the page gives up after 30 s) | Reload. If it keeps happening, check the Apps Script **Executions** page for errors |
 | Ticket link in an email doesn't open | The public site moved or isn't hosted yet | Host the `public/` folder, set `PUBLIC_SITE_URL` in `exec-portal/config.js` to its address, then **Resend tickets** |
+| A volunteer's phone can't do walk-ins or see payments | That's the door scanner (phones open it on purpose) | Use the help desk laptop, or tap **Full portal** on the phone |
 | Camera won't start on the Door tab | Camera permission denied, or not https | Allow camera for the site in the browser settings, reload. Or type names/ticket IDs instead |
 | Everyone scans orange "entry is closed" | Entry wasn't opened | Door tab → tap the Entry button to open |
 | Checked in the wrong person | Human mistake | Door tab → **Recent check-ins** → **Undo** |

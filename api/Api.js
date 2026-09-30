@@ -125,7 +125,7 @@ function route_(req) {
       return updateTicket_(requireSession_(req.token), req.ticketId, req.changes, req.siteUrl, req.orderChanges);
 
     case "activityLog":
-      requireSession_(req.token);
+      requireAdmin_(req.token);
       return activityLog_(req.filters);
 
     case "getSettings":

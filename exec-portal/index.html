@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex">
   <title>CSS Exec Portal</title>
-  <link rel="stylesheet" href="styles.css?v=0.3.2">
+  <link rel="stylesheet" href="styles.css?v=0.4.0">
 </head>
 <body>
   <div id="demo-banner" class="demo-banner" hidden></div>
@@ -32,10 +32,12 @@
   <!-- Portal -->
   <div id="app-view" hidden>
     <header class="topbar">
-      <div class="brand" data-t="appTitle"></div>
+      <div class="brand" id="brand" data-t="appTitle"></div>
+      <select id="global-event" class="global-event" aria-label="Event" hidden></select>
       <div class="who">
         <span class="muted" data-t="signedInAs"></span> <strong id="who-name"></strong>
         <span id="admin-badge" class="pill good" data-t="roleAdmin" hidden></span>
+        <a id="full-portal-link" class="link" href="?full=1" data-t="fullPortal" hidden></a>
         <button id="logout-button" class="link" data-t="signOut"></button>
       </div>
     </header>
@@ -45,7 +47,7 @@
       <button class="tab" data-tab="events" data-t="tabEvents"></button>
       <button class="tab" data-tab="payments" data-t="tabPayments"></button>
       <button class="tab" data-tab="door" data-t="tabDoor"></button>
-      <button class="tab" data-tab="activity" data-t="tabActivity"></button>
+      <button class="tab" id="activity-tab-button" data-tab="activity" data-t="tabActivity" hidden></button>
       <button class="tab" id="settings-tab-button" data-tab="settings" data-t="tabSettings" hidden></button>
     </nav>
 
@@ -183,7 +185,8 @@
      <div id="tab-payments" hidden>
       <div class="payments-top">
         <label for="pay-event" class="visually-hidden" data-t="payEvent"></label>
-        <select id="pay-event"></select>
+        <select id="pay-event" class="tab-event-select"></select>
+        <div id="pay-tiles" class="tiles pay-tiles"></div>
         <div class="row-between">
           <p id="pay-summary" class="muted small"></p>
           <button id="add-order-button" class="secondary small-button" data-t="addOrder"></button>
@@ -201,6 +204,7 @@
       </div>
       <div id="bulk-bar" class="bulk-bar" hidden></div>
       <p id="pay-status" class="muted small" aria-live="polite"></p>
+      <div class="order-cols" aria-hidden="true"><span data-t="colOrder"></span><span data-t="colPayer"></span><span data-t="colPeople"></span><span data-t="colTotal"></span><span></span></div>
       <ul id="orders" class="results"></ul>
      </div>
      <div id="tab-door" hidden>
@@ -211,7 +215,7 @@
           <span id="live-sub" class="door-live-sub"></span>
         </div>
         <label for="door-event" class="visually-hidden" data-t="payEvent"></label>
-        <select id="door-event"></select>
+        <select id="door-event" class="tab-event-select"></select>
         <div class="row-between">
           <button id="entry-toggle" class="entry-toggle"></button>
           <span id="door-counts" class="muted small"></span>
@@ -427,17 +431,17 @@
   </dialog>
 
   <script src="config.js?v=0.2.4"></script>
-  <script src="strings.js?v=0.3.2"></script>
+  <script src="strings.js?v=0.4.2"></script>
   <script src="mock.js?v=0.2.4"></script>
-  <script src="app.js?v=0.3.2"></script>
-  <script src="events.js?v=0.3.2"></script>
-  <script src="payments.js?v=0.3.1"></script>
+  <script src="app.js?v=0.4.0"></script>
+  <script src="events.js?v=0.4.0"></script>
+  <script src="payments.js?v=0.4.1"></script>
   <script src="edit.js?v=0.3.0"></script>
   <script src="finance.js?v=0.3.1"></script>
   <script src="activity.js?v=0.3.2"></script>
   <script src="settings.js?v=0.3.2"></script>
-  <script src="attendees.js?v=0.3.0"></script>
+  <script src="attendees.js?v=0.4.0"></script>
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
-  <script src="door.js?v=0.3.0"></script>
+  <script src="door.js?v=0.4.1"></script>
 </body>
 </html>

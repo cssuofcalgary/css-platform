@@ -36,7 +36,8 @@ function renderDoor() {
   $("live-inside").textContent = d.counts.checkedIn;
   $("live-total").textContent = d.counts.paid;
   $("live-sub").textContent = d.counts.awaiting ? T.liveNotPaid(d.counts.awaiting) : "";
-  $("entry-toggle").textContent = d.event.entryOpen ? T.entryOpen : T.entryClosed;
+  $("entry-toggle").textContent = SCANNER_MODE ? (d.event.entryOpen ? T.entryOpenPlain : T.entryClosedPlain)
+    : d.event.entryOpen ? T.entryOpen : T.entryClosed;
   $("door-counts").textContent = T.doorCounts(d.counts.checkedIn, d.counts.paid, d.counts.awaiting);
 
   const unpaid = d.tickets.filter((t) => t.status === "awaiting");
@@ -61,6 +62,7 @@ function renderDoor() {
 function personRow(t, showPay) {
   const answers = Object.entries(t.answers || {}).map(([k, v]) => `${escapeHtml(k)}: ${escapeHtml(v)}`).join(" · ");
   const action = t.checkedInAt ? `<span class="pill good">✓ ${escapeHtml(T.insideMark(shortTime(t.checkedInAt)))}</span>`
+    : SCANNER_MODE && (t.status === "awaiting" || t.flag) ? `<span class="pill warn">${T.sendToDesk}</span>`   // the scanner never lets these in
     : t.status === "awaiting"
       ? (showPay ? `<button class="primary small-button" data-pay="${t.orderId}">${T.markPaidShort(money(t.orderTotal))}</button>` : "")
       : `<button class="primary small-button" data-checkin="${t.id}">${T.checkIn}</button>`;
@@ -276,6 +278,7 @@ async function onWalkInSubmit(ev) {
 // ---- Entry open / closed --------------------------------------------------------------
 
 async function toggleEntry() {
+  if (SCANNER_MODE) return;   // opening and closing entry is for the help desk
   const open = !doorState.data.event.entryOpen;
   if (!open && !confirm(T.confirmCloseEntry)) return;
   $("entry-toggle").disabled = true;

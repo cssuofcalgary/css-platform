@@ -34,7 +34,7 @@ async function loadAttendees() {
 function renderSummary() {
   const d = attState.data;
   const t = d.totals;
-  const tile = (label, value, note) => `<div class="tile"><div class="tile-num">${value}</div><div class="tile-label">${label}</div>${note ? `<div class="tile-note">${note}</div>` : ""}</div>`;
+  const tile = statTile;
   const cap = d.event.capacity ? ` / ${d.event.capacity}` : "";
   $("detail-tiles").innerHTML = [
     tile(T.tileRegistered, t.registered),

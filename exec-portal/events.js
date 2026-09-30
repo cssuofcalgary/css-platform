@@ -1,5 +1,7 @@
 // CSS Exec Portal — Events tab: list, create, edit, publish.
 
+let globalEventId = "";   // the event every tab is looking at (desktop picker in the top bar)
+
 const eventsState = { events: [], editing: null, loaded: false, showArchived: false };
 
 // ---- Tabs -------------------------------------------------------------------
@@ -31,6 +33,32 @@ async function loadEvents() {
   eventsState.counts = reply.counts || {};
   eventsState.loaded = true;
   renderEvents();
+  renderGlobalEvent();
+}
+
+/** One event picker in the top bar (wide screens) that Payments and Door both follow. */
+function renderGlobalEvent() {
+  const events = activeEvents();
+  const select = $("global-event");
+  select.hidden = !events.length;
+  if (!events.length) return;
+  if (!globalEventId || !events.some((e) => e.id === globalEventId)) {
+    const today = new Date().toISOString().slice(0, 10);
+    const next = events.filter((e) => e.date >= today).sort((a, b) => a.date.localeCompare(b.date))[0];
+    globalEventId = (next || events[0]).id;
+    payState.eventId = globalEventId;
+    doorState.eventId = globalEventId;
+  }
+  select.innerHTML = events.map((e) =>
+    `<option value="${e.id}" ${e.id === globalEventId ? "selected" : ""}>${escapeHtml(e.name)} (${escapeHtml(e.date)})</option>`).join("");
+}
+
+function onGlobalEventChange() {
+  globalEventId = $("global-event").value;
+  payState.eventId = globalEventId;
+  doorState.eventId = globalEventId;
+  if (!$("tab-payments").hidden) openPaymentsTab();
+  if (!$("tab-door").hidden) openDoorTab();
 }
 
 /** Events the day-to-day tabs should offer (not drafts, not archived). */
@@ -336,6 +364,7 @@ function publicLink(e) {
 // ---- Wire up ----------------------------------------------------------------
 
 document.querySelectorAll(".tab").forEach((b) => b.addEventListener("click", () => switchTab(b.dataset.tab)));
+$("global-event").addEventListener("change", onGlobalEventChange);
 $("new-event-button").addEventListener("click", () => openEditor(null));
 $("toggle-archived").addEventListener("click", () => { eventsState.showArchived = !eventsState.showArchived; renderEvents(); });
 $("editor-back-button").addEventListener("click", showEventsList);

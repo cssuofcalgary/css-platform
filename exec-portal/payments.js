@@ -50,6 +50,7 @@ function renderOrders() {
   });
   $("pay-status").textContent = list.length ? T.orderCount(list.length) : T.noOrders;
   $("orders").innerHTML = list.map(orderCard).join("");
+  renderPayTiles();
   renderFinanceExtras(list);
 }
 
@@ -58,33 +59,46 @@ function orderCard(o) {
   const statusClass = { awaiting: "warn", paid: "good" }[o.status] || "neutral";
   return `
     <li class="card order" data-order="${o.id}">
-      <div class="order-head">
+      <div class="o-code">
         <span class="order-code">${o.status === "awaiting" ? `<input type="checkbox" class="pick" data-pick="${o.id}" ${payState.selected.has(o.id) ? "checked" : ""} aria-label="${T.pickOrder}"> ` : ""}${escapeHtml(o.code)}</span>
-        <span><span class="pill ${statusClass}">${statusText}</span> <span class="order-total">${money(o.total)}</span></span>
+        <span class="o-when">${T.registered} ${escapeHtml(shortTime(o.createdAt))}</span>
       </div>
-      <div class="order-meta">
+      <div class="o-who order-meta">
         <span><strong>${escapeHtml(o.payerName)}</strong> · ${escapeHtml(o.payerEmail)}</span>
         ${o.etransferName ? `<span>${T.etransferNameLabel}: <strong>${escapeHtml(o.etransferName)}</strong></span>` : ""}
-        <span>${T.registered} ${escapeHtml(shortTime(o.createdAt))}</span>
         ${o.status === "paid" && o.paidBy ? `<span>${escapeHtml(T.paidByLabel(o.paidBy, shortTime(o.paidAt)))}</span>` : ""}
         ${o.notes ? `<span>${escapeHtml(o.notes)}</span>` : ""}
       </div>
-      <ul class="order-tickets">${o.tickets.map((t) => `
+      <ul class="order-tickets o-tickets">${o.tickets.map((t) => `
         <li>${escapeHtml(t.name)} · ${escapeHtml(t.ticketType)} ${money(t.price)}
           ${t.ucid ? ` · UCID ${escapeHtml(t.ucid)}` : ""}${t.memberId ? ` · ${escapeHtml(t.memberId)}` : ""}
           ${Object.entries(t.answers || {}).map(([k, v]) => ` · ${escapeHtml(k)}: ${escapeHtml(v)}`).join("")}
           ${t.status === "paid" ? ` · <a class="link" target="_blank" rel="noopener" href="${ticketUrl(t)}">${T.openTicket}</a>` : ""}
           ${t.status === "paid" || t.status === "awaiting" ? ` · <button class="link" data-edit-ticket="${t.id}">${T.editPerson}</button>` : ""}
-          ${t.checkedInAt ? ` · ✅ ${T.checkedInMark}` : ""}${t.emailedAt && !t.emailedAt.startsWith("test") ? ` · ✉ ${T.emailedMark}` : ""}
-          ${t.flag ? `<br><span class="flag">⚠ ${escapeHtml(t.flag)}</span>` : ""}</li>`).join("")}
+          ${t.checkedInAt ? ` · ${T.checkedInMark}` : ""}${t.emailedAt && !t.emailedAt.startsWith("test") ? ` · ${T.emailedMark}` : ""}
+          ${t.flag ? `<br><span class="flag">${escapeHtml(t.flag)}</span>` : ""}</li>`).join("")}
       </ul>
-      <div class="order-actions">
+      <div class="o-total"><span class="order-total">${money(o.total)}</span><span class="pill ${statusClass}">${statusText}</span></div>
+      <div class="order-actions o-actions">
         ${o.status === "awaiting" ? `<button class="primary" data-act="paid">${T.markPaid(money(o.total))}</button>` : ""}
         ${o.status === "paid" ? `<button class="link" data-act="resend">${T.resend}</button>` : ""}
         ${o.status === "paid" || o.status === "awaiting" ? `<button class="link danger" data-act="refund">${T.refund}</button>` : ""}
         <span class="order-result"></span>
       </div>
     </li>`;
+}
+
+/** The four numbers Finance looks at first. */
+function renderPayTiles() {
+  const d = payState.data;
+  const awaiting = d.orders.filter((o) => o.status === "awaiting").length;
+  const overdue = d.orders.filter(isOverdue).length;
+  const cap = d.event.capacity ? ` / ${d.event.capacity}` : "";
+  $("pay-tiles").innerHTML =
+    statTile(T.tileReceived, money(d.money.received), T.tilePaidCount(d.spotsTaken)) +
+    statTile(T.tileStillToCome, money(d.money.awaiting), T.tileOrdersAwaiting(awaiting)) +
+    statTile(T.tileOverdue, overdue, T.tileOverdueNote(d.reminderHours || 48), overdue > 0) +
+    statTile(T.tileSpots, `${d.spotsTaken}${cap}`, d.event.capacity ? T.tileSpotsNote(Math.max(d.event.capacity - d.spotsTaken, 0)) : "");
 }
 
 function editTicket(button) {

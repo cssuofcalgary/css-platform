@@ -335,3 +335,97 @@ body.phone .door-live-num { font-size: 36px; }
 .att-sort { width: auto; padding: 8px 10px; }
 .att { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; padding: 12px 14px; }
 .att .sub { font-size: 13px; color: var(--muted); overflow-wrap: anywhere; }
+
+/* ---- Orders: a stacked card on small screens, a table row on wide ones ---- */
+:root { --order-cols: 150px minmax(0, 1.1fr) minmax(0, 1.6fr) 120px minmax(150px, auto); }
+.order { grid-template-columns: 1fr auto; grid-template-areas: "code total" "who who" "tickets tickets" "actions actions"; align-items: start; }
+.o-code { grid-area: code; }
+.o-who { grid-area: who; }
+.o-tickets { grid-area: tickets; }
+.o-total { grid-area: total; display: flex; gap: 10px; align-items: center; justify-content: flex-end; }
+.o-actions { grid-area: actions; }
+.o-when { display: block; font-size: 12px; color: var(--muted); }
+.order-cols { display: none; }
+.tile.attention { border-left: 3px solid var(--accent); }
+.pay-tiles { margin: 4px 0 6px; }
+
+/* ---- Door scanner mode (phones, and exec.../scanner): only what the person at the door needs ---- */
+body.scanner-mode .tabs,
+body.scanner-mode #walkin-button,
+body.scanner-mode #unpaid-box,
+body.scanner-mode #flagged-box,
+body.scanner-mode .global-event { display: none !important; }
+body.scanner-mode .door-buttons { grid-template-columns: 1fr; }
+body.scanner-mode .entry-toggle { pointer-events: none; }
+body.scanner-mode .content { max-width: 520px; }
+.global-event { display: none; }
+
+/* ---- Wide screens: sidebar + dashboard ---- */
+@media (min-width: 960px) {
+  body:not(.scanner-mode) #app-view {
+    display: grid;
+    grid-template-columns: 210px minmax(0, 1fr);
+    grid-template-rows: auto 1fr;
+    min-height: 100vh;
+  }
+  body:not(.scanner-mode) #app-view > .topbar { grid-column: 1 / -1; flex-wrap: nowrap; gap: 16px; padding: 10px 24px; }
+  body:not(.scanner-mode) #app-view > .tabs {
+    flex-direction: column;
+    max-width: none;
+    margin: 0;
+    padding: 16px 12px;
+    gap: 2px;
+    overflow: visible;
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+  }
+  body:not(.scanner-mode) .tab {
+    text-align: left;
+    padding: 9px 12px;
+    border-bottom: 0;
+    border-left: 3px solid transparent;
+    border-radius: 8px;
+  }
+  body:not(.scanner-mode) .tab:hover { background: var(--bg); }
+  body:not(.scanner-mode) .tab.active { background: var(--bg); border-left-color: var(--accent); color: var(--text); }
+  body:not(.scanner-mode) #app-view > .content { max-width: 1160px; margin: 0; width: 100%; padding: 24px 32px 56px; }
+
+  .global-event:not([hidden]) { display: block; width: auto; min-width: 280px; max-width: 460px; margin-right: auto; padding: 8px 12px; font-weight: 600; }
+  .tab-event-select { display: none; }
+  #pay-summary { display: none; }
+  #add-order-button { margin-left: auto; }
+  #tab-door { max-width: 760px; }
+
+  .tiles { grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); }
+
+  .order-cols {
+    display: grid;
+    grid-template-columns: var(--order-cols);
+    gap: 16px;
+    padding: 8px 16px 6px;
+    margin-top: 10px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--muted);
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+  }
+  #orders { gap: 0; margin-top: 0; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; background: var(--surface); }
+  #orders:empty { display: none; }
+  #orders .order {
+    grid-template-columns: var(--order-cols);
+    grid-template-areas: "code who tickets total actions";
+    gap: 16px;
+    align-items: center;
+    padding: 12px 16px;
+    border: 0;
+    border-bottom: 1px solid var(--border);
+    border-radius: 0;
+  }
+  #orders .order:last-child { border-bottom: 0; }
+  #orders .order:hover { background: var(--bg); }
+  #orders .o-total { flex-direction: column; align-items: flex-start; gap: 4px; }
+  #orders .o-actions { flex-direction: column; align-items: flex-start; gap: 4px; }
+  #orders .o-tickets li:first-child { border-top: 0; padding-top: 0; }
+  #orders .o-tickets li:last-child { padding-bottom: 0; }
+}

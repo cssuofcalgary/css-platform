@@ -64,6 +64,10 @@ The Events list shows how many people have **paid** and how many are **awaiting 
 - **Admin password only:** UCID, member ID (the membership is checked again), **ticket type** (the price and the order total change; the message tells you whether to collect or refund the difference), answers to the event's questions, the help-desk warning (clear it if it was sorted out), and the order's payer name/email, e-transfer name and notes. Everything is saved in the change log with the old and new values.
 If you see "ticket emails waiting (daily email limit)", press **Send now** later, or the next day. Gmail allows about 100 emails a day.
 
+## The portal on a laptop vs a phone
+- **Laptop or tablet (help desk, Finance):** the full portal with a menu on the left. Pick the event once at the top and Payments and Door both follow it.
+- **Phone (door volunteers):** opens the **door scanner** by itself: just the camera, how many are inside, a name search and Undo. It has no payments, walk-ins or other tabs. Anyone unpaid or flagged shows **Send to help desk**. The help desk person on a laptop deals with everything else. Address for volunteers: `…/css-platform/scanner/` (later `exec.ucalgary.ca/scanner`). A help-desk person on a phone can tap **Full portal** at the top.
+
 ## Door tab (event night)
 1. Pick the event (tonight's is picked automatically). The big number at the top is **how many are inside / how many have paid**.
 2. Tap **Entry CLOSED** to **open entry** when doors open. Scanners only let people in while it's open.
@@ -83,7 +87,7 @@ If you see "ticket emails waiting (daily email limit)", press **Send now** later
 
 No signal? Things get slow, not broken. Before the event, keep the Payments tab open or print the list.
 
-## Activity tab (everyone)
+## Activity tab (admin password only)
 A plain list of what happened, newest first: "Kevin marked TNM-4408 paid · 6:02 pm". Filter by **event**, by **person**, by kind (Payments, Door, Edits, Events, Settings), or search a code or name. Use it to settle "I paid!" or "who checked them in?".
 
 ## Settings tab (admin password only)
