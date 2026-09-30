@@ -6,39 +6,81 @@
  * each person is emailed their own ticket (a link to their ticket page + QR code).
  */
 
-/** Orders for one event, each with its tickets, newest first. */
-function listOrders_(eventId) {
+/** Waiting too long for payment? (the same rule the reminder email uses; text like "test address, not sent" counts as handled) */
+function reminderDue_(o) {
+  if (o.status !== "awaiting") return false;
+  const cutoff = Date.now() - REMINDER_AFTER_HOURS * 3600 * 1000;
+  if (new Date(o.createdAt).getTime() > cutoff) return false;
+  if (!o.remindedAt) return true;
+  const when = new Date(o.remindedAt).getTime();
+  return !isNaN(when) && when <= cutoff;
+}
+
+const ORDERS_PAGE = 50;       // orders sent per page
+const ORDERS_PAGE_MAX = 200;
+
+/**
+ * Orders for one event, newest first, ONE PAGE at a time so the screen opens fast however many there are.
+ * opts: { filter: awaiting | overdue | paid | closed | all (default awaiting), q (search text), offset, limit }.
+ * Always returns the totals for the whole event (counts, money, spots) so the tiles and filter chips are right
+ * without loading every order.
+ */
+function listOrders_(eventId, opts) {
+  opts = opts || {};
   const event = findEvent_(function (e) { return e.id === eventId; });
   if (!event) throw new ApiError_("NOT_FOUND", "Event not found.");
   const tickets = readRows_("Tickets").filter(function (t) { return t.eventId === eventId; });
-  const orders = readRows_("Orders")
-    .filter(function (o) { return o.eventId === eventId; })
-    .map(function (o) {
-      return {
-        id: o.id, code: o.code, payerName: o.payerName, payerEmail: o.payerEmail,
-        etransferName: o.etransferName, total: Number(o.total) || 0, status: o.status,
-        createdAt: o.createdAt, paidAt: o.paidAt, paidBy: o.paidBy, notes: o.notes, remindedAt: o.remindedAt || "",
-        tickets: tickets.filter(function (t) { return t.orderId === o.id; }).map(function (t) {
-          return {
-            id: t.id, name: t.name, email: t.email, ucid: t.ucid, memberId: t.memberId,
-            ticketType: t.ticketType, price: Number(t.price) || 0, answers: t.answers,
-            flag: t.flag, status: t.status, checkedInAt: t.checkedInAt, emailedAt: t.emailedAt,
-            secret: t.secret   // execs only: lets the help desk open someone's ticket page
-          };
-        })
-      };
-    })
-    .sort(function (a, b) { return String(b.createdAt).localeCompare(String(a.createdAt)); });
+  const byOrder = {};
+  tickets.forEach(function (t) { (byOrder[t.orderId] = byOrder[t.orderId] || []).push(t); });
+  const all = readRows_("Orders").filter(function (o) { return o.eventId === eventId; });
+
+  const counts = { all: all.length, awaiting: 0, overdue: 0, paid: 0, closed: 0 };
+  const money = { received: 0, awaiting: 0 };
+  all.forEach(function (o) {
+    const total = Number(o.total) || 0;
+    if (o.status === "awaiting") { counts.awaiting++; money.awaiting += total; if (reminderDue_(o)) counts.overdue++; }
+    else if (o.status === "paid") { counts.paid++; money.received += total; }
+    else counts.closed++;
+  });
+
+  const filter = ["awaiting", "overdue", "paid", "closed", "all"].indexOf(opts.filter) !== -1 ? opts.filter : "awaiting";
+  const q = String(opts.q || "").trim().toLowerCase();
+  const shown = all.filter(function (o) {
+    if (filter === "awaiting" && o.status !== "awaiting") return false;
+    if (filter === "overdue" && !reminderDue_(o)) return false;
+    if (filter === "paid" && o.status !== "paid") return false;
+    if (filter === "closed" && o.status !== "refunded" && o.status !== "cancelled") return false;
+    if (!q) return true;
+    return [o.code, o.payerName, o.payerEmail, o.etransferName].concat((byOrder[o.id] || []).map(function (t) { return t.name; }))
+      .some(function (v) { return String(v || "").toLowerCase().indexOf(q) !== -1; });
+  }).sort(function (a, b) { return String(b.createdAt).localeCompare(String(a.createdAt)); });
+
+  const offset = Math.max(0, parseInt(opts.offset, 10) || 0);
+  const limit = Math.min(ORDERS_PAGE_MAX, Math.max(1, parseInt(opts.limit, 10) || ORDERS_PAGE));
+  const page = shown.slice(offset, offset + limit).map(function (o) {
+    return {
+      id: o.id, code: o.code, payerName: o.payerName, payerEmail: o.payerEmail,
+      etransferName: o.etransferName, total: Number(o.total) || 0, status: o.status,
+      createdAt: o.createdAt, paidAt: o.paidAt, paidBy: o.paidBy, notes: o.notes, remindedAt: o.remindedAt || "",
+      tickets: (byOrder[o.id] || []).map(function (t) {
+        return {
+          id: t.id, name: t.name, email: t.email, ucid: t.ucid, memberId: t.memberId,
+          ticketType: t.ticketType, price: Number(t.price) || 0, answers: t.answers,
+          flag: t.flag, status: t.status, checkedInAt: t.checkedInAt, emailedAt: t.emailedAt,
+          secret: t.secret   // execs only: lets the help desk open someone's ticket page
+        };
+      })
+    };
+  });
 
   return {
     ok: true,
     event: { id: event.id, name: event.name, capacity: event.capacity, capacityRule: event.capacityRule,
              ticketTypes: event.ticketTypes, questions: event.questions },
-    orders: orders,
-    money: {
-      received: orders.filter(function (o) { return o.status === "paid"; }).reduce(function (s, o) { return s + o.total; }, 0),
-      awaiting: orders.filter(function (o) { return o.status === "awaiting"; }).reduce(function (s, o) { return s + o.total; }, 0)
-    },
+    orders: page,
+    filter: filter, offset: offset, total: shown.length, hasMore: offset + page.length < shown.length,
+    counts: counts,
+    money: money,
     reminderHours: REMINDER_AFTER_HOURS,
     spotsTaken: spotsTaken_(event),
     unsentEmails: tickets.filter(function (t) { return t.status === "paid" && !t.emailedAt; }).length
@@ -70,8 +112,8 @@ function markPaidLocked_(session, orderId, force) {
   }
 
   const now = new Date().toISOString();
-  updateRow_("Orders", order.id, { status: "paid", paidAt: now, paidBy: session.name });
-  tickets.forEach(function (t) { updateRow_("Tickets", t.id, { status: "paid" }); });
+  updateRow_("Orders", order.id, { status: "paid", paidAt: now, paidBy: session.name }, order._row);
+  tickets.forEach(function (t) { updateRow_("Tickets", t.id, { status: "paid" }, t._row); });
   log_(session.name, "order.paid", order.code, { total: order.total, tickets: tickets.length, overCapacity: !!force });
   return { already: false, order: order };
 }
@@ -121,14 +163,7 @@ function sendReminders_(session, eventId, dryRun) {
   const today = Utilities.formatDate(new Date(), "America/Edmonton", "yyyy-MM-dd");
   if (event.date < today) throw new ApiError_("BAD_REQUEST", "This event is over. No reminders needed.");
 
-  const cutoff = Date.now() - REMINDER_AFTER_HOURS * 3600 * 1000;
-  const isDue = function (o) {
-    if (o.status !== "awaiting") return false;
-    if (new Date(o.createdAt).getTime() > cutoff) return false;
-    if (!o.remindedAt) return true;
-    const when = new Date(o.remindedAt).getTime();
-    return !isNaN(when) && when <= cutoff;   // text like "test address, not sent" counts as already handled
-  };
+  const isDue = reminderDue_;
 
   let quota = 0;
   try { quota = MailApp.getRemainingDailyQuota(); } catch (e) { /* unknown */ }
@@ -161,7 +196,7 @@ function sendReminders_(session, eventId, dryRun) {
     if (sendReminderEmail_(event, o, mine)) sent++; else failed.push(o);
   });
   if (failed.length) {
-    withLock_(function () { failed.forEach(function (o) { updateRow_("Orders", o.id, { remindedAt: "" }); }); });
+    withLock_(function () { failed.forEach(function (o) { updateRow_("Orders", o.id, { remindedAt: "" }, o._row); }); });
   }
   log_(session.name, "reminders.send", event.id, { sent: sent, failed: failed.length });
   return { ok: true, sent: sent, failed: failed.length };
@@ -183,9 +218,9 @@ function refundOrder_(session, orderId, reason) {
     updateRow_("Orders", order.id, {
       status: newStatus,
       notes: [order.notes, newStatus + " by " + session.name + (note ? ": " + note : "")].filter(Boolean).join(" | ")
-    });
+    }, order._row);
     tickets.forEach(function (t) {
-      if (t.status === "paid" || t.status === "awaiting") updateRow_("Tickets", t.id, { status: newStatus });
+      if (t.status === "paid" || t.status === "awaiting") updateRow_("Tickets", t.id, { status: newStatus }, t._row);
     });
     log_(session.name, "order." + newStatus, order.code, { total: order.total, reason: note });
     return { ok: true, status: newStatus };
@@ -206,11 +241,11 @@ function sendPendingTicketEmails_(orderId) {
     const event = events[t.eventId];
     if (!event) return;
     if (isTestAddress_(t.email)) {
-      updateRow_("Tickets", t.id, { emailedAt: "test address, not sent" });
+      updateRow_("Tickets", t.id, { emailedAt: "test address, not sent" }, t._row);
       return;
     }
     if (sendTicketEmail_(event, t)) {
-      updateRow_("Tickets", t.id, { emailedAt: new Date().toISOString() });
+      updateRow_("Tickets", t.id, { emailedAt: new Date().toISOString() }, t._row);
       sent++;
     }
   });
@@ -225,7 +260,7 @@ function resendTickets_(session, orderId, siteUrl) {
   rememberSiteUrl_(siteUrl);
   const tickets = readRows_("Tickets").filter(function (t) { return t.orderId === orderId && t.status === "paid"; });
   if (!tickets.length) throw new ApiError_("BAD_REQUEST", "No paid tickets in this order.");
-  tickets.forEach(function (t) { updateRow_("Tickets", t.id, { emailedAt: "" }); });
+  tickets.forEach(function (t) { updateRow_("Tickets", t.id, { emailedAt: "" }, t._row); });
   const result = sendPendingTicketEmails_(orderId);
   log_(session.name, "tickets.resend", orderId, result);
   return { ok: true, emailsSent: result.sent, emailsWaiting: result.waiting };

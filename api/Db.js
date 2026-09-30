@@ -145,6 +145,12 @@ function fromCell_(column, value) {
  */
 function readRows_(name) {
   if (DB_.rows[name]) return DB_.rows[name];
+
+  // Shared cache between requests: skips opening the spreadsheet entirely. See "Table cache" below.
+  const cached = cacheableTable_(name) ? tableCacheGet_(name) : null;
+  if (cached) return (DB_.rows[name] = cached);
+  const version = cacheableTable_(name) ? tableVersion_(name) : "";   // taken BEFORE reading the sheet
+
   const sheet = table_(name);
   const values = retry_(function () { return sheet.getDataRange().getValues(); });
   const rows = [];
@@ -158,7 +164,83 @@ function readRows_(name) {
       rows.push(row);
     }
   }
+  if (version) tableCachePut_(name, version, rows);
   return (DB_.rows[name] = rows);
+}
+
+// ---- Table cache -------------------------------------------------------------------------------
+// Reading a whole tab from Sheets costs roughly half a second or more. So each table is also kept in
+// Apps Script's shared cache, under a version number. EVERY write (insertRow_ / updateRowOnce_) picks a
+// new version, which makes the old copy unreachable at once, so the next read always sees fresh data.
+// A reader takes the version before it reads the sheet, so a copy read around a write can only ever be
+// stored under the old, already-dead version. If the cache is empty, too big or fails, we just read the
+// sheet as before. The Log is never cached (it only grows and is read from the end).
+
+const TABLE_CACHE_SECONDS = 1800;   // safety net for edits made by hand in the sheet
+const TABLE_CACHE_MAX_CHARS = 2400000;
+
+function cacheableTable_(name) { return name !== "Log"; }
+
+function tableVersion_(name) {
+  try {
+    const cache = CacheService.getScriptCache();
+    let v = cache.get("dbver_" + name);
+    if (!v) { v = Utilities.getUuid().slice(0, 8); cache.put("dbver_" + name, v, 21600); }
+    return v;
+  } catch (e) { return ""; }
+}
+
+/** Called by every write: the table's cached copy is dead from this moment. */
+function bumpTableVersion_(name) {
+  if (!cacheableTable_(name)) return;
+  try {
+    const cache = CacheService.getScriptCache();
+    const old = cache.get("dbver_" + name);
+    cache.put("dbver_" + name, Utilities.getUuid().slice(0, 8), 21600);
+    if (old) cache.remove("tbl_" + name + "_" + old + "_count");
+  } catch (e) { /* the next reads just miss */ }
+}
+
+function tableCacheGet_(name) {
+  try {
+    const v = tableVersion_(name);
+    if (!v) return null;
+    const packed = cacheGetJson_(CacheService.getScriptCache(), "tbl_" + name + "_" + v);
+    if (!packed) return null;
+    return packed.map(function (p) {
+      Object.defineProperty(p[1], "_row", { value: p[0], enumerable: false });
+      return p[1];
+    });
+  } catch (e) { return null; }
+}
+
+function tableCachePut_(name, version, rows) {
+  try {
+    const packed = rows.map(function (r) { return [r._row, r]; });
+    if (JSON.stringify(packed).length > TABLE_CACHE_MAX_CHARS) return;   // too big for the cache: read the sheet each time
+    cachePutJson_(CacheService.getScriptCache(), "tbl_" + name + "_" + version, packed, TABLE_CACHE_SECONDS);
+  } catch (e) { /* caching is a bonus, never a failure */ }
+}
+
+/**
+ * One row straight from the sheet (never the cache). The door uses it to double-check a ticket right
+ * before checking someone in. Returns null if that row no longer holds this id (rows moved).
+ */
+function readRowFresh_(name, rowNumber, id) {
+  const sheet = table_(name);
+  const header = headerFor_(name);
+  const values = retry_(function () { return sheet.getRange(rowNumber, 1, 1, header.length).getValues(); })[0];
+  const row = {};
+  header.forEach(function (column, c) { if (column) row[column] = fromCell_(column, values[c]); });
+  if (String(row.id) !== String(id)) return null;
+  Object.defineProperty(row, "_row", { value: rowNumber, enumerable: false });
+  return row;
+}
+
+/** Forget every copy of a table (this request's and the shared one). */
+function dropTableCache_(name) {
+  delete DB_.rows[name];
+  bumpTableVersion_(name);
 }
 
 /** The last `count` rows of a table (newest last), without reading the whole sheet. Used for the Log, which only grows. */
@@ -180,25 +262,37 @@ function insertRow_(name, obj) {
   const sheet = table_(name);
   const header = headerFor_(name);
   delete DB_.rows[name];
-  const range = sheet.getRange(sheet.getLastRow() + 1, 1, 1, header.length);
-  range.setNumberFormat("@");   // keep "2026-10-21" and "18:00" as text, not dates
-  range.setValues([header.map(function (column) { return toCell_(column, obj[column]); })]);
+  const values = header.map(function (column) { return toCell_(column, obj[column]); });
+  try {
+    if (name === "Log") {
+      sheet.appendRow(values);   // one call; the Log's columns are plain text already
+    } else {
+      const range = sheet.getRange(sheet.getLastRow() + 1, 1, 1, header.length);
+      range.setNumberFormat("@");   // keep "2026-10-21" and "18:00" as text, not dates
+      range.setValues([values]);
+    }
+  } finally {
+    bumpTableVersion_(name);   // AFTER the write: the cached copy is now out of date
+  }
 }
 
 /**
  * Updates the row whose id matches. Only the columns in `changes` are touched.
  * `rowHint` (a row's `_row` from readRows_) skips the search, after checking the id is still there.
  */
-function updateRow_(name, id, changes, rowHint) {
-  return retry_(function () { return updateRowOnce_(name, id, changes, rowHint); });   // writing the same values twice is harmless
+function updateRow_(name, id, changes, rowHint, rowVerified) {
+  return retry_(function () { return updateRowOnce_(name, id, changes, rowHint, rowVerified); });   // writing the same values twice is harmless
 }
 
-function updateRowOnce_(name, id, changes, rowHint) {
+/** `rowVerified` = the caller has just read this row fresh from the sheet (readRowFresh_), so skip re-checking its id. */
+function updateRowOnce_(name, id, changes, rowHint, rowVerified) {
   const sheet = table_(name);
   const header = headerFor_(name);
   const idCol = header.indexOf("id");
   let row = -1;
-  if (rowHint && String(sheet.getRange(rowHint, idCol + 1).getValue()) === String(id)) {
+  if (rowHint && rowVerified) {
+    row = rowHint;
+  } else if (rowHint && String(sheet.getRange(rowHint, idCol + 1).getValue()) === String(id)) {
     row = rowHint;
   } else {
     const ids = sheet.getRange(1, idCol + 1, sheet.getLastRow(), 1).getValues();
@@ -208,6 +302,7 @@ function updateRowOnce_(name, id, changes, rowHint) {
   delete DB_.rows[name];
 
   // Write side-by-side columns in one go (e.g. checkedInAt + checkedInBy).
+  try {
   const cols = Object.keys(changes)
     .map(function (column) { return { c: header.indexOf(column), v: toCell_(column, changes[column]) }; })
     .filter(function (x) { return x.c !== -1; })
@@ -217,6 +312,9 @@ function updateRowOnce_(name, id, changes, rowHint) {
     sheet.getRange(row, cols[0].c + 1, 1, cols.length).setValues([cols.map(function (x) { return x.v; })]);
   } else {
     cols.forEach(function (x) { sheet.getRange(row, x.c + 1).setValue(x.v); });
+  }
+  } finally {
+    bumpTableVersion_(name);   // AFTER the write: the cached copy is now out of date
   }
   return true;
 }

@@ -1,6 +1,7 @@
 // CSS Exec Portal — Payments tab (Finance): match e-transfers to orders, mark paid, refund.
 
-const payState = { eventId: "", data: null, filter: "awaiting", selected: new Set() };
+const payState = { eventId: "", data: null, filter: "awaiting", q: "", selected: new Set(), timer: null };
+const ORDERS_PAGE = 50;
 
 async function openPaymentsTab() {
   if (!eventsState.loaded) await loadEvents();
@@ -17,10 +18,22 @@ async function openPaymentsTab() {
   loadOrders();
 }
 
-async function loadOrders() {
+/**
+ * One page of orders at a time (the server filters and searches). `append` = the "Show more" button.
+ * A plain reload (after an action) asks for as many as are already on screen, so the list doesn't jump back to the top.
+ */
+let ordersCounter = 0;
+async function loadOrders(append) {
+  const mine = ++ordersCounter;
+  const have = payState.data ? payState.data.orders.length : 0;
   $("pay-status").textContent = T.loadingOrders;
-  const reply = await api("listOrders", { eventId: payState.eventId });
+  const reply = await api("listOrders", {
+    eventId: payState.eventId, filter: payState.filter, q: payState.q,
+    offset: append ? have : 0, limit: append ? ORDERS_PAGE : Math.min(200, Math.max(ORDERS_PAGE, have))
+  });
+  if (mine !== ordersCounter) return;   // a newer request already started
   if (!reply.ok) return handleEventError(reply, $("pay-status"));
+  if (append && payState.data) reply.orders = payState.data.orders.concat(reply.orders);
   payState.data = reply;
   // keep only ticks for orders that are still waiting for payment
   payState.selected = new Set([...payState.selected].filter((id) => reply.orders.some((o) => o.id === id && o.status === "awaiting")));
@@ -30,7 +43,7 @@ async function loadOrders() {
 function renderOrders() {
   const data = payState.data;
   if (!data) return;
-  const awaiting = data.orders.filter((o) => o.status === "awaiting").length;
+  const awaiting = data.counts.awaiting;
   $("pay-summary").textContent = T.paySummary(data.spotsTaken, data.event.capacity ? ` / ${data.event.capacity}` : "", awaiting) +
     T.payMoney(money(data.money.received), money(data.money.received + data.money.awaiting));
 
@@ -38,17 +51,9 @@ function renderOrders() {
   $("pay-unsent").innerHTML = data.unsentEmails
     ? `<span>${T.unsentEmails(data.unsentEmails)}</span><button class="link" id="send-unsent">${T.sendNow}</button>` : "";
 
-  const q = $("pay-search").value.trim().toLowerCase();
-  const list = data.orders.filter((o) => {
-    if (payState.filter === "awaiting" && o.status !== "awaiting") return false;
-    if (payState.filter === "overdue" && !isOverdue(o)) return false;
-    if (payState.filter === "paid" && o.status !== "paid") return false;
-    if (payState.filter === "closed" && o.status !== "refunded" && o.status !== "cancelled") return false;
-    if (!q) return true;
-    return [o.code, o.payerName, o.payerEmail, o.etransferName, ...o.tickets.map((t) => t.name)]
-      .some((v) => String(v || "").toLowerCase().includes(q));
-  });
-  $("pay-status").textContent = list.length ? T.orderCount(list.length) : T.noOrders;
+  const list = data.orders;   // the server already filtered and searched
+  $("pay-status").textContent = list.length ? T.orderCountOf(list.length, data.total) : T.noOrders;
+  $("orders-more").hidden = !data.hasMore;
   $("orders").innerHTML = list.map(orderCard).join("");
   renderPayTiles();
   renderFinanceExtras(list);
@@ -91,8 +96,8 @@ function orderCard(o) {
 /** The four numbers Finance looks at first. */
 function renderPayTiles() {
   const d = payState.data;
-  const awaiting = d.orders.filter((o) => o.status === "awaiting").length;
-  const overdue = d.orders.filter(isOverdue).length;
+  const awaiting = d.counts.awaiting;
+  const overdue = d.counts.overdue;
   const cap = d.event.capacity ? ` / ${d.event.capacity}` : "";
   $("pay-tiles").innerHTML =
     statTile(T.tileReceived, money(d.money.received), T.tilePaidCount(d.spotsTaken)) +
@@ -173,13 +178,18 @@ function shortTime(iso) {
 // ---- Wire up ----------------------------------------------------------------
 
 $("pay-event").addEventListener("change", () => { payState.eventId = $("pay-event").value; loadOrders(); });
-$("pay-search").addEventListener("input", renderOrders);
+$("pay-search").addEventListener("input", () => {
+  clearTimeout(payState.timer);
+  payState.timer = setTimeout(() => { payState.q = $("pay-search").value.trim(); loadOrders(); }, 350);
+});
+$("orders-more").addEventListener("click", () => loadOrders(true));
 $("pay-filters").addEventListener("click", (e) => {
   const chip = e.target.closest(".chip");
   if (!chip) return;
   payState.filter = chip.dataset.filter;
+  payState.selected.clear();
   document.querySelectorAll("#pay-filters .chip").forEach((c) => c.classList.toggle("active", c === chip));
-  renderOrders();
+  loadOrders();
 });
 $("orders").addEventListener("click", onOrdersClick);
 $("pay-unsent").addEventListener("click", (e) => { if (e.target.id === "send-unsent") sendUnsent(); });

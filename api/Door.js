@@ -29,10 +29,20 @@ function scan_(session, eventId, code, atDesk) {
     const event = findEvent_(function (e) { return e.id === eventId; });
     if (!event) throw new ApiError_("NOT_FOUND", "Event not found.");
 
-    const ticket = readRows_("Tickets").filter(function (t) {
+    let ticket = readRows_("Tickets").filter(function (t) {
       return key.kind === "secret" ? t.secret === key.value : t.id === key.value;
     })[0];
     if (!ticket) return scanResult_("red", "Ticket not found.");
+
+    // Never trust the shared cache for the check-in decision: re-read this one ticket straight from the sheet.
+    const fresh = readRowFresh_("Tickets", ticket._row, ticket.id);
+    if (fresh) {
+      ticket = fresh;
+    } else {   // rows moved (sheet sorted by hand): drop the cache and look again
+      dropTableCache_("Tickets");
+      ticket = readRows_("Tickets").filter(function (t) { return t.id === ticket.id; })[0];
+      if (!ticket) return scanResult_("red", "Ticket not found.");
+    }
 
     const person = personView_(ticket);
     if (ticket.eventId !== event.id) {
@@ -58,7 +68,7 @@ function scan_(session, eventId, code, atDesk) {
     }
 
     const now = new Date().toISOString();
-    updateRow_("Tickets", ticket.id, { checkedInAt: now, checkedInBy: session.name }, ticket._row);
+    updateRow_("Tickets", ticket.id, { checkedInAt: now, checkedInBy: session.name }, ticket._row, true);   // row was just read fresh
     log_(session.name, atDesk ? "checkin.desk" : "checkin", ticket.id, { name: ticket.name, flag: ticket.flag || "" });
     return scanResult_("green", ticket.flag ? "Checked in at the help desk." : "Checked in. Welcome!", person);
   });
@@ -117,43 +127,75 @@ function walkIn_(session, eventId, input) {
   });
 }
 
-/** Exec: everything the door needs for one event. */
-function doorList_(eventId, session) {
+const DOOR_LIST_CAP = 100;       // unpaid / needs-checking people sent with the list
+const DOOR_RECENT = 10;
+const DOOR_SEARCH_MAX = 20;
+
+/**
+ * Exec: what the door screen needs, kept small: the counts for the whole event, the people who still need the
+ * help desk (not paid / flagged, up to DOOR_LIST_CAP each) and the latest check-ins. The full guest list is NOT
+ * sent (scans don't need it). `q` (typed search) returns up to 20 matches in `matches`.
+ */
+function doorList_(eventId, session, opts) {
+  opts = opts || {};
   const event = findEvent_(function (e) { return e.id === eventId; });
   if (!event) throw new ApiError_("NOT_FOUND", "Event not found.");
   const doorOnly = !!session && session.role === "door";
   if (doorOnly && !event.entryOpen) throw new ApiError_("DOOR_CLOSED", DOOR_CLOSED_TEXT);
   const orders = {};
   readRows_("Orders").forEach(function (o) { if (o.eventId === eventId) orders[o.id] = o; });
-  const tickets = readRows_("Tickets")
-    .filter(function (t) { return t.eventId === eventId && t.status !== "cancelled" && t.status !== "refunded"; })
-    .map(function (t) {
-      const order = orders[t.orderId] || {};
-      if (doorOnly) {   // a door volunteer sees who is coming and who is inside, not payment details or answers
-        return { id: t.id, name: t.name, ticketType: t.ticketType, status: t.status, flag: t.flag ? "see help desk" : "", checkedInAt: t.checkedInAt, checkedInBy: t.checkedInBy };
-      }
-      return {
-        id: t.id, secret: t.secret, name: t.name, ticketType: t.ticketType, status: t.status, flag: t.flag,
-        checkedInAt: t.checkedInAt, checkedInBy: t.checkedInBy, answers: t.answers,
-        orderId: t.orderId, orderCode: order.code, orderTotal: Number(order.total) || 0,
-        payerName: order.payerName, etransferName: order.etransferName
-      };
-    })
-    .sort(function (a, b) { return a.name.localeCompare(b.name); });
+  const active = readRows_("Tickets")
+    .filter(function (t) { return t.eventId === eventId && t.status !== "cancelled" && t.status !== "refunded"; });
 
-  return {
+  const view = function (t) {
+    const order = orders[t.orderId] || {};
+    if (doorOnly) {   // a door volunteer sees who is coming and who is inside, not payment details or answers
+      return { id: t.id, name: t.name, ticketType: t.ticketType, status: t.status, flag: t.flag ? "see help desk" : "", checkedInAt: t.checkedInAt, checkedInBy: t.checkedInBy };
+    }
+    return {
+      id: t.id, secret: t.secret, name: t.name, ticketType: t.ticketType, status: t.status, flag: t.flag,
+      checkedInAt: t.checkedInAt, checkedInBy: t.checkedInBy, answers: t.answers,
+      orderId: t.orderId, orderCode: order.code, orderTotal: Number(order.total) || 0,
+      payerName: order.payerName, etransferName: order.etransferName
+    };
+  };
+  const byName = function (a, b) { return a.name.localeCompare(b.name); };
+
+  const unpaid = active.filter(function (t) { return t.status === "awaiting"; });
+  const flagged = active.filter(function (t) { return t.status === "paid" && t.flag && !t.checkedInAt; });
+  const inside = active.filter(function (t) { return t.checkedInAt; });
+  const recent = inside.slice().sort(function (a, b) { return String(b.checkedInAt).localeCompare(String(a.checkedInAt)); }).slice(0, DOOR_RECENT);
+
+  // the small lists, each person once
+  const seen = {}, tickets = [];
+  unpaid.slice(0, DOOR_LIST_CAP).concat(flagged.slice(0, DOOR_LIST_CAP), recent).forEach(function (t) {
+    if (!seen[t.id]) { seen[t.id] = true; tickets.push(view(t)); }
+  });
+  tickets.sort(byName);
+
+  const reply = {
     ok: true,
     event: { id: event.id, name: event.name, entryOpen: event.entryOpen, ticketTypes: event.ticketTypes },
     tickets: tickets,
     counts: {
-      paid: tickets.filter(function (t) { return t.status === "paid"; }).length,
-      checkedIn: tickets.filter(function (t) { return t.checkedInAt; }).length,
-      awaiting: tickets.filter(function (t) { return t.status === "awaiting"; }).length
+      paid: active.filter(function (t) { return t.status === "paid"; }).length,
+      checkedIn: inside.length,
+      awaiting: unpaid.length,
+      flagged: flagged.length
     }
   };
+
+  const q = String(opts.q || "").trim().toLowerCase();
+  if (q.length >= 2) {
+    reply.matches = active.filter(function (t) {
+      const o = orders[t.orderId] || {};
+      return doorOnly ? String(t.name).toLowerCase().indexOf(q) !== -1
+        : [t.name, o.code, o.payerName, o.etransferName].some(function (v) { return String(v || "").toLowerCase().indexOf(q) !== -1; });
+    }).sort(function (a, b) { return a.name.localeCompare(b.name); }).slice(0, DOOR_SEARCH_MAX).map(view);
+  }
+  return reply;
 }
 
-// ---- Door-only sign-in --------------------------------------------------------------------
 // A door volunteer signs in on the scanner page with just their name (plus the door password,
 // if the admin set one in Settings). It only works while at least one event has entry open, and it
 // can only scan, undo a check-in, and see the open events. Closing entry locks it out again.
@@ -182,6 +224,7 @@ function loginDoor_(password, name) {
     }
   }
   if (!entryOpenEvents_().length) throw new ApiError_("DOOR_CLOSED", DOOR_CLOSED_TEXT);
+  warmCaches_(true);
   return { ok: true, token: startSession_(who, "door"), name: who, role: "door" };
 }
 

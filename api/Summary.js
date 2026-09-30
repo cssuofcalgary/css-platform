@@ -6,7 +6,15 @@
  * 18 Taro") and the full attendee list. Read-only.
  */
 
-function eventSummary_(eventId) {
+const ATTENDEES_PAGE = 50;
+const ATTENDEES_PAGE_MAX = 500;
+
+/**
+ * opts: { filter, q, sort (name|type|newest), offset, limit, full }. The numbers always cover the whole
+ * event; `attendees` is ONE PAGE of the filtered list (`full: true` = everyone, for the spreadsheet download).
+ */
+function eventSummary_(eventId, opts) {
+  opts = opts || {};
   const event = findEvent_(function (e) { return e.id === eventId; });
   if (!event) throw new ApiError_("NOT_FOUND", "Event not found.");
 
@@ -52,7 +60,7 @@ function eventSummary_(eventId) {
     return { label: q.label, type: q.type, answers: answers.slice(0, 60) };
   });
 
-  const attendees = all.map(function (t) {
+  const everyone = all.map(function (t) {
     const o = orders[t.orderId] || {};
     return {
       id: t.id, name: t.name, email: t.email, ucid: t.ucid, memberId: t.memberId,
@@ -64,7 +72,34 @@ function eventSummary_(eventId) {
         payerName: o.payerName, payerEmail: o.payerEmail, etransferName: o.etransferName, notes: o.notes
       }
     };
-  }).sort(function (a, b) { return a.name.localeCompare(b.name); });
+  });
+
+  const closedStatus = function (t) { return t.status === "refunded" || t.status === "cancelled"; };
+  const matchesFilter = function (a) {
+    switch (opts.filter) {
+      case "paid": return a.status === "paid";
+      case "awaiting": return a.status === "awaiting";
+      case "inside": return !!a.checkedInAt && !closedStatus(a);
+      case "notArrived": return a.status === "paid" && !a.checkedInAt;
+      case "flagged": return !!a.flag && !closedStatus(a);
+      case "closed": return closedStatus(a);
+      case "all": return true;
+      default: return !closedStatus(a);   // "active"
+    }
+  };
+  const q = String(opts.q || "").trim().toLowerCase();
+  const sorters = {
+    name: function (a, b) { return a.name.localeCompare(b.name); },
+    type: function (a, b) { return a.ticketType.localeCompare(b.ticketType) || a.name.localeCompare(b.name); },
+    newest: function (a, b) { return String(b.createdAt).localeCompare(String(a.createdAt)); }
+  };
+  const matching = everyone.filter(matchesFilter).filter(function (a) {
+    return !q || [a.name, a.email, a.ucid, a.memberId, a.order.code, a.order.etransferName, a.order.payerName]
+      .some(function (v) { return String(v || "").toLowerCase().indexOf(q) !== -1; });
+  }).sort(sorters[opts.sort] || sorters.name);
+  const offset = opts.full ? 0 : Math.max(0, parseInt(opts.offset, 10) || 0);
+  const limit = opts.full ? matching.length : Math.min(ATTENDEES_PAGE_MAX, Math.max(1, parseInt(opts.limit, 10) || ATTENDEES_PAGE));
+  const attendees = matching.slice(offset, offset + limit);
 
   const taken = spotsTaken_(event);
   return {
@@ -87,6 +122,7 @@ function eventSummary_(eventId) {
     money: { received: received, awaiting: waiting },
     byType: byType,
     questions: questions,
-    attendees: attendees
+    attendees: attendees,
+    attTotal: matching.length, attOffset: offset, attHasMore: offset + attendees.length < matching.length
   };
 }

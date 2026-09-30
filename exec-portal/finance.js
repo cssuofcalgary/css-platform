@@ -17,7 +17,7 @@ function isOverdue(o) {
 
 function renderFinanceExtras(shown) {
   const data = payState.data;
-  const overdue = data.orders.filter(isOverdue).length;
+  const overdue = data.counts.overdue;
   const chip = document.querySelector('#pay-filters [data-filter="overdue"]');
   chip.textContent = T.filterOverdue(overdue);
 

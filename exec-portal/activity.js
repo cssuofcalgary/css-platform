@@ -14,7 +14,7 @@ async function loadActivity() {
   const mine = ++actState.counter;
   $("act-status").textContent = T.actLoading;
   const reply = await api("activityLog", { filters: {
-    eventId: $("act-event").value, who: $("act-who").value, group: actState.group, query: $("act-search").value
+    eventId: $("act-event").value, who: $("act-who").value, group: actState.group, query: $("act-search").value, limit: Number($("act-limit").value)
   } });
   if (mine !== actState.counter) return;   // a newer request already started
   if (!reply.ok) return handleEventError(reply, $("act-status"));
@@ -38,6 +38,7 @@ async function loadActivity() {
 
 $("act-event").addEventListener("change", loadActivity);
 $("act-who").addEventListener("change", loadActivity);
+$("act-limit").addEventListener("change", loadActivity);
 $("act-search").addEventListener("input", () => { clearTimeout(actState.timer); actState.timer = setTimeout(loadActivity, 350); });
 $("act-groups").addEventListener("click", (e) => {
   const chip = e.target.closest(".chip");

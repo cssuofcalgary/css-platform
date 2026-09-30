@@ -5,7 +5,8 @@
  * sentence ("Kevin marked MGN-4408 paid") so disputes ("I paid!") are quick to settle.
  */
 
-const ACTIVITY_MAX = 300;
+const ACTIVITY_DEFAULT = 50;
+const ACTIVITY_LIMITS = [50, 100, 200];   // what the "show" dropdown offers
 
 /** Groups the filter chips use. */
 const ACTIVITY_GROUPS = {
@@ -32,6 +33,7 @@ function activityLog_(filters) {
   readRows_("Orders").forEach(function (o) { byOrderCode[o.code] = o.eventId; });
 
   // Newest rows are at the bottom of the sheet; read from the end, up to a generous cap
+  const max = ACTIVITY_LIMITS.indexOf(Number(filters.limit)) !== -1 ? Number(filters.limit) : ACTIVITY_DEFAULT;
   const rows = readLastRows_("Log", 2000).reverse();
   const q = String(filters.query || "").trim().toLowerCase();
   const out = [];
@@ -46,10 +48,10 @@ function activityLog_(filters) {
     if (filters.group && filters.group !== "all" && group !== filters.group) return;
     const summary = activitySummary_(r, events);
     if (q && (summary + " " + r.target + " " + r.who).toLowerCase().indexOf(q) === -1) return;
-    if (out.length < ACTIVITY_MAX) out.push({ time: r.time, who: r.who, action: r.action, group: group, target: r.target, eventId: eventId, summary: summary });
+    if (out.length < max) out.push({ time: r.time, who: r.who, action: r.action, group: group, target: r.target, eventId: eventId, summary: summary });
   });
 
-  return { ok: true, entries: out, people: Object.keys(people).sort(), truncated: out.length >= ACTIVITY_MAX };
+  return { ok: true, entries: out, people: Object.keys(people).sort(), truncated: out.length >= max };
 }
 
 function activitySummary_(r, events) {

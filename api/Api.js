@@ -107,7 +107,7 @@ function route_(req) {
 
     case "listOrders":
       requireSession_(req.token);
-      return listOrders_(req.eventId);
+      return listOrders_(req.eventId, req);
 
     case "markOrderPaid":
       return markOrderPaid_(requireSession_(req.token), req.orderId, !!req.force, req.siteUrl);
@@ -187,13 +187,13 @@ function route_(req) {
 
     case "eventSummary":
       requireSession_(req.token);
-      return eventSummary_(req.eventId);
+      return eventSummary_(req.eventId, req);
 
     case "walkIn":
       return walkIn_(requireSession_(req.token), req.eventId, req.walkIn);
 
     case "doorList":
-      return doorList_(req.eventId, requireSession_(req.token));
+      return doorList_(req.eventId, requireSession_(req.token), req);
 
     default:
       throw new ApiError_("UNKNOWN_ACTION", "Unknown action: " + req.action);
@@ -224,7 +224,16 @@ function login_(password, name) {
   const who = String(name || "").trim().slice(0, 60);
   if (!who) throw new ApiError_("NAME_NEEDED", "Pick your name.");
 
+  warmCaches_(false);   // sign-in may take a moment longer; every screen after it is quick
   return { ok: true, token: startSession_(who, role), name: who, role: role };
+}
+
+/** Reads the tables into the shared cache now, so the first click after signing in is not the slow one. */
+function warmCaches_(doorOnly) {
+  try {
+    readRows_("Events"); readRows_("Tickets"); readRows_("Orders");
+    if (!doorOnly) loadMembers_();
+  } catch (err) { /* warming is a bonus: never block signing in */ }
 }
 
 /** A new signed-in session. It carries the current "epoch"; signing everyone out changes the epoch. */

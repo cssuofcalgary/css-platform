@@ -40,7 +40,8 @@ function loadMembers_() {
 const CACHE_CHUNK_SIZE = 90000;
 
 function cachePutJson_(cache, key, value, seconds) {
-  const text = JSON.stringify(value);
+  // Escape non-ASCII (e.g. Chinese names) so each 90,000-character chunk stays under the cache's 100 KB limit.
+  const text = JSON.stringify(value).replace(/[^ -~]/g, function (c) { return String.fromCharCode(92) + "u" + ("0000" + c.charCodeAt(0).toString(16)).slice(-4); });
   const chunks = {};
   let count = 0;
   for (let i = 0; i < text.length; i += CACHE_CHUNK_SIZE) {

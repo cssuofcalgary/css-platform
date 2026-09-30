@@ -1,6 +1,6 @@
 // CSS Exec Portal — Door tab: scan tickets, walk-ins, help-desk lists.
 
-const doorState = { eventId: "", data: null, scanner: null, lastCode: "", lastAt: 0, busy: false, refreshTimer: null };
+const doorState = { eventId: "", data: null, matches: [], scanner: null, lastCode: "", lastAt: 0, busy: false, refreshTimer: null };
 
 async function openDoorTab() {
   if (!eventsState.loaded) await loadEvents();
@@ -40,10 +40,11 @@ function renderDoor() {
     : d.event.entryOpen ? T.entryOpen : T.entryClosed;
   $("door-counts").textContent = T.doorCounts(d.counts.checkedIn, d.counts.paid, d.counts.awaiting);
 
+  // The server sends only the small lists (not paid / needs checking / latest check-ins), plus the real totals.
   const unpaid = d.tickets.filter((t) => t.status === "awaiting");
-  const flagged = d.tickets.filter((t) => t.status === "paid" && t.flag);
-  $("unpaid-title").textContent = T.unpaidTitle(unpaid.length);
-  $("flagged-title").textContent = T.flaggedTitle(flagged.length);
+  const flagged = d.tickets.filter((t) => t.status === "paid" && t.flag && !t.checkedInAt);
+  $("unpaid-title").textContent = T.unpaidTitle(d.counts.awaiting);
+  $("flagged-title").textContent = T.flaggedTitle(d.counts.flagged !== undefined ? d.counts.flagged : flagged.length);
   $("helpdesk-unpaid").innerHTML = unpaid.length ? unpaid.map((t) => personRow(t, true)).join("") : `<li class="muted small">${T.nobody}</li>`;
   $("helpdesk-flagged").innerHTML = flagged.length ? flagged.map((t) => personRow(t, false)).join("") : `<li class="muted small">${T.nobody}</li>`;
 
@@ -57,6 +58,11 @@ function renderDoor() {
       </div>
       <button class="link danger" data-undo="${t.id}">${T.undo}</button>
     </li>`).join("") : `<li class="muted small">${T.nobody}</li>`;
+}
+
+/** A person from the small lists or from the last typed search. */
+function doorFind(id) {
+  return (doorState.data ? doorState.data.tickets : []).find((x) => x.id === id) || doorState.matches.find((x) => x.id === id) || null;
 }
 
 function personRow(t, showPay) {
@@ -194,15 +200,17 @@ function feedback(color) {
 
 // ---- Typed lookups (QR won't scan, no phone) --------------------------------------
 
-function onManualSubmit(ev) {
+async function onManualSubmit(ev) {
   ev.preventDefault();
   const q = $("manual-input").value.trim();
   if (!q) return;
   if (/^tkt/i.test(q) || /[?&]t=/.test(q)) { $("manual-results").innerHTML = ""; return checkCode(q); }
-  const needle = q.toLowerCase();
-  const matches = (doorState.data ? doorState.data.tickets : []).filter((t) =>
-    [t.name, t.orderCode, t.payerName, t.etransferName].some((v) => String(v || "").toLowerCase().includes(needle)));
-  $("manual-results").innerHTML = matches.length ? matches.slice(0, 20).map((t) => personRow(t, true)).join("") : `<li class="muted small">${T.noMatch}</li>`;
+  if (q.length < 2) return;
+  $("manual-results").innerHTML = `<li class="muted small">${T.searching}</li>`;
+  const reply = await api("doorList", { eventId: doorState.eventId, q });   // the server searches everyone (up to 20 matches)
+  if (!reply.ok) { $("manual-results").innerHTML = ""; return showResult({ color: "red", message: errorText(reply) }); }
+  doorState.matches = reply.matches || [];
+  $("manual-results").innerHTML = doorState.matches.length ? doorState.matches.map((t) => personRow(t, true)).join("") : `<li class="muted small">${T.noMatch}</li>`;
 }
 
 async function onDoorListClick(ev) {
@@ -211,14 +219,14 @@ async function onDoorListClick(ev) {
   const undo = ev.target.closest("[data-undo]");
   if (checkin) {
     // Typing a name / tapping a list = the help desk, so flagged people can be let in after checking.
-    const t = doorState.data.tickets.find((x) => x.id === checkin.dataset.checkin);
+    const t = doorFind(checkin.dataset.checkin);
     if (t && t.flag && !confirm(T.confirmDeskCheckIn(t.name, t.flag))) return;
     checkin.disabled = true;
     await checkCode(checkin.dataset.checkin, true);
     $("manual-results").innerHTML = "";
   }
   if (undo) {
-    const t = doorState.data.tickets.find((x) => x.id === undo.dataset.undo);
+    const t = doorFind(undo.dataset.undo);
     if (!confirm(T.confirmUndo(t ? t.name : ""))) return;
     undo.disabled = true;
     const reply = await api("undoCheckIn", { ticketId: undo.dataset.undo });
@@ -228,7 +236,7 @@ async function onDoorListClick(ev) {
     await loadDoor();
   }
   if (pay) {
-    const t = doorState.data.tickets.find((x) => x.orderId === pay.dataset.pay);
+    const t = (doorState.data.tickets.concat(doorState.matches)).find((x) => x.orderId === pay.dataset.pay);
     if (!confirm(T.confirmPaid(money(t.orderTotal), t.orderCode, t.etransferName || t.payerName))) return;
     pay.disabled = true;
     const siteUrl = new URL(PUBLIC_SITE_URL, location.href).href;

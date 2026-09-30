@@ -1,6 +1,7 @@
 // CSS Exec Portal — Attendees: one event's numbers, question answers and everyone registered.
 
-const attState = { event: null, data: null, filter: "active" };
+const attState = { event: null, data: null, filter: "active", timer: null };
+const ATT_PAGE = 50;
 
 async function openAttendees(event) {
   attState.event = event;
@@ -21,11 +22,20 @@ async function openAttendees(event) {
   await loadAttendees();
 }
 
-async function loadAttendees() {
+/** One page of the list at a time (the server filters, searches and sorts). `append` = the "Show more" button. */
+let attCounter = 0;
+async function loadAttendees(append) {
+  const mine = ++attCounter;
+  const have = attState.data ? attState.data.attendees.length : 0;
   $("detail-status").textContent = T.attLoading;
-  const reply = await api("eventSummary", { eventId: attState.event.id });
+  const reply = await api("eventSummary", {
+    eventId: attState.event.id, filter: attState.filter, q: $("att-search").value.trim(), sort: $("att-sort").value,
+    offset: append ? have : 0, limit: append ? ATT_PAGE : Math.min(500, Math.max(ATT_PAGE, have))
+  });
+  if (mine !== attCounter) return;
   if (!reply.ok) return handleEventError(reply, $("detail-status"));
   $("detail-status").textContent = "";
+  if (append && attState.data) reply.attendees = attState.data.attendees.concat(reply.attendees);
   attState.data = reply;
   renderSummary();
   renderAttendees();
@@ -59,31 +69,11 @@ function renderSummary() {
     </div>`).join("")}` : "";
 }
 
-function matchesFilter(a) {
-  switch (attState.filter) {
-    case "active": return a.status === "paid" || a.status === "awaiting";
-    case "paid": return a.status === "paid";
-    case "awaiting": return a.status === "awaiting";
-    case "inside": return !!a.checkedInAt && (a.status === "paid" || a.status === "awaiting");
-    case "notArrived": return a.status === "paid" && !a.checkedInAt;
-    case "flagged": return !!a.flag && (a.status === "paid" || a.status === "awaiting");
-    case "closed": return a.status === "refunded" || a.status === "cancelled";
-    default: return true;
-  }
-}
-
 function renderAttendees() {
   if (!attState.data) return;
-  const q = $("att-search").value.trim().toLowerCase();
-  const sort = $("att-sort").value;
-  const list = attState.data.attendees.filter(matchesFilter).filter((a) => !q ||
-    [a.name, a.email, a.ucid, a.memberId, a.order.code, a.order.etransferName, a.order.payerName]
-      .some((v) => String(v || "").toLowerCase().includes(q)));
-  list.sort((a, b) => sort === "type" ? a.ticketType.localeCompare(b.ticketType) || a.name.localeCompare(b.name)
-    : sort === "newest" ? String(b.createdAt).localeCompare(String(a.createdAt))
-    : a.name.localeCompare(b.name));
-
-  $("att-count").textContent = list.length ? T.attCount(list.length) : T.attNone;
+  const list = attState.data.attendees;   // already filtered, searched and sorted by the server
+  $("att-count").textContent = list.length ? T.attCountOf(list.length, attState.data.attTotal) : T.attNone;
+  $("att-more").hidden = !attState.data.attHasMore;
   $("att-list").innerHTML = list.map(attendeeCard).join("");
 }
 
@@ -117,16 +107,17 @@ function onAttendeeClick(event) {
 }
 
 $("detail-back-button").addEventListener("click", showEventsList);
-$("detail-refresh").addEventListener("click", loadAttendees);
-$("att-search").addEventListener("input", renderAttendees);
-$("att-sort").addEventListener("change", renderAttendees);
+$("detail-refresh").addEventListener("click", () => loadAttendees());
+$("att-search").addEventListener("input", () => { clearTimeout(attState.timer); attState.timer = setTimeout(() => loadAttendees(), 350); });
+$("att-sort").addEventListener("change", () => loadAttendees());
+$("att-more").addEventListener("click", () => loadAttendees(true));
 $("att-list").addEventListener("click", onAttendeeClick);
 $("att-filters").addEventListener("click", (event) => {
   const chip = event.target.closest(".chip");
   if (!chip) return;
   attState.filter = chip.dataset.filter;
   document.querySelectorAll("#att-filters .chip").forEach((c) => c.classList.toggle("active", c === chip));
-  renderAttendees();
+  loadAttendees();
 });
 
 // ---- Download the list (opens in Excel / Google Sheets) -------------------------------
@@ -149,11 +140,17 @@ function attendeesCsv(data) {
   return "﻿" + [head, ...rows].map((r) => r.map(csvCell).join(",")).join("\r\n");
 }
 
-function downloadAttendees() {
-  if (!attState.data || !attState.data.attendees.length) return showToast(T.attDownloadNone);
-  const name = `${attState.data.event.name}-${attState.data.event.date || ""}`.replace(/[^A-Za-z0-9]+/g, "-").replace(/^-|-$/g, "");
+async function downloadAttendees() {
+  if (!attState.data) return showToast(T.attDownloadNone);
+  const button = $("detail-csv");
+  button.disabled = true;
+  const all = await api("eventSummary", { eventId: attState.event.id, filter: "all", full: true });   // everyone, not just the page on screen
+  button.disabled = false;
+  if (!all.ok) return handleEventError(all, $("detail-status"));
+  if (!all.attendees.length) return showToast(T.attDownloadNone);
+  const name = `${all.event.name}-${all.event.date || ""}`.replace(/[^A-Za-z0-9]+/g, "-").replace(/^-|-$/g, "");
   const link = document.createElement("a");
-  link.href = URL.createObjectURL(new Blob([attendeesCsv(attState.data)], { type: "text/csv;charset=utf-8" }));
+  link.href = URL.createObjectURL(new Blob([attendeesCsv(all)], { type: "text/csv;charset=utf-8" }));
   link.download = `${name || "attendees"}.csv`;
   document.body.appendChild(link);
   link.click();

@@ -116,6 +116,7 @@
         </div>
         <p id="att-count" class="muted small"></p>
         <ul id="att-list" class="results"></ul>
+        <button id="att-more" class="secondary" type="button" data-t="loadMore" hidden></button>
       </section>
 
       <section id="event-editor-view" hidden>
@@ -212,6 +213,7 @@
       <p id="pay-status" class="muted small" aria-live="polite"></p>
       <div class="order-cols" aria-hidden="true"><span data-t="colOrder"></span><span data-t="colPayer"></span><span data-t="colPeople"></span><span data-t="colTotal"></span><span></span></div>
       <ul id="orders" class="results"></ul>
+      <button id="orders-more" class="secondary" type="button" data-t="loadMore" hidden></button>
      </div>
      <div id="tab-door" hidden>
       <div class="door-top">
@@ -284,7 +286,10 @@
           <select id="act-event" aria-label="Event"></select>
           <select id="act-who" aria-label="Who"></select>
         </div>
-        <input id="act-search" class="search" type="search" autocomplete="off">
+        <div class="grid-2">
+          <input id="act-search" class="search" type="search" autocomplete="off">
+          <select id="act-limit" aria-label="How many to show"><option value="50" selected>Show 50</option><option value="100">Show 100</option><option value="200">Show 200</option></select>
+        </div>
         <div class="chips" id="act-groups">
           <button class="chip active" data-group="all" data-t="actAll"></button>
           <button class="chip" data-group="payments" data-t="actPayments"></button>
@@ -511,19 +516,19 @@
   </dialog>
 
   <script src="config.js?v=0.3.7"></script>
-  <script src="strings.js?v=0.3.7"></script>
+  <script src="strings.js?v=0.5.0"></script>
   <script src="mock.js?v=0.3.7"></script>
   <script src="app.js?v=0.3.7"></script>
   <script src="events.js?v=0.3.7"></script>
-  <script src="payments.js?v=0.3.7"></script>
+  <script src="payments.js?v=0.5.0"></script>
   <script src="edit.js?v=0.3.7"></script>
-  <script src="finance.js?v=0.3.7"></script>
-  <script src="activity.js?v=0.3.7"></script>
+  <script src="finance.js?v=0.5.0"></script>
+  <script src="activity.js?v=0.5.0"></script>
   <script src="settings.js?v=0.3.7"></script>
   <script src="emails.js?v=0.3.7"></script>
   <script src="mailall.js?v=0.3.7"></script>
-  <script src="attendees.js?v=0.3.7"></script>
+  <script src="attendees.js?v=0.5.0"></script>
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
-  <script src="door.js?v=0.3.7"></script>
+  <script src="door.js?v=0.5.0"></script>
 </body>
 </html>
