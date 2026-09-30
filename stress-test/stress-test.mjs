@@ -14,6 +14,7 @@
 // Roughly 100 emails are sent (the CSS Gmail can send 500 a day).
 //
 // Options:  --regs 50 --paid 25 --burst 30   (burst = most requests in flight at once during the door test)
+//           --no-email   @example.com addresses only: nothing is emailed, no email quota used
 //           --raw   no automatic retries (harshest view); default behaves like the real pages
 
 import readline from "node:readline";
@@ -23,8 +24,10 @@ const API = process.env.CSS_API || "https://script.google.com/macros/s/AKfycbxJ_
 const SITE = "https://events.ucalgarycss.ca/";
 const arg = (name, fallback) => { const i = process.argv.indexOf("--" + name); return i > -1 ? Number(process.argv[i + 1]) : fallback; };
 const REGS = arg("regs", 50), PAID = arg("paid", 25), BURST = arg("burst", 30);
-const PAYER_MAIL = (n) => `gordonchen04+st${String(n).padStart(2, "0")}@gmail.com`;
-const BUDDY_MAIL = (n) => `epicfacewizzard46+b${String(n).padStart(2, "0")}@gmail.com`;
+// --no-email: use @example.com addresses, which the system never emails (no quota used, nothing arrives)
+const NO_EMAIL = process.argv.includes("--no-email");
+const PAYER_MAIL = (n) => NO_EMAIL ? `st${String(n).padStart(2, "0")}@example.com` : `gordonchen04+st${String(n).padStart(2, "0")}@gmail.com`;
+const BUDDY_MAIL = (n) => NO_EMAIL ? `b${String(n).padStart(2, "0")}@example.com` : `epicfacewizzard46+b${String(n).padStart(2, "0")}@gmail.com`;
 
 // ---- helpers ----------------------------------------------------------------------------------
 async function ask(question, hidden) {
@@ -138,7 +141,7 @@ check(`all ${REGS} registrations got through`, okRegs === REGS, `${okRegs}/${REG
 const free = all.ok ? all.orders.filter((o) => o.status === "paid").length : 0;
 check("free (RSVP) orders were marked paid automatically", free >= Math.min(5, okRegs), `${free} paid already`);
 const ticketsEmailed = all.ok ? all.orders.flatMap((o) => o.tickets).filter((t) => t.status === "paid" && t.emailedAt && !String(t.emailedAt).startsWith("test")).length : 0;
-check("free RSVP tickets were emailed with their QR", ticketsEmailed >= Math.min(5, okRegs), `${ticketsEmailed} emailed`);
+if (!NO_EMAIL) check("free RSVP tickets were emailed with their QR", ticketsEmailed >= Math.min(5, okRegs), `${ticketsEmailed} emailed`);
 
 // 3. finance marks 25 paid at once
 heading(`Step 2: Finance marks ${PAID} orders (+3 flagged ones) paid at the same moment`);
