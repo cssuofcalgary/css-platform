@@ -50,7 +50,7 @@ function findMyTickets_(req) {
   addresses.forEach(function (to) {
     if (!lookupBudget_()) return;
     const items = groups[to].map(function (t) { return { event: events[t.eventId], ticket: t }; });
-    if (sendMyTicketsEmail_(to, items)) { sent++; lookupSpend_(); }
+    if (sendMyTicketsEmail_(to, items, ticketsLink_(to))) { sent++; lookupSpend_(); }
   });
   if (sent > 0) lookupDone_(key);
   log_("public", "tickets.lookup", "", { by: byEmail ? "email" : "ucid", emails: sent });
@@ -103,7 +103,7 @@ function findMyPass_(req) {
   if (!found || !lookupBudget_()) return generic;
 
   const to = String(found.email).toLowerCase();
-  const sent = sendMyPassEmail_(to, found, MEMBER_PORTAL_URL + "?member=" + encodeURIComponent(found.memberId));
+  const sent = sendMyPassEmail_(to, found, memberPassLink_(found));
   if (sent) { lookupSpend_(); lookupDone_(key); }
   log_("public", "pass.lookup", "", { by: byEmail ? "email" : "ucid", sent: sent ? 1 : 0 });
 
@@ -145,4 +145,84 @@ function lookupSpend_() {
   const props = PropertiesService.getScriptProperties();
   const day = lookupDayKey_();
   props.setProperty(day, String(parseInt(props.getProperty(day) || "0", 10) + 1));
+}
+
+// ---- Private links: the member portal shows tickets to whoever holds the link ------------
+
+/**
+ * A link key proves "this link was emailed to the right person" without anyone logging in.
+ * It is a signature of the member ID (or email) made with a secret that only this script has
+ * (LINK_KEY, created automatically). Old links keep working; to cancel every link ever sent,
+ * delete the LINK_KEY Script Property.
+ */
+function linkKey_(kind, who) {
+  const props = PropertiesService.getScriptProperties();
+  let secret = props.getProperty("LINK_KEY");
+  if (!secret) {
+    secret = Utilities.getUuid() + Utilities.getUuid();
+    props.setProperty("LINK_KEY", secret);
+  }
+  const bytes = Utilities.computeHmacSha256Signature(kind + ":" + String(who).toLowerCase(), secret);
+  return Utilities.base64EncodeWebSafe(bytes).replace(/=+$/, "").slice(0, 24);
+}
+
+function linkKeyOk_(kind, who, given) {
+  const want = linkKey_(kind, who);
+  const got = String(given || "");
+  if (got.length !== want.length) return false;
+  let diff = 0;
+  for (let i = 0; i < want.length; i++) diff |= want.charCodeAt(i) ^ got.charCodeAt(i);
+  return diff === 0;
+}
+
+/** Link to a member's pass (and the tickets under it). */
+function memberPassLink_(member) {
+  return MEMBER_PORTAL_URL + "?member=" + encodeURIComponent(member.memberId) + "&k=" + linkKey_("pass", member.memberId);
+}
+
+/** Link to the tickets of someone who isn't (or may not be) a member, by the email on their tickets. */
+function ticketsLink_(email) {
+  return MEMBER_PORTAL_URL + "?tickets=" + encodeURIComponent(String(email).toLowerCase()) + "&k=" + linkKey_("tix", email);
+}
+
+/**
+ * The member portal asks for tickets with {memberId, k} (a member's pass link) or {email, k}
+ * (a tickets link). Upcoming published events only; paid tickets, plus unpaid ones marked as waiting.
+ */
+function myTickets_(req) {
+  const today = Utilities.formatDate(new Date(), "America/Edmonton", "yyyy-MM-dd");
+  const events = {};
+  allEvents_().forEach(function (e) { if (e.status === "published" && e.date >= today) events[e.id] = e; });
+
+  let match, name = "";
+  if (req.memberId) {
+    const memberId = String(req.memberId).trim().toUpperCase();
+    if (!linkKeyOk_("pass", memberId, req.k)) throw new ApiError_("NOT_ALLOWED", "This link isn't valid. Ask for a new one.");
+    const member = loadMembers_().filter(function (m) { return m.memberId === memberId; })[0];
+    if (!member) throw new ApiError_("NOT_FOUND", "Member not found.");
+    name = member.name;
+    const ucid = String(member.ucid || "").replace(/\D/g, "");
+    const mail = String(member.email || "").toLowerCase();
+    match = function (t) {
+      return t.memberId === memberId || (ucid.length >= 6 && String(t.ucid || "").replace(/\D/g, "") === ucid) || (mail && String(t.email || "").toLowerCase() === mail);
+    };
+  } else {
+    const email = String(req.email || "").trim().toLowerCase();
+    if (!email || !linkKeyOk_("tix", email, req.k)) throw new ApiError_("NOT_ALLOWED", "This link isn't valid. Ask for a new one.");
+    match = function (t) { return String(t.email || "").toLowerCase() === email; };
+  }
+
+  const orders = {};
+  readRows_("Orders").forEach(function (o) { orders[o.id] = o; });
+  const tickets = readRows_("Tickets").filter(function (t) {
+    return (t.status === "paid" || t.status === "awaiting") && events[t.eventId] && match(t);
+  }).map(function (t) {
+    const e = events[t.eventId];
+    return {
+      id: t.id, secret: t.secret, name: t.name, ticketType: t.ticketType, status: t.status, checkedIn: !!t.checkedInAt,
+      orderCode: (orders[t.orderId] || {}).code || "",
+      event: { name: e.name, date: e.date, startTime: e.startTime, endTime: e.endTime, location: e.location, slug: e.slug }
+    };
+  }).sort(function (a, b) { return a.event.date.localeCompare(b.event.date) || a.name.localeCompare(b.name); });
+  return { ok: true, name: name, tickets: tickets, site: siteInfo_() };
 }

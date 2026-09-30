@@ -54,6 +54,8 @@ The old system (`../CSS Ticketing System/`) keeps running until this one is prov
 | `api/Db.js` | The platform data sheet: creates tabs, reads rows, inserts/updates **by id**, change log, lock. `retry_()` repeats a Sheets call up to 3 times when Google has a momentary failure (reads and updates only, never inserts) |
 | `api/Events.js` | Events: validation, save, publish/close, image upload, public event views |
 | `api/Orders.js` | Registration: one Order (payment code) + one Ticket per person, membership check (flags, never blocks), duplicate check, anti-spam |
+| `api/TestKit.js` | Stress-test kit, run **by hand from the Apps Script editor** (not reachable from the web): `buildStressTest()` makes two closed test events, 46 varied fake attendees (all @example.com) and emails a sheet of 50 QR codes with the expected result of each scan; `emailStressTestSheet()` re-sends it; `removeStressTest()` archives both events. Run `buildStressTest` once |
+| `api/MyTickets.js` | "Find my tickets / pass" lookups (email or UCID + last name) and the private-link tickets for the member portal |
 | `api/Payments.js` | Finance: list orders, mark paid (capacity check, `force` to override), refund/cancel (never deletes), resend tickets, send waiting emails. Public ticket lookup by secret. Remembers the public site address for email links (`PUBLIC_SITE_URL` property) |
 | `api/Settings.js` | Admin only: read/save settings (validated; a new Membership sheet is really read before it's accepted), passwords, "sign everyone out" (a session *epoch*: every session remembers the epoch it was made in, changing it invalidates them all), health check, last-error memory |
 | `api/Activity.js` | Turns the Log tab into readable sentences, with filters (event, exec, group, text) |
@@ -103,7 +105,8 @@ Lists (`ticketTypes`, `questions`, `answers`) are stored as JSON text.
 | `register` `{slug, people[], etransferName, website}` | no | `people[0]` = payer, others = friends. Each: name, email, ucid?, memberId?, ticketTypeId, answers `{questionId: value}`. Max 10. `website` must be empty (bot trap). Same email max 5 registrations / 10 min. Returns payment code, total, e-transfer email, tickets + flags; emails the payer |
 | `getTicket` `{secret}` | no | One ticket + its event, for the ticket page |
 | `findMyTickets` `{email}` or `{ucid, lastName}` | no | "Find my tickets" (`public/tickets.html`, code in `api/MyTickets.js`). Never returns tickets: emails links for the person's paid tickets on upcoming events to the address on each ticket. Same reply whether or not anything was found; masked address shown only when UCID + last name both match. Limits: 4 tries and 1 sent email per search per 10 min, 40 emails a day (`FIND_TICKETS_*` constants), test addresses never emailed. Logged as `tickets.lookup` |
-| `findMyPass` `{email}` or `{ucid, lastName}` | no | Same idea for the **member portal** (`member.ucalgarycss.ca`, whose lookup page calls this API): finds the person on the Membership sheet and emails a link `member.ucalgarycss.ca/?member=<ID>` to the email on file. Shares the same limits and the 40-a-day cap. Logged as `pass.lookup` |
+| `findMyPass` `{email}` or `{ucid, lastName}` | no | Same idea for the **member portal** (`member.ucalgarycss.ca`, whose lookup page calls this API): finds the person on the Membership sheet and emails a link `member.ucalgarycss.ca/?member=<ID>` to the email on file. Shares the same limits and the 40-a-day cap. Logged as `pass.lookup`. The email's link is a private link (`?member=ID&k=KEY`) |
+| `myTickets` `{memberId, k}` or `{email, k}` | link key | For the member portal: a person's upcoming paid/awaiting tickets (with secrets, so it can draw QR codes). `k` is a signature (HMAC) of the member ID or email made with the Script Property `LINK_KEY`, so only someone who got the emailed private link can see tickets. Member IDs and emails alone never work. Members are matched to tickets by member ID, UCID or email; non-members by ticket email. Code in `api/MyTickets.js` (`linkKey_`, `memberPassLink_`, `ticketsLink_`, `myTickets_`) |
 | `logout` | yes | Ends the session |
 | `searchMembers` `{query}` | yes | Up to 25 members + `total` |
 | `getMember` `{memberId}` | yes | One member |
@@ -142,6 +145,8 @@ Lists (`ticketTypes`, `questions`, `answers`) are stored as JSON text.
 | `MEMBERSHIP_TAB` | Default `Form Responses 1` |
 | `ETRANSFER_EMAIL` | Default `css.uofcalgary@gmail.com` |
 | `CONTACT_EMAIL`, `INSTAGRAM_URL` | Shown at the bottom of the public pages (the API sends them; `public/config.js` is only the fallback) |
+| `LINK_KEY` | Set **by the system** the first time a private link is made. Signs the links in "Find my pass / tickets" emails. **Delete it to cancel every link ever sent** (a new one is made automatically; members just ask for a new link) |
+| `PRESIDENT_NAME` | Optional. Name in the signature of every email. Default "Gordon Chen". Change it when the President changes |
 | `SESSION_EPOCH`, `LAST_ERROR` | Set **by the system**. Changing `SESSION_EPOCH` signs everyone out. `LAST_ERROR` = the last unexpected error, shown in the health check |
 
 Everything above except the automatic ones can be changed in the portal's **Settings** tab (admin). Script Properties is only needed if the admin password is lost.
