@@ -19,6 +19,7 @@ const STRINGS = {
     closed: "Registration is closed",
     spotsLeft: (n) => n === 1 ? "1 spot left" : `${n} spots left`,
     payNote: "Pay by Interac e-transfer. Your spot is confirmed once payment is received.",
+    closesAt: (when) => `Registration closes ${when}.`,
     contact: "Questions? Email",
     instagram: "Instagram",
     privacy: "We only use your details to run this event.",

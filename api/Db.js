@@ -10,7 +10,8 @@
 const TABLES = {
   Events: ["id", "slug", "name", "description", "date", "startTime", "endTime", "location",
            "capacity", "capacityRule", "status", "entryOpen", "imageFileId", "imageUrl",
-           "ticketTypes", "questions", "codePrefix", "createdBy", "createdAt", "updatedBy", "updatedAt"],
+           "ticketTypes", "questions", "codePrefix", "createdBy", "createdAt", "updatedBy", "updatedAt",
+           "registrationCloses"],
   Orders: ["id", "code", "eventId", "payerName", "payerEmail", "etransferName", "total", "status",
            "createdAt", "paidAt", "paidBy", "notes"],
   Tickets: ["id", "secret", "orderId", "eventId", "name", "email", "ucid", "memberId", "ticketType",
@@ -94,7 +95,7 @@ function toCell_(column, value) {
 }
 
 /** Columns Sheets likes to turn into real dates/times; read them back as plain text. */
-const DATE_COLUMNS = { date: "yyyy-MM-dd", startTime: "HH:mm", endTime: "HH:mm" };
+const DATE_COLUMNS = { date: "yyyy-MM-dd", startTime: "HH:mm", endTime: "HH:mm", registrationCloses: "yyyy-MM-dd'T'HH:mm" };
 
 function fromCell_(column, value) {
   let text;

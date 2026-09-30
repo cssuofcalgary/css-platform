@@ -132,6 +132,33 @@ function resendTickets_(session, orderId, siteUrl) {
   return { ok: true, emailsSent: result.sent, emailsWaiting: result.waiting };
 }
 
+/** Finance/help desk: fix a typo in someone's name or email. A new email = their ticket is sent again. */
+function updateTicket_(session, ticketId, changes, siteUrl) {
+  rememberSiteUrl_(siteUrl);
+  changes = changes || {};
+  const result = withLock_(function () {
+    const ticket = readRows_("Tickets").filter(function (t) { return t.id === ticketId; })[0];
+    if (!ticket) throw new ApiError_("NOT_FOUND", "Ticket not found.");
+    const name = changes.name === undefined ? ticket.name : String(changes.name).trim().replace(/\s+/g, " ").slice(0, 80);
+    const email = changes.email === undefined ? ticket.email : String(changes.email).trim().toLowerCase().slice(0, 120);
+    if (!name) throw new ApiError_("BAD_REQUEST", "Name can't be empty.");
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new ApiError_("BAD_REQUEST", "That email doesn't look right.");
+    const emailChanged = email !== ticket.email;
+    if (name === ticket.name && !emailChanged) return { changed: false };
+
+    updateRow_("Tickets", ticket.id, emailChanged && ticket.status === "paid"
+      ? { name: name, email: email, emailedAt: "" } : { name: name, email: email }, ticket._row);
+    const order = readRows_("Orders").filter(function (o) { return o.id === ticket.orderId; })[0];
+    if (order && order.payerEmail === ticket.email && order.payerName === ticket.name) {
+      updateRow_("Orders", order.id, { payerName: name, payerEmail: email }, order._row);
+    }
+    log_(session.name, "ticket.edit", ticket.id, { from: { name: ticket.name, email: ticket.email }, to: { name: name, email: email } });
+    return { changed: true, resend: emailChanged && ticket.status === "paid", orderId: ticket.orderId };
+  });
+  const sent = result.resend ? sendPendingTicketEmails_(result.orderId) : { sent: 0, waiting: 0 };
+  return { ok: true, changed: result.changed, emailsSent: sent.sent };
+}
+
 // ---- Public ticket page ---------------------------------------------------------
 
 function getTicket_(secret) {

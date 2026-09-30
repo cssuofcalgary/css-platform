@@ -105,7 +105,13 @@ function route_(req) {
       return setEntryOpen_(requireSession_(req.token), req.eventId, !!req.open);
 
     case "scan":
-      return scan_(requireSession_(req.token), req.eventId, req.code);
+      return scan_(requireSession_(req.token), req.eventId, req.code, !!req.atDesk);
+
+    case "undoCheckIn":
+      return undoCheckIn_(requireSession_(req.token), req.ticketId);
+
+    case "updateTicket":
+      return updateTicket_(requireSession_(req.token), req.ticketId, req.changes, req.siteUrl);
 
     case "walkIn":
       return walkIn_(requireSession_(req.token), req.eventId, req.walkIn);

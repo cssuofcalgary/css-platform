@@ -32,7 +32,10 @@ Open the **web app URL** (README section 2) in a browser.
 | Ticket link in an email doesn't open | The public site moved or isn't hosted yet | Host the `public/` folder, set `PUBLIC_SITE_URL` in `exec-portal/config.js` to its address, then **Resend tickets** |
 | Camera won't start on the Door tab | Camera permission denied, or not https | Allow camera for the site in the browser settings, reload. Or type names/ticket IDs instead |
 | Everyone scans orange "entry is closed" | Entry wasn't opened | Door tab → tap the Entry button to open |
-| Checked in the wrong person | Human mistake | Nothing breaks. The Log shows it. (An "undo check-in" button isn't built yet; tell whoever maintains this) |
+| Checked in the wrong person | Human mistake | Door tab → **Recent check-ins** → **Undo** |
+| Everyone flagged gets orange "go to the help desk" | On purpose | Help desk: Door tab → "Please check" list → **Check in** after checking |
+| Can't find the Archive button | Signed in with the exec password | Sign out, sign in with the **admin** password (`ADMIN_PASSWORD` in Script Properties) |
+| Registration closed too early/late | The event's "Registration closes" time | Events → Edit → change or clear it |
 | Marked the wrong order paid | Human mistake | **Refund / cancel** it (no money to return if none was received), and ask the person to register again. Everything stays in the Log |
 
 ## Authorization (Google permission prompt)

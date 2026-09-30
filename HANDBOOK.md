@@ -22,6 +22,7 @@ Wrong password 10 times → sign-in pauses for 10 minutes.
    - **Capacity:** leave blank for no limit. "Paid tickets only" = only people who've paid take up a spot.
    - **Ticket types & prices:** starts with *Member* and *Non-member*. Set the prices. Tick **"Members only"** on a ticket to check the buyer's membership. Add more types with **+ Add ticket type** (e.g. Early bird). Price 0 = Free.
    - **Extra questions:** name, email and UCID are always asked. Add others like "Drink choice". "Choose one" = a list of options, separated by commas.
+   - **Registration closes:** leave blank and it closes by itself when the event starts. Or pick an earlier date/time.
    - **Payment code letters:** the start of the code people put in their e-transfer message (e.g. MGN-4821). Leave it blank and it uses the event's initials.
 3. **Save draft** keeps it private. **Save & publish** puts it online.
 
@@ -29,6 +30,7 @@ Wrong password 10 times → sign-in pauses for 10 minutes.
 In the Events list, each event has:
 - **Edit:** change anything. The public link never changes.
 - **Close registration:** the page stays up but says registration is closed. **Reopen** undoes it.
+- **Archive** *(admin password only)*: hides a finished or test event everywhere. Nothing is deleted. **Show archived events** → **Restore** brings it back.
 - **Public page ↗:** the link to share (Instagram, group chats). All upcoming events: https://cssuofcalgary.github.io/css-platform/public/
 
 ## What people see when they register
@@ -52,6 +54,7 @@ The Events list shows how many people have **paid** and how many are **awaiting 
 **Refund / cancel:** opens the spot again. For a paid order, send the money back by e-transfer yourself; the system only records it. Nothing is ever deleted.
 **Resend tickets:** someone lost their email, or it went to spam.
 **Ticket ↗:** opens that person's ticket (handy at the help desk).
+**Edit** (next to a person): fix a typo in their name or email. A new email gets their ticket sent again automatically.
 If you see "ticket emails waiting (daily email limit)", press **Send now** later, or the next day. Gmail allows about 100 emails a day.
 
 ## Door tab (event night)
@@ -59,15 +62,17 @@ If you see "ticket emails waiting (daily email limit)", press **Send now** later
 2. Tap **Entry CLOSED** to **open entry** when doors open. Scanners only let people in while it's open.
 3. **📷 Start scanning** and allow the camera. Point it at the QR on the person's phone (a screenshot is fine).
    - 🟢 **Green:** let them in. Their answers (e.g. drink) show underneath.
-   - 🟢 with a **yellow border:** let them in, but check the note (e.g. membership not found).
-   - 🟠 **Orange:** already checked in, **not paid yet**, or entry closed. Send them to the help desk.
+   - 🟠 **Orange:** already checked in, **not paid yet**, entry closed, or **"Please go to the help desk"** (something to check, e.g. membership not found). Send them to the help desk.
    - 🔴 **Red:** not a valid ticket for this event. Send them to the help desk.
+   After each result the scanner pauses for a moment. **Tap the result** to scan the next person straight away.
    Two people can scan at once on two phones. The same ticket can never get in twice.
+   **On a phone, the portal opens straight to the Door tab.**
 4. **QR won't scan?** Type their name or ticket ID (on their ticket, TKT…) in the box → **Find** → **Check in**.
 5. **+ Walk-in:** name, UCID if they have one, ticket type, cash or e-transfer → **Add & check in**. Walk-ins are always allowed, even when sold out.
 6. **Help desk lists** at the bottom:
    - **Not paid yet:** check their e-transfer, then **Mark paid** → **Check in**.
-   - **Please check:** people flagged earlier (membership not found, duplicate email).
+   - **Please check:** people flagged at registration (membership not found, duplicate email). The scanner won't let them in. Check it with them, then tap **Check in** here.
+   - **Recent check-ins:** the last people let in. **Undo** if someone was scanned by mistake.
 
 No signal? Things get slow, not broken. Before the event, keep the Payments tab open or print the list.
 

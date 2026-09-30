@@ -90,7 +90,16 @@ function showApp() {
   $("who-name").textContent = state.name;
   $("admin-badge").hidden = state.role !== "admin";
   showSearch();
-  $("search-input").focus();
+  // Phones are for the door: open straight to the Door tab.
+  // (The tab code loads after this file, so on first load wait until every script has run.)
+  if (!isPhone()) return $("search-input").focus();
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", () => switchTab("door"));
+  else switchTab("door");
+}
+
+/** A phone = small screen + touch. Tablets and laptops get the full portal. */
+function isPhone() {
+  return window.matchMedia("(max-width: 700px) and (pointer: coarse)").matches;
 }
 
 let searchTimer = null;
@@ -206,6 +215,7 @@ function fillText() {
 
 function start() {
   fillText();
+  document.body.classList.toggle("phone", isPhone());
   if (!API_URL) {
     $("demo-banner").textContent = T.demoBanner;
     $("demo-banner").hidden = false;

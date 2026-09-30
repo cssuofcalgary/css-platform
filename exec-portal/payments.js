@@ -4,7 +4,7 @@ const payState = { eventId: "", data: null, filter: "awaiting" };
 
 async function openPaymentsTab() {
   if (!eventsState.loaded) await loadEvents();
-  const events = eventsState.events.filter((e) => e.status !== "draft");
+  const events = activeEvents();
   const select = $("pay-event");
   if (!events.length) {
     select.innerHTML = "";
@@ -69,6 +69,7 @@ function orderCard(o) {
           ${t.ucid ? ` · UCID ${escapeHtml(t.ucid)}` : ""}${t.memberId ? ` · ${escapeHtml(t.memberId)}` : ""}
           ${Object.entries(t.answers || {}).map(([k, v]) => ` · ${escapeHtml(k)}: ${escapeHtml(v)}`).join("")}
           ${t.status === "paid" ? ` · <a class="link" target="_blank" rel="noopener" href="${ticketUrl(t)}">${T.openTicket}</a>` : ""}
+          ${t.status === "paid" || t.status === "awaiting" ? ` · <button class="link" data-edit-ticket="${t.id}">${T.editPerson}</button>` : ""}
           ${t.checkedInAt ? ` · ✅ ${T.checkedInMark}` : ""}${t.emailedAt && !t.emailedAt.startsWith("test") ? ` · ✉ ${T.emailedMark}` : ""}
           ${t.flag ? `<br><span class="flag">⚠ ${escapeHtml(t.flag)}</span>` : ""}</li>`).join("")}
       </ul>
@@ -81,7 +82,24 @@ function orderCard(o) {
     </li>`;
 }
 
+async function editTicket(button) {
+  const order = payState.data.orders.find((o) => o.tickets.some((t) => t.id === button.dataset.editTicket));
+  const ticket = order.tickets.find((t) => t.id === button.dataset.editTicket);
+  const name = prompt(T.promptName, ticket.name);
+  if (name === null) return;
+  const email = prompt(T.promptEmail, ticket.email);
+  if (email === null) return;
+  button.disabled = true;
+  const reply = await api("updateTicket", { ticketId: ticket.id, changes: { name, email }, siteUrl: new URL(PUBLIC_SITE_URL, location.href).href });
+  const result = button.closest(".order").querySelector(".order-result");
+  if (!reply.ok) { button.disabled = false; return handleEventError(reply, result); }
+  result.textContent = T.edited(reply.emailsSent);
+  setTimeout(loadOrders, 1500);
+}
+
 async function onOrdersClick(event) {
+  const edit = event.target.closest("button[data-edit-ticket]");
+  if (edit) return editTicket(edit);
   const button = event.target.closest("button[data-act]");
   if (!button) return;
   const card = button.closest(".order");

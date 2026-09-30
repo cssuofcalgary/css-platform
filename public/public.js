@@ -79,7 +79,12 @@ function registerBlock(e) {
   return `
     ${e.spotsLeft !== null && e.spotsLeft <= 20 ? `<p class="spots">${T.spotsLeft(e.spotsLeft)}</p>` : ""}
     <button class="register" id="open-register">${T.register}</button>
-    <p class="muted small">${T.payNote}</p>`;
+    <p class="muted small">${T.payNote}${e.registrationCloses ? " " + T.closesAt(formatDateTime(e.registrationCloses)) : ""}</p>`;
+}
+
+function formatDateTime(local) {
+  const [date, time] = String(local).split("T");
+  return `${new Date(date + "T12:00:00").toLocaleDateString("en-CA", { month: "short", day: "numeric" })}, ${formatTime(time || "23:59")}`;
 }
 
 function showMessage(text, withBack) {

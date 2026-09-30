@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex">
   <title>CSS Exec Portal</title>
-  <link rel="stylesheet" href="styles.css?v=0.2.1">
+  <link rel="stylesheet" href="styles.css?v=0.2.4">
 </head>
 <body>
   <div id="demo-banner" class="demo-banner" hidden></div>
@@ -73,6 +73,7 @@
         </div>
         <p id="events-status" class="muted small" aria-live="polite"></p>
         <ul id="events-list" class="results"></ul>
+        <button id="toggle-archived" class="link small" hidden></button>
       </section>
 
       <section id="event-editor-view" hidden>
@@ -124,6 +125,10 @@
             <div id="ev-questions"></div>
             <button type="button" id="add-question" class="link" data-t="addQuestion"></button>
           </fieldset>
+
+          <label for="ev-closes" data-t="evCloses"></label>
+          <input id="ev-closes" type="datetime-local">
+          <p class="muted small" data-t="evClosesHint"></p>
 
           <label for="ev-code-prefix" data-t="evCodePrefix"></label>
           <input id="ev-code-prefix" maxlength="4" class="short">
@@ -194,6 +199,11 @@
         </div>
       </form>
 
+      <details id="recent-box" class="helpdesk" open>
+        <summary id="recent-title"></summary>
+        <ul id="recent-list" class="results"></ul>
+      </details>
+
       <form id="manual-form" class="manual">
         <input id="manual-input" type="search" autocomplete="off" enterkeyhint="search">
         <button type="submit" class="secondary" data-t="find"></button>
@@ -212,13 +222,13 @@
     </main>
   </div>
 
-  <script src="config.js?v=0.2.1"></script>
-  <script src="strings.js?v=0.2.3"></script>
-  <script src="mock.js?v=0.2.1"></script>
-  <script src="app.js?v=0.2.1"></script>
-  <script src="events.js?v=0.2.1"></script>
-  <script src="payments.js?v=0.2.1"></script>
+  <script src="config.js?v=0.2.4"></script>
+  <script src="strings.js?v=0.2.4"></script>
+  <script src="mock.js?v=0.2.4"></script>
+  <script src="app.js?v=0.2.5"></script>
+  <script src="events.js?v=0.2.4"></script>
+  <script src="payments.js?v=0.2.4"></script>
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
-  <script src="door.js?v=0.2.3"></script>
+  <script src="door.js?v=0.2.4"></script>
 </body>
 </html>

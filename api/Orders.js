@@ -13,7 +13,7 @@ function register_(req) {
   if (req.website) throw new ApiError_("BAD_REQUEST", "Please try again.");   // hidden field only bots fill in
 
   const event = findEvent_(function (e) { return e.slug === String(req.slug || "").toLowerCase(); });
-  if (!event || event.status !== "published") throw new ApiError_("CLOSED", "Registration for this event is closed.");
+  if (!event || !registrationOpen_(event)) throw new ApiError_("CLOSED", "Registration for this event is closed.");
 
   const people = Array.isArray(req.people) ? req.people : [];
   if (!people.length) throw new ApiError_("BAD_REQUEST", "Add at least one person.");

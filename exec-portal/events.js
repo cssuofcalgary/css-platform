@@ -1,6 +1,6 @@
 // CSS Exec Portal — Events tab: list, create, edit, publish.
 
-const eventsState = { events: [], editing: null, loaded: false };
+const eventsState = { events: [], editing: null, loaded: false, showArchived: false };
 
 // ---- Tabs -------------------------------------------------------------------
 
@@ -29,8 +29,17 @@ async function loadEvents() {
   renderEvents();
 }
 
+/** Events the day-to-day tabs should offer (not drafts, not archived). */
+function activeEvents() {
+  return eventsState.events.filter((e) => e.status !== "draft" && e.status !== "archived");
+}
+
 function renderEvents() {
-  const list = eventsState.events;
+  const archived = eventsState.events.filter((e) => e.status === "archived");
+  const list = eventsState.showArchived ? archived : eventsState.events.filter((e) => e.status !== "archived");
+  const toggle = $("toggle-archived");
+  toggle.hidden = !archived.length;
+  toggle.textContent = eventsState.showArchived ? T.hideArchived : T.showArchived(archived.length);
   $("events-status").textContent = list.length ? "" : T.noEvents;
   $("events-list").innerHTML = list.map((e) => `
     <li class="card event-row">
@@ -46,7 +55,9 @@ function renderEvents() {
         ${e.status === "draft" ? `<button class="link" data-action="publish" data-id="${e.id}">${T.publish}</button>` : ""}
         ${e.status === "published" ? `<button class="link" data-action="close" data-id="${e.id}">${T.closeRegistration}</button>` : ""}
         ${e.status === "closed" ? `<button class="link" data-action="reopen" data-id="${e.id}">${T.reopen}</button>` : ""}
-        ${e.status !== "draft" ? `<a class="link" target="_blank" rel="noopener" href="${publicLink(e)}">${T.viewPublicPage}</a>` : ""}
+        ${e.status !== "draft" && e.status !== "archived" ? `<a class="link" target="_blank" rel="noopener" href="${publicLink(e)}">${T.viewPublicPage}</a>` : ""}
+        ${state.role === "admin" && e.status !== "archived" ? `<button class="link danger" data-action="archive" data-id="${e.id}">${T.archive}</button>` : ""}
+        ${state.role === "admin" && e.status === "archived" ? `<button class="link" data-action="restore" data-id="${e.id}">${T.restore}</button>` : ""}
       </div>
     </li>`).join("");
 }
@@ -58,8 +69,9 @@ async function onEventsListClick(event) {
   if (!target) return;
   if (button.dataset.action === "edit") return openEditor(target);
 
-  const status = { publish: "published", close: "closed", reopen: "published" }[button.dataset.action];
+  const status = { publish: "published", close: "closed", reopen: "published", archive: "archived", restore: "closed" }[button.dataset.action];
   if (status === "published" && target.status === "draft" && !confirm(T.confirmPublish)) return;
+  if (status === "archived" && !confirm(T.confirmArchive(target.name))) return;
   button.disabled = true;
   const reply = await api("setEventStatus", { eventId: target.id, status });
   if (!reply.ok) { button.disabled = false; return handleEventError(reply, $("events-status")); }
@@ -88,6 +100,7 @@ function openEditor(existing) {
   $("ev-capacity").value = e.capacity ?? "";
   $("ev-capacity-rule").value = e.capacityRule || "paid";
   $("ev-code-prefix").value = e.codePrefix || "";
+  $("ev-closes").value = e.registrationCloses || "";
   $("ev-image-file").value = "";
   $("ev-image-status").textContent = "";
   showImagePreview(e.imageUrl);
@@ -227,7 +240,8 @@ async function saveEvent(publish) {
     description: $("ev-description").value,
     capacity: $("ev-capacity").value,
     capacityRule: $("ev-capacity-rule").value,
-    codePrefix: $("ev-code-prefix").value
+    codePrefix: $("ev-code-prefix").value,
+    registrationCloses: $("ev-closes").value
   };
   if (publish && e.status !== "published" && !confirm(T.confirmPublish)) return;
 
@@ -265,7 +279,7 @@ function handleEventError(reply, el) {
 
 function statusPill(status) {
   const cls = { draft: "neutral", published: "good", closed: "warn" }[status] || "neutral";
-  const text = { draft: T.statusDraft, published: T.statusPublished, closed: T.statusClosed }[status] || status;
+  const text = { draft: T.statusDraft, published: T.statusPublished, closed: T.statusClosed, archived: T.statusArchived }[status] || status;
   return `<span class="pill ${cls}">${text}</span>`;
 }
 
@@ -300,6 +314,7 @@ function publicLink(e) {
 
 document.querySelectorAll(".tab").forEach((b) => b.addEventListener("click", () => switchTab(b.dataset.tab)));
 $("new-event-button").addEventListener("click", () => openEditor(null));
+$("toggle-archived").addEventListener("click", () => { eventsState.showArchived = !eventsState.showArchived; renderEvents(); });
 $("editor-back-button").addEventListener("click", showEventsList);
 $("events-list").addEventListener("click", onEventsListClick);
 $("add-ticket-type").addEventListener("click", () => {

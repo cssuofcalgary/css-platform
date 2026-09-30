@@ -6,7 +6,7 @@
  * Prices and questions are per-event settings, never code.
  */
 
-const EVENT_STATUSES = ["draft", "published", "closed"];
+const EVENT_STATUSES = ["draft", "published", "closed", "archived"];
 
 function eventFromRow_(row) {
   return {
@@ -27,6 +27,7 @@ function eventFromRow_(row) {
     ticketTypes: row.ticketTypes || [],
     questions: row.questions || [],
     codePrefix: row.codePrefix,
+    registrationCloses: row.registrationCloses || "",
     createdBy: row.createdBy,
     createdAt: row.createdAt,
     updatedBy: row.updatedBy,
@@ -92,6 +93,11 @@ function saveEvent_(session, input) {
 
 function setEventStatus_(session, eventId, status) {
   if (EVENT_STATUSES.indexOf(status) === -1) throw new ApiError_("BAD_REQUEST", "Unknown status.");
+  const current = findEvent_(function (e) { return e.id === eventId; });
+  if (!current) throw new ApiError_("NOT_FOUND", "Event not found.");
+  if ((status === "archived" || current.status === "archived") && session.role !== "admin") {
+    throw new ApiError_("ADMIN_ONLY", "Only the admin password can archive or restore events.");
+  }
   return withLock_(function () {
     updateRow_("Events", eventId, { status: status, updatedBy: session.name, updatedAt: new Date().toISOString() });
     log_(session.name, "event.status", eventId, { status: status });
@@ -140,7 +146,7 @@ function publicEvents_() {
 
 function publicEvent_(slug) {
   const event = findEvent_(function (e) { return e.slug === String(slug || "").toLowerCase(); });
-  if (!event || event.status === "draft") throw new ApiError_("NOT_FOUND", "Event not found.");
+  if (!event || event.status === "draft" || event.status === "archived") throw new ApiError_("NOT_FOUND", "Event not found.");
   return { ok: true, event: publicEventView_(event) };
 }
 
@@ -161,11 +167,26 @@ function publicEventView_(event) {
       return { id: t.id, name: t.name, price: t.price, needsMembership: !!t.needsMembership };
     }),
     questions: event.questions,
-    registrationOpen: event.status === "published" && !soldOut,
+    registrationOpen: registrationOpen_(event) && !soldOut,
+    registrationCloses: registrationClosesAt_(event),
     soldOut: soldOut,
     spotsLeft: event.capacity ? Math.max(event.capacity - taken, 0) : null,
     etransferEmail: getConfig_().etransferEmail
   };
+}
+
+// ---- Registration window ------------------------------------------------------
+
+/** When registration closes ("yyyy-MM-ddTHH:mm", Calgary time). Default: when the event starts. */
+function registrationClosesAt_(event) {
+  if (event.registrationCloses) return event.registrationCloses;
+  return event.date + "T" + (event.startTime || "23:59");
+}
+
+function registrationOpen_(event) {
+  if (event.status !== "published") return false;
+  const now = Utilities.formatDate(new Date(), "America/Edmonton", "yyyy-MM-dd'T'HH:mm");
+  return now < registrationClosesAt_(event);
 }
 
 // ---- Helpers ----------------------------------------------------------------
@@ -202,6 +223,8 @@ function cleanEventInput_(input) {
 
   const capacity = text(input.capacity) === "" ? "" : Math.max(0, Math.floor(Number(input.capacity) || 0));
   const prefix = text(input.codePrefix, 4).toUpperCase().replace(/[^A-Z0-9]/g, "") || initials_(name);
+  const closes = text(input.registrationCloses, 16);
+  if (closes && !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(closes)) throw new ApiError_("BAD_REQUEST", "Registration closing time doesn't look right.");
 
   return {
     id: text(input.id, 20),
@@ -217,7 +240,8 @@ function cleanEventInput_(input) {
     imageUrl: text(input.imageUrl, 300),
     ticketTypes: ticketTypes,
     questions: questions,
-    codePrefix: prefix
+    codePrefix: prefix,
+    registrationCloses: closes
   };
 }
 

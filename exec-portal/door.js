@@ -4,7 +4,7 @@ const doorState = { eventId: "", data: null, scanner: null, lastCode: "", lastAt
 
 async function openDoorTab() {
   if (!eventsState.loaded) await loadEvents();
-  const events = eventsState.events.filter((e) => e.status !== "draft");
+  const events = activeEvents();
   if (!events.length) { $("scan-result").textContent = T.noEventsForPayments; return; }
   if (!doorState.eventId || !events.some((e) => e.id === doorState.eventId)) {
     const today = new Date().toISOString().slice(0, 10);
@@ -38,6 +38,17 @@ function renderDoor() {
   $("flagged-title").textContent = T.flaggedTitle(flagged.length);
   $("helpdesk-unpaid").innerHTML = unpaid.length ? unpaid.map((t) => personRow(t, true)).join("") : `<li class="muted small">${T.nobody}</li>`;
   $("helpdesk-flagged").innerHTML = flagged.length ? flagged.map((t) => personRow(t, false)).join("") : `<li class="muted small">${T.nobody}</li>`;
+
+  const recent = d.tickets.filter((t) => t.checkedInAt).sort((a, b) => b.checkedInAt.localeCompare(a.checkedInAt)).slice(0, 10);
+  $("recent-title").textContent = T.recentTitle(d.counts.checkedIn);
+  $("recent-list").innerHTML = recent.length ? recent.map((t) => `
+    <li class="card door-person">
+      <div>
+        <div class="name"><strong>${escapeHtml(t.name)}</strong> · ${escapeHtml(t.ticketType)}</div>
+        <div class="sub">${escapeHtml(shortTime(t.checkedInAt))}${t.checkedInBy ? " · " + escapeHtml(t.checkedInBy) : ""}</div>
+      </div>
+      <button class="link danger" data-undo="${t.id}">${T.undo}</button>
+    </li>`).join("") : `<li class="muted small">${T.nobody}</li>`;
 }
 
 function personRow(t, showPay) {
@@ -94,18 +105,18 @@ function onCode(text) {
   checkCode(text);
 }
 
-async function checkCode(code) {
+async function checkCode(code, atDesk) {
   doorState.busy = true;
   const known = findLocally(code);
   showIdle(known ? `${known.name} · ${T.checking}` : T.checking);   // name shows instantly; colour follows
-  const reply = await api("scan", { eventId: doorState.eventId, code });
+  const reply = await api("scan", { eventId: doorState.eventId, code, atDesk: !!atDesk });
   doorState.busy = false;
   if (!reply.ok) {
     if (reply.error === "NOT_LOGGED_IN") { stopCamera(); signOutLocally(); return showLogin(errorText(reply)); }
     return showResult({ color: "red", message: errorText(reply) });
   }
   showResult(reply.result);
-  if (reply.result.color.startsWith("green") && reply.result.person) markInsideLocally(reply.result.person.id);
+  if (reply.result.color === "green" && reply.result.person) markInsideLocally(reply.result.person.id);
 }
 
 /** Finds a ticket in the list the phone already has (by link, secret or ticket ID). */
@@ -188,10 +199,24 @@ function onManualSubmit(ev) {
 async function onDoorListClick(ev) {
   const checkin = ev.target.closest("[data-checkin]");
   const pay = ev.target.closest("[data-pay]");
+  const undo = ev.target.closest("[data-undo]");
   if (checkin) {
+    // Typing a name / tapping a list = the help desk, so flagged people can be let in after checking.
+    const t = doorState.data.tickets.find((x) => x.id === checkin.dataset.checkin);
+    if (t && t.flag && !confirm(T.confirmDeskCheckIn(t.name, t.flag))) return;
     checkin.disabled = true;
-    await checkCode(checkin.dataset.checkin);
+    await checkCode(checkin.dataset.checkin, true);
     $("manual-results").innerHTML = "";
+  }
+  if (undo) {
+    const t = doorState.data.tickets.find((x) => x.id === undo.dataset.undo);
+    if (!confirm(T.confirmUndo(t ? t.name : ""))) return;
+    undo.disabled = true;
+    const reply = await api("undoCheckIn", { ticketId: undo.dataset.undo });
+    if (!reply.ok) { undo.disabled = false; return showResult({ color: "red", message: errorText(reply) }); }
+    showIdle(T.undone(t ? t.name : ""));
+    doorState.lastCode = "";
+    await loadDoor();
   }
   if (pay) {
     const t = doorState.data.tickets.find((x) => x.orderId === pay.dataset.pay);
@@ -265,4 +290,4 @@ $("wi-cancel").addEventListener("click", () => { $("walkin-form").hidden = true;
 $("wi-types").addEventListener("change", updateWalkInMember);
 $("walkin-form").addEventListener("submit", onWalkInSubmit);
 $("manual-form").addEventListener("submit", onManualSubmit);
-["manual-results", "helpdesk-unpaid", "helpdesk-flagged"].forEach((id) => $(id).addEventListener("click", onDoorListClick));
+["manual-results", "helpdesk-unpaid", "helpdesk-flagged", "recent-list"].forEach((id) => $(id).addEventListener("click", onDoorListClick));

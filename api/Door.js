@@ -20,7 +20,7 @@ function setEntryOpen_(session, eventId, open) {
  * Exec: a QR code was scanned (or a ticket ID typed).
  * `code` can be a ticket link (…ticket.html?t=SECRET), a bare secret, or a ticket ID (TKT…).
  */
-function scan_(session, eventId, code) {
+function scan_(session, eventId, code, atDesk) {
   const key = ticketKey_(code);
   if (!key) return scanResult_("red", "Couldn't read that code.");
   if (key.kind === "member") return scanResult_("red", "That's a membership card, not a ticket for this event.");
@@ -52,11 +52,27 @@ function scan_(session, eventId, code) {
     if (!event.entryOpen) {
       return scanResult_("orange", "Valid ticket, but entry is closed. Open entry to check people in.", person);
     }
+    // Flagged tickets (membership not found, duplicate email...) only get in through the help desk.
+    if (ticket.flag && !atDesk) {
+      return scanResult_("orange", "Please go to the help desk: " + ticket.flag + ".", person);
+    }
 
     const now = new Date().toISOString();
     updateRow_("Tickets", ticket.id, { checkedInAt: now, checkedInBy: session.name }, ticket._row);
-    log_(session.name, "checkin", ticket.id, { name: ticket.name });
-    return scanResult_(ticket.flag ? "green-flag" : "green", ticket.flag ? "Checked in. Please check: " + ticket.flag : "Checked in. Welcome!", person);
+    log_(session.name, atDesk ? "checkin.desk" : "checkin", ticket.id, { name: ticket.name, flag: ticket.flag || "" });
+    return scanResult_("green", ticket.flag ? "Checked in at the help desk." : "Checked in. Welcome!", person);
+  });
+}
+
+/** Exec: take back a check-in (scanned the wrong person, or scanned twice by mistake). */
+function undoCheckIn_(session, ticketId) {
+  return withLock_(function () {
+    const ticket = readRows_("Tickets").filter(function (t) { return t.id === ticketId; })[0];
+    if (!ticket) throw new ApiError_("NOT_FOUND", "Ticket not found.");
+    if (!ticket.checkedInAt) return { ok: true, already: true };
+    updateRow_("Tickets", ticket.id, { checkedInAt: "", checkedInBy: "" }, ticket._row);
+    log_(session.name, "checkin.undo", ticket.id, { name: ticket.name, wasBy: ticket.checkedInBy, wasAt: ticket.checkedInAt });
+    return { ok: true };
   });
 }
 
@@ -97,7 +113,7 @@ function walkIn_(session, eventId, input) {
     };
     insertRow_("Tickets", ticket);
     log_(session.name, "walkin", order.code, { name: name, type: type.name, total: order.total, method: method });
-    return { ok: true, result: scanResult_(flag ? "green-flag" : "green", "Walk-in added and checked in (" + moneyText_(order.total) + " " + method + ")." + (flag ? " Please check: " + flag : ""), personView_(ticket)).result };
+    return { ok: true, result: scanResult_("green", "Walk-in added and checked in (" + moneyText_(order.total) + " " + method + ")." + (flag ? " Note: " + flag : ""), personView_(ticket)).result };
   });
 }
 

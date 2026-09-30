@@ -274,3 +274,17 @@ label.check input { width: auto; }
   .grid-3 { grid-template-columns: 1fr 1fr; }
   .grid-3 > div:first-child { grid-column: 1 / -1; }
 }
+
+/* Phone mode (small touch screens): scanner first, less chrome */
+body.phone .topbar { padding: 8px 12px; }
+body.phone .who .muted { display: none; }
+body.phone .content { padding: 10px 12px 24px; }
+body.phone .tabs { padding: 4px 12px 0; }
+body.phone .scan-result { position: sticky; top: 0; z-index: 5; min-height: 110px; font-size: 19px; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.25); }
+body.phone .scan-result .big-name { font-size: 30px; }
+body.phone .camera { max-width: none; }
+body.phone .door-buttons button { padding: 16px; font-size: 17px; }
+.scan-result { cursor: pointer; }
+.scan-result.idle { cursor: default; }
+.tap-hint { margin-top: 6px; font-size: 13px; opacity: 0.8; text-transform: uppercase; letter-spacing: 0.5px; }
+.link.small { font-size: 14px; margin-top: 8px; }

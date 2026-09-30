@@ -66,7 +66,7 @@ Lists (`ticketTypes`, `questions`, `answers`) are stored as JSON text.
 
 | Tab | Columns |
 |---|---|
-| Events | id, slug, name, description, date (YYYY-MM-DD), startTime, endTime (HH:mm), location, capacity (blank = no limit), capacityRule (`paid`/`all`), status (`draft`/`published`/`closed`), entryOpen, imageFileId, imageUrl, ticketTypes, questions, codePrefix, createdBy, createdAt, updatedBy, updatedAt |
+| Events | id, slug, name, description, date (YYYY-MM-DD), startTime, endTime (HH:mm), registrationCloses (YYYY-MM-DDTHH:mm, Calgary time; blank = when the event starts), location, capacity (blank = no limit), capacityRule (`paid`/`all`), status (`draft`/`published`/`closed`/`archived`), entryOpen, imageFileId, imageUrl, ticketTypes, questions, codePrefix, createdBy, createdAt, updatedBy, updatedAt |
 | Orders | id, code (payment code, e.g. MGN-4821), eventId, payerName, payerEmail, etransferName, total, status (`awaiting`/`paid`/`refunded`/`cancelled`; free orders start `paid`), createdAt, paidAt, paidBy, notes |
 | Tickets | id (`TKT` + 8 chars), secret (for the ticket link), orderId, eventId, name, email, ucid, memberId, ticketType (name), price, answers (question label → answer), flag (why the help desk should check, e.g. membership not found, duplicate email), status (same as its order), checkedInAt, checkedInBy, createdAt, emailedAt (when the ticket email went out; blank = waiting; "test address, not sent" for @example.com) |
 | Log | time, who, action, target, details. Every change made through the portal |
@@ -87,14 +87,16 @@ Lists (`ticketTypes`, `questions`, `answers`) are stored as JSON text.
 | `getMember` `{memberId}` | yes | One member |
 | `listEvents` | yes | All events incl. drafts + `counts[eventId] = {awaiting, paid, checkedIn}` |
 | `saveEvent` `{event}` | yes | Create (no id) or update (with id). The slug (public link) never changes after creation |
-| `setEventStatus` `{eventId, status}` | yes | draft / published / closed |
+| `setEventStatus` `{eventId, status}` | yes | draft / published / closed / **archived** (archiving or restoring needs the **admin** password). Archived events vanish from the public site and the day-to-day tabs; nothing is deleted |
+| `updateTicket` `{ticketId, changes: {name?, email?}, siteUrl}` | yes | Fix a typo. New email on a paid ticket = ticket re-sent. Also updates the order's payer if it's the same person |
+| `undoCheckIn` `{ticketId}` | yes | Clears a check-in (logged) |
 | `listOrders` `{eventId}` | yes | Orders with their tickets (incl. ticket secrets, for help-desk links), spots taken, unsent email count |
 | `markOrderPaid` `{orderId, force?, siteUrl}` | yes | Order + its tickets → paid, emails each ticket. Refuses with `OVER_CAPACITY` unless `force` |
 | `refundOrder` `{orderId, reason}` | yes | Paid → refunded, awaiting → cancelled. Spot reopens. Refuses if anyone already checked in |
 | `resendTickets` `{orderId, siteUrl}` | yes | Emails the paid tickets again |
 | `sendPendingEmails` | yes | Sends ticket emails that were held back by the daily limit |
 | `setEntryOpen` `{eventId, open}` | yes | Scanners only check people in while entry is open |
-| `scan` `{eventId, code}` | yes | Returns `{result: {color, message, person}}`. Colors: `green`, `green-flag` (in, but check the flag), `orange` (already in / not paid / entry closed), `red` (not found / wrong event / refunded / member card) |
+| `scan` `{eventId, code, atDesk?}` | yes | Returns `{result: {color, message, person}}`. Colors: `green`, `orange` (already in / not paid / entry closed / **flagged: go to the help desk**), `red` (not found / wrong event / refunded / member card). Flagged tickets only check in with `atDesk: true` (help desk buttons) |
 | `walkIn` `{eventId, walkIn: {name, ucid?, memberId?, ticketTypeId, method: cash/etransfer}}` | yes | Creates a paid order + ticket, already checked in. Ignores capacity |
 | `doorList` `{eventId}` | yes | All active tickets + counts, for the help desk |
 | `uploadImage` `{dataUrl, filename}` | yes | JPG/PNG/WebP ≤ 5 MB → Drive, shared by link → `{fileId, url}` |
