@@ -162,6 +162,8 @@ const STRINGS = {
     filterAll: "All",
     filterOverdue: (n) => `Waiting too long (${n})`,
     overdueNotice: (n, hours) => `${n} order${n === 1 ? "" : "s"} unpaid for over ${hours} hours.`,
+    attDownload: "Download list (CSV)",
+    attDownloadNone: "Nothing to download yet.",
     mailAll: "Email everyone",
     mailTitle: (event) => `Email people registered for ${event}`,
     mailHint: "Each person gets their own copy, in the usual look. Use Preview to see it first. The same address only gets one email.",

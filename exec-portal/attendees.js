@@ -128,3 +128,37 @@ $("att-filters").addEventListener("click", (event) => {
   document.querySelectorAll("#att-filters .chip").forEach((c) => c.classList.toggle("active", c === chip));
   renderAttendees();
 });
+
+// ---- Download the list (opens in Excel / Google Sheets) -------------------------------
+
+/** A spreadsheet treats cells starting with = + - @ as formulas; a leading quote keeps them plain text. */
+function csvCell(value) {
+  let text = String(value === undefined || value === null ? "" : value);
+  if (/^[=+\-@\t\r]/.test(text)) text = "'" + text;
+  return /[",\n]/.test(text) ? '"' + text.replace(/"/g, '""') + '"' : text;
+}
+
+function attendeesCsv(data) {
+  const questions = data.event.questions.map((q) => q.label);
+  const head = ["Name", "Email", "UCID", "Member ID", "Ticket", "Price", "Status", "Checked in", "Checked in by", "Order code", "Order total", "Payer", "E-transfer name", "Flag", "Notes", ...questions];
+  const rows = data.attendees.map((a) => [
+    a.name, a.email, a.ucid, a.memberId, a.ticketType, a.price, a.status, a.checkedInAt, a.checkedInBy,
+    a.order.code, a.order.total, a.order.payerName, a.order.etransferName, a.flag, a.order.notes,
+    ...questions.map((label) => (a.answers || {})[label] || "")
+  ]);
+  return "﻿" + [head, ...rows].map((r) => r.map(csvCell).join(",")).join("\r\n");
+}
+
+function downloadAttendees() {
+  if (!attState.data || !attState.data.attendees.length) return showToast(T.attDownloadNone);
+  const name = `${attState.data.event.name}-${attState.data.event.date || ""}`.replace(/[^A-Za-z0-9]+/g, "-").replace(/^-|-$/g, "");
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(new Blob([attendeesCsv(attState.data)], { type: "text/csv;charset=utf-8" }));
+  link.download = `${name || "attendees"}.csv`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(link.href), 2000);
+}
+
+$("detail-csv").addEventListener("click", downloadAttendees);

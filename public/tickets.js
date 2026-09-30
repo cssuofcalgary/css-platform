@@ -2,6 +2,8 @@
 
 const $ = (id) => document.getElementById(id);
 
+const MEMBER_SITE = "https://member.ucalgarycss.ca/";
+
 async function api(action, details = {}) {
   try {
     const res = await fetch(API_URL, {
@@ -58,12 +60,20 @@ $("find-email").addEventListener("submit", (e) => {
   submit(e.target, { email });
 });
 
-$("find-ucid").addEventListener("submit", (e) => {
+$("find-ucid").addEventListener("submit", async (e) => {
   e.preventDefault();
   const ucid = $("f-ucid").value.trim();
   const lastName = $("f-last").value.trim();
   if (!ucid || !lastName) return show(T.findNeed, true);
-  submit(e.target, { ucid, lastName });
+  // UCID + last name opens the tickets right away, on the member portal (pass and tickets together)
+  const buttons = document.querySelectorAll("#page button[type=submit]");
+  buttons.forEach((b) => { b.disabled = true; });
+  show("");
+  const reply = await api("openMyAccess", { ucid, lastName });
+  buttons.forEach((b) => { b.disabled = false; });
+  if (!reply.ok) return show(reply.error === "NETWORK" || reply.error === "SERVER_ERROR" ? T.error : (reply.message || T.error), true);
+  const query = reply.kind === "pass" ? `?member=${encodeURIComponent(reply.memberId)}&k=${encodeURIComponent(reply.k)}` : `?tucid=${encodeURIComponent(reply.ucid)}&k=${encodeURIComponent(reply.k)}`;
+  location.href = MEMBER_SITE + query;
 });
 
 document.querySelectorAll("[data-t]").forEach((el) => { el.textContent = T[el.dataset.t]; });

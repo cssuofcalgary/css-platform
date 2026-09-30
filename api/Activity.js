@@ -64,6 +64,7 @@ function activitySummary_(r, events) {
     case "order.create": return "registered online: " + r.target + " for " + (d.event || "an event") + " (" + d.tickets + " ticket" + (d.tickets === 1 ? "" : "s") + ", " + money(d.total) + ")";
     case "order.manual": return "added " + d.name + " as paid: " + r.target + " (" + d.type + ", " + money(d.total) + ")";
     case "tickets.lookup": return "a member used Find my tickets (" + (d.by === "ucid" ? "UCID" : "email") + ", " + (d.emails || 0) + " email" + (d.emails === 1 ? "" : "s") + " sent)";
+    case "access.open": return "a " + (d.as === "member" ? "member" : "ticket holder") + " opened their page with UCID and last name";
     case "pass.lookup": return "a member used Find my pass (" + (d.by === "ucid" ? "UCID" : "email") + ", " + (d.sent ? "email sent" : "nothing sent") + ")";
     case "tickets.resend": return "resent tickets for order " + r.target;
     case "reminders.send": return "sent " + (d.sent || 0) + " payment reminder" + (d.sent === 1 ? "" : "s");

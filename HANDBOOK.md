@@ -71,6 +71,9 @@ If you see "ticket emails waiting (daily email limit)", press **Send now** later
 ## What the emails look like
 All system emails (registration, payment reminder, ticket, find-my-tickets, find-my-pass) share one look: the same paper-ticket design as the member pass email, with a sage header, the CSS banner, pandas and a signature. It lives in `emailShell_()` in `api/Mail.js`. The signature name is the Script Property `PRESIDENT_NAME` (default "Gordon Chen"); change it when the President changes.
 
+### UCID and last name go straight in
+On the member portal and on the events site's "Find my tickets", "I forgot which email I used" takes a UCID and last name and opens the member pass (with the tickets under it) right away, with no email. Someone who only has tickets (not a member) gets a tickets-only page. Entering just an email still emails a private link instead, because an email address alone proves nothing. This is less strict than the email route: anyone who knows a classmate's UCID and last name could open their page. The limits (4 tries per UCID, 120 in total per 10 minutes) stop guessing. If that ever worries the team, say so and it can go back to email-only.
+
 ### Emailing everyone registered
 Payments tab → **Email everyone**. Choose who (everyone, only people who paid, or only people who haven't), write a subject and message, press **Preview** to see it, then **Send**. Each person gets their own copy; someone with two tickets gets one email. It asks you to confirm the number of people, and can't be undone. Good for a venue change, a reminder the day before, or a thank-you. Your daily email allowance is about 100 and some is kept back for tickets, so a big event may need to be split across two days.
 

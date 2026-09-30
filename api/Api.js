@@ -63,6 +63,9 @@ function route_(req) {
     case "myTickets":
       return myTickets_(req);
 
+    case "openMyAccess":
+      return openMyAccess_(req);
+
     // ---- Exec ----
     case "login":
       return login_(req.password, req.name);

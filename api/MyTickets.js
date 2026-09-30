@@ -202,6 +202,10 @@ function myTickets_(req) {
     match = function (t) {
       return t.memberId === memberId || (ucid.length >= 6 && String(t.ucid || "").replace(/\D/g, "") === ucid) || (mail && String(t.email || "").toLowerCase() === mail);
     };
+  } else if (req.ucid) {
+    const ucid = String(req.ucid).replace(/\D/g, "");
+    if (ucid.length < 6 || !linkKeyOk_("tixu", ucid, req.k)) throw new ApiError_("NOT_ALLOWED", "This link isn't valid. Ask for a new one.");
+    match = function (t) { return String(t.ucid || "").replace(/\D/g, "") === ucid; };
   } else {
     const email = String(req.email || "").trim().toLowerCase();
     if (!email || !linkKeyOk_("tix", email, req.k)) throw new ApiError_("NOT_ALLOWED", "This link isn't valid. Ask for a new one.");
@@ -220,5 +224,49 @@ function myTickets_(req) {
       event: { name: e.name, date: e.date, startTime: e.startTime, endTime: e.endTime, location: e.location, slug: e.slug }
     };
   }).sort(function (a, b) { return a.event.date.localeCompare(b.event.date) || a.name.localeCompare(b.name); });
+  if (!name && tickets.length) name = String(tickets[0].name || "");
   return { ok: true, name: name, tickets: tickets, site: siteInfo_() };
 }
+
+// ---- UCID + last name: straight into the portal --------------------------------------------
+
+const OPEN_ACCESS_GLOBAL_TRIES = 120;   // wrong-or-right guesses from everyone together, per 10 minutes
+
+/**
+ * "I forgot which email I used": a UCID and last name that both match open the member pass (and the
+ * tickets under it) right away, with no email step. Returns the private key the portal keeps on that
+ * device. People without a membership get a tickets-only key if tickets carry that UCID and name.
+ * Limits: 4 tries per UCID and 120 tries in total per 10 minutes, so this can't be used to hunt for names.
+ */
+function openMyAccess_(req) {
+  const ucid = String(req.ucid || "").replace(/\D/g, "").slice(0, 12);
+  const lastName = normalizeName_(req.lastName || "");
+  if (ucid.length < 6 || !lastName) throw new ApiError_("BAD_REQUEST", "Enter your UCID and last name.");
+  const miss = new ApiError_("NOT_FOUND", "We couldn't match that UCID and last name. Check them and try again, or use your email.");
+
+  const cache = CacheService.getScriptCache();
+  const total = parseInt(cache.get("open_access_total") || "0", 10);
+  if (total >= OPEN_ACCESS_GLOBAL_TRIES) throw new ApiError_("TOO_MANY_TRIES", "Too many tries right now. Wait a few minutes, or use your email.");
+  cache.put("open_access_total", String(total + 1), 600);
+  if (lookupBlocked_(lookupKey_("o", ucid))) throw new ApiError_("TOO_MANY_TRIES", "Too many tries for that UCID. Wait 10 minutes, or use your email.");
+
+  const member = loadMembers_().filter(function (m) {
+    return m.memberId && String(m.ucid || "").replace(/\D/g, "") === ucid && nameEndsWith_(m.name, lastName);
+  })[0];
+  if (member) {
+    log_("public", "access.open", "", { as: "member" });
+    return { ok: true, kind: "pass", memberId: member.memberId, k: linkKey_("pass", member.memberId) };
+  }
+
+  const today = Utilities.formatDate(new Date(), "America/Edmonton", "yyyy-MM-dd");
+  const live = {};
+  allEvents_().forEach(function (e) { if (e.status === "published" && e.date >= today) live[e.id] = true; });
+  const hasTickets = readRows_("Tickets").some(function (t) {
+    return (t.status === "paid" || t.status === "awaiting") && live[t.eventId] &&
+      String(t.ucid || "").replace(/\D/g, "") === ucid && nameEndsWith_(t.name, lastName);
+  });
+  if (!hasTickets) throw miss;
+  log_("public", "access.open", "", { as: "tickets" });
+  return { ok: true, kind: "tickets", ucid: ucid, k: linkKey_("tixu", ucid) };
+}
+
