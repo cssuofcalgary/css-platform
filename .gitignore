@@ -1,0 +1,12 @@
+# Planning notes stay private (they live in Gordon's vault too)
+# CSS Event & Membership Management.md
+/\#*.md
+
+# Never commit secrets or local tool files
+.env
+*.secret
+.clasprc.json
+node_modules/
+.DS_Store
+Thumbs.db
+desktop.ini

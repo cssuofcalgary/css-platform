@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>CSS Exec Portal</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="demo-banner" class="demo-banner" hidden></div>
+
+  <!-- Sign-in -->
+  <main id="login-view" class="login" hidden>
+    <form id="login-form" class="card login-card" autocomplete="off">
+      <h1 data-t="appTitle"></h1>
+      <p class="muted" data-t="appSubtitle"></p>
+
+      <label for="password" data-t="passwordLabel"></label>
+      <input id="password" type="password" autocomplete="current-password" required>
+
+      <label for="name-input" data-t="nameLabel"></label>
+      <input id="name-input" type="text" autocomplete="name" required>
+
+      <p id="login-error" class="error" role="alert" hidden></p>
+      <button id="login-button" type="submit" class="primary" data-t="signIn"></button>
+    </form>
+  </main>
+
+  <!-- Portal -->
+  <div id="app-view" hidden>
+    <header class="topbar">
+      <div class="brand" data-t="appTitle"></div>
+      <div class="who">
+        <span class="muted" data-t="signedInAs"></span> <strong id="who-name"></strong>
+        <span id="admin-badge" class="pill good" data-t="roleAdmin" hidden></span>
+        <button id="logout-button" class="link" data-t="signOut"></button>
+      </div>
+    </header>
+
+    <nav class="tabs">
+      <button class="tab active" data-tab="members" data-t="tabMembers"></button>
+      <button class="tab" data-tab="events" data-t="tabEvents"></button>
+      <button class="tab" data-tab="payments" data-t="tabPayments"></button>
+    </nav>
+
+    <main class="content">
+     <div id="tab-members">
+      <section id="search-view">
+        <label for="search-input" class="visually-hidden" data-t="searchLabel"></label>
+        <input id="search-input" class="search" type="search" autocomplete="off" enterkeyhint="search">
+        <p id="search-status" class="muted small" aria-live="polite"></p>
+        <ul id="results" class="results"></ul>
+      </section>
+
+      <section id="member-view" hidden>
+        <button id="back-button" class="link" data-t="back"></button>
+        <article class="card member-card">
+          <h2 id="member-name"></h2>
+          <div id="member-badges" class="badges"></div>
+          <dl id="member-fields" class="fields"></dl>
+        </article>
+        <p class="muted small" data-t="readOnlyNote"></p>
+      </section>
+     </div>
+
+     <div id="tab-events" hidden>
+      <section id="events-list-view">
+        <div class="row-between">
+          <h2 class="section-title" data-t="eventsTitle"></h2>
+          <button id="new-event-button" class="primary small-button" data-t="newEvent"></button>
+        </div>
+        <p id="events-status" class="muted small" aria-live="polite"></p>
+        <ul id="events-list" class="results"></ul>
+      </section>
+
+      <section id="event-editor-view" hidden>
+        <button id="editor-back-button" class="link" data-t="backToEvents"></button>
+        <form id="event-form" class="card editor" novalidate>
+          <h2 id="editor-title"></h2>
+
+          <label for="ev-name" data-t="evName"></label>
+          <input id="ev-name" required maxlength="120">
+
+          <label data-t="evImage"></label>
+          <div class="image-picker">
+            <img id="ev-image-preview" alt="" hidden>
+            <input id="ev-image-file" type="file" accept="image/jpeg,image/png,image/webp">
+            <p id="ev-image-status" class="muted small"></p>
+          </div>
+
+          <div class="grid-3">
+            <div><label for="ev-date" data-t="evDate"></label><input id="ev-date" type="date" required></div>
+            <div><label for="ev-start" data-t="evStart"></label><input id="ev-start" type="time"></div>
+            <div><label for="ev-end" data-t="evEnd"></label><input id="ev-end" type="time"></div>
+          </div>
+
+          <label for="ev-location" data-t="evLocation"></label>
+          <input id="ev-location" maxlength="150">
+
+          <label for="ev-description" data-t="evDescription"></label>
+          <textarea id="ev-description" rows="6" maxlength="4000"></textarea>
+
+          <div class="grid-2">
+            <div><label for="ev-capacity" data-t="evCapacity"></label><input id="ev-capacity" type="number" min="0" inputmode="numeric"></div>
+            <div><label for="ev-capacity-rule" data-t="evCapacityRule"></label>
+              <select id="ev-capacity-rule">
+                <option value="paid" data-t="evCapacityPaid"></option>
+                <option value="all" data-t="evCapacityAll"></option>
+              </select>
+            </div>
+          </div>
+
+          <fieldset>
+            <legend data-t="evTickets"></legend>
+            <div id="ev-ticket-types"></div>
+            <button type="button" id="add-ticket-type" class="link" data-t="addTicketType"></button>
+          </fieldset>
+
+          <fieldset>
+            <legend data-t="evQuestions"></legend>
+            <p class="muted small" data-t="evQuestionsHint"></p>
+            <div id="ev-questions"></div>
+            <button type="button" id="add-question" class="link" data-t="addQuestion"></button>
+          </fieldset>
+
+          <label for="ev-code-prefix" data-t="evCodePrefix"></label>
+          <input id="ev-code-prefix" maxlength="4" class="short">
+          <p class="muted small" data-t="evCodePrefixHint"></p>
+
+          <p id="editor-error" class="error" role="alert" hidden></p>
+          <div class="button-row">
+            <button type="submit" id="save-draft-button" class="secondary" data-t="saveDraft"></button>
+            <button type="button" id="save-publish-button" class="primary" data-t="savePublish"></button>
+          </div>
+        </form>
+      </section>
+     </div>
+     <div id="tab-payments" hidden>
+      <div class="payments-top">
+        <label for="pay-event" class="visually-hidden" data-t="payEvent"></label>
+        <select id="pay-event"></select>
+        <p id="pay-summary" class="muted small"></p>
+        <div id="pay-unsent" class="notice-box" hidden></div>
+        <div class="chips" id="pay-filters">
+          <button class="chip active" data-filter="awaiting" data-t="filterAwaiting"></button>
+          <button class="chip" data-filter="paid" data-t="filterPaid"></button>
+          <button class="chip" data-filter="closed" data-t="filterClosed"></button>
+          <button class="chip" data-filter="all" data-t="filterAll"></button>
+        </div>
+        <input id="pay-search" class="search" type="search" autocomplete="off">
+      </div>
+      <p id="pay-status" class="muted small" aria-live="polite"></p>
+      <ul id="orders" class="results"></ul>
+     </div>
+    </main>
+  </div>
+
+  <script src="config.js"></script>
+  <script src="strings.js"></script>
+  <script src="mock.js"></script>
+  <script src="app.js"></script>
+  <script src="events.js"></script>
+  <script src="payments.js"></script>
+</body>
+</html>

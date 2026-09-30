@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>Your ticket · CSS</title>
+  <link rel="stylesheet" href="public.css">
+</head>
+<body>
+  <header class="site-header">
+    <a href="./" class="site-brand">
+      <span class="logo" aria-hidden="true">CSS</span>
+      <span>
+        <strong data-t="siteName"></strong><br>
+        <small data-t="siteShort"></small>
+      </span>
+    </a>
+  </header>
+
+  <main id="page" class="page">
+    <p class="muted center" data-t="loading"></p>
+  </main>
+
+  <footer class="site-footer">
+    <p><span data-t="contact"></span> <a id="contact-link"></a> · <a id="instagram-link" target="_blank" rel="noopener" data-t="instagram"></a></p>
+  </footer>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <script src="config.js"></script>
+  <script src="strings.js"></script>
+  <script src="ticket.js"></script>
+</body>
+</html>
