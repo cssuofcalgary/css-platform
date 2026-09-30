@@ -26,6 +26,7 @@ const STRINGS = {
     cameraError: "Couldn't open the camera. Allow camera access, or type the ticket ID below.",
     readyToScan: "Point the camera at a ticket QR code.",
     checking: "Checking…",
+    tapForNext: "Tap for next scan",
     walkIn: "+ Walk-in",
     walkInTitle: "Walk-in",
     walkInName: "Name",

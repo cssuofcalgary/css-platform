@@ -82,10 +82,13 @@ async function stopCamera() {
   $("camera-toggle").textContent = T.startCamera;
 }
 
+const PAUSE_AFTER_RESULT_MS = 2500;   // breather after each result (tap the result to skip it)
+const SAME_CODE_IGNORE_MS = 10000;    // the same QR held in view isn't re-checked for 10 s
+
 function onCode(text) {
   const now = Date.now();
-  if (doorState.busy) return;
-  if (text === doorState.lastCode && now - doorState.lastAt < 4000) return;   // same QR still in view
+  if (doorState.busy || now < (doorState.pausedUntil || 0)) return;
+  if (text === doorState.lastCode && now - doorState.lastAt < SAME_CODE_IGNORE_MS) return;
   doorState.lastCode = text;
   doorState.lastAt = now;
   checkCode(text);
@@ -137,8 +140,18 @@ function showResult(result) {
   box.innerHTML = `
     ${p ? `<div class="big-name">${escapeHtml(p.name)}</div><div class="detail">${escapeHtml(p.ticketType)} · ${escapeHtml(p.id)}</div>` : ""}
     <div>${escapeHtml(result.message)}</div>
-    ${answers ? `<div class="detail">${answers}</div>` : ""}`;
+    ${answers ? `<div class="detail">${answers}</div>` : ""}
+    ${doorState.scanner ? `<div class="detail tap-hint">${T.tapForNext}</div>` : ""}`;
+  doorState.pausedUntil = Date.now() + PAUSE_AFTER_RESULT_MS;
   feedback(result.color);
+}
+
+/** Tapping the result card = "next person": resume scanning straight away. */
+function onResultTap() {
+  if (!doorState.scanner || $("scan-result").classList.contains("idle")) return;
+  doorState.pausedUntil = 0;
+  doorState.lastCode = "";   // allow re-scanning the same code on purpose
+  showIdle(T.readyToScan);
 }
 
 /** Beep + buzz so the door person doesn't have to stare at the screen. */
@@ -245,6 +258,7 @@ async function toggleEntry() {
 
 $("door-event").addEventListener("change", () => { doorState.eventId = $("door-event").value; showIdle(); loadDoor(); });
 $("entry-toggle").addEventListener("click", toggleEntry);
+$("scan-result").addEventListener("click", onResultTap);
 $("camera-toggle").addEventListener("click", toggleCamera);
 $("walkin-button").addEventListener("click", openWalkIn);
 $("wi-cancel").addEventListener("click", () => { $("walkin-form").hidden = true; });
