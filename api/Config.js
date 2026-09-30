@@ -16,6 +16,7 @@
 const API_VERSION = "0.3.0";
 const MEMBER_CACHE_SECONDS = 300;   // search data is re-read from the sheet at most every 5 min
 const SESSION_SECONDS = 21600;      // stay logged in for 6 h (the Apps Script cache maximum)
+const REMINDER_AFTER_HOURS = 48;   // an unpaid order gets a "please pay" reminder after this long (and again after this long)
 const MAX_FAILED_LOGINS = 10;       // after this many wrong passwords in 10 min, logins pause for 10 min
 
 function getConfig_() {

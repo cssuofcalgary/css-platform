@@ -99,9 +99,57 @@ function register_(req) {
   });
 }
 
+/**
+ * Finance: someone e-transferred (or paid cash) without registering online. Adds them as a
+ * paid registration in one step. Emails their ticket. `force` = go over capacity anyway.
+ */
+function addOrder_(session, eventId, input, force, siteUrl) {
+  rememberSiteUrl_(siteUrl);
+  input = input || {};
+  const event = findEvent_(function (e) { return e.id === eventId; });
+  if (!event) throw new ApiError_("NOT_FOUND", "Event not found.");
+  const person = cleanPerson_(input.person, event, 0, true);
+  person.flag = membershipFlag_(person, loadMembers_());
+  const etransferName = String(input.etransferName || "").trim().slice(0, 80);
+  const note = String(input.notes || "").trim().slice(0, 200);
+
+  const order = withLock_(function () {
+    if (event.capacity && !force) {
+      const taken = spotsTaken_(event);
+      if (taken + 1 > event.capacity) {
+        throw new ApiError_("OVER_CAPACITY", "This would make " + (taken + 1) + " tickets, over the capacity of " + event.capacity + ".");
+      }
+    }
+    const tickets = readRows_("Tickets");
+    if (tickets.some(function (t) {
+      return t.eventId === event.id && t.email.toLowerCase() === person.email && (t.status === "awaiting" || t.status === "paid");
+    })) person.flag = joinFlags_(person.flag, "Already registered with this email");
+
+    const now = new Date().toISOString();
+    const created = {
+      id: newId_("OR"), code: uniqueCode_(event, readRows_("Orders")), eventId: event.id,
+      payerName: person.name, payerEmail: person.email, etransferName: etransferName, total: person.price,
+      status: "paid", createdAt: now, paidAt: now, paidBy: session.name,
+      notes: ["Added by " + session.name, note].filter(Boolean).join(" | ")
+    };
+    insertRow_("Orders", created);
+    insertRow_("Tickets", {
+      id: newTicketId_(), secret: Utilities.getUuid().replace(/-/g, ""), orderId: created.id, eventId: event.id,
+      name: person.name, email: person.email, ucid: person.ucid, memberId: person.memberId,
+      ticketType: person.ticketTypeName, price: person.price, answers: person.answers, flag: person.flag,
+      status: "paid", checkedInAt: "", checkedInBy: "", createdAt: now
+    });
+    log_(session.name, "order.manual", created.code, { name: person.name, type: person.ticketTypeName, total: person.price, overCapacity: !!force });
+    return created;
+  });
+
+  const sent = sendPendingTicketEmails_(order.id);
+  return { ok: true, code: order.code, total: order.total, emailsSent: sent.sent, emailsWaiting: sent.waiting, flag: person.flag };
+}
+
 // ---- Checks -----------------------------------------------------------------
 
-function cleanPerson_(p, event, index) {
+function cleanPerson_(p, event, index, lenient) {
   p = p || {};
   const who = index === 0 ? "Your" : "Friend " + index + "'s";
   const name = String(p.name || "").trim().replace(/\s+/g, " ").slice(0, 80);
@@ -118,7 +166,7 @@ function cleanPerson_(p, event, index) {
   const answers = {};
   event.questions.forEach(function (q) {
     const value = String((p.answers || {})[q.id] || "").trim().slice(0, 300);
-    if (q.required && !value) throw new ApiError_("BAD_REQUEST", "\"" + q.label + "\" is missing for " + name + ".");
+    if (q.required && !value && !lenient) throw new ApiError_("BAD_REQUEST", "\"" + q.label + "\" is missing for " + name + ".");
     if (value && q.type === "choice" && q.options.indexOf(value) === -1) throw new ApiError_("BAD_REQUEST", "Pick one of the options for \"" + q.label + "\".");
     if (value) answers[q.label] = value;
   });

@@ -50,7 +50,10 @@ The Events list shows how many people have **paid** and how many are **awaiting 
 3. Check the amount is **exactly** the total shown. Then **Mark paid**. Everyone in that order gets their ticket email automatically.
    - Amount wrong? Don't mark it paid. Reply to them.
    - "Over capacity" warning? The event is full of paid tickets. Only continue if you really want to go over.
-4. Filters: **Awaiting** (still to pay), **Paid**, **Refunded / cancelled**, **All**.
+4. Filters: **Awaiting** (still to pay), **Waiting too long** (unpaid for over 2 days), **Paid**, **Refunded / cancelled**, **All**. The line at the top shows **money received of money expected**, handy for matching the bank.
+   - **Send reminders** (yellow bar): emails everyone who's waited over 2 days. It tells you how many first and asks before sending. Nobody is reminded more than once every 2 days.
+   - **Mark several paid:** tick the boxes next to orders (or **Select all shown**), check the amounts in the pop-up, and confirm once. Orders that would go over capacity are skipped and listed.
+   - **+ Add paid registration:** someone paid (e-transfer or cash) without registering online. Enter their name, email, ticket type; they're added as paid and emailed their ticket. For a group, add each person separately.
 5. ⚠ yellow notes = something to check at the door (membership not found, duplicate email).
 
 **Refund / cancel:** opens the spot again. For a paid order, send the money back by e-transfer yourself; the system only records it. Nothing is ever deleted.

@@ -90,6 +90,15 @@ function route_(req) {
     case "markOrderPaid":
       return markOrderPaid_(requireSession_(req.token), req.orderId, !!req.force, req.siteUrl);
 
+    case "markOrdersPaid":
+      return markOrdersPaid_(requireSession_(req.token), req.orderIds, req.siteUrl);
+
+    case "sendReminders":
+      return sendReminders_(requireSession_(req.token), req.eventId, !!req.dryRun);
+
+    case "addOrder":
+      return addOrder_(requireSession_(req.token), req.eventId, req.order, !!req.force, req.siteUrl);
+
     case "refundOrder":
       return refundOrder_(requireSession_(req.token), req.orderId, req.reason);
 

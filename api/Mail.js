@@ -63,6 +63,38 @@ function sendRegistrationEmail_(event, order, tickets) {
   }
 }
 
+/** To the payer of an order that hasn't been paid yet: a gentle nudge with the payment details again. */
+function sendReminderEmail_(event, order, tickets) {
+  if (!canSendMail_(order.payerEmail)) return false;
+  const config = getConfig_();
+  const people = tickets.map(function (t) { return esc_(t.name) + " (" + esc_(t.ticketType) + ")"; }).join(", ");
+  const html =
+    "<div style=\"font-family:Arial,Helvetica,sans-serif;max-width:560px;color:#1c1917\">" +
+    "<p style=\"color:#b91c1c;font-weight:bold;margin:0 0 12px\">Chinese Students' Society · University of Calgary</p>" +
+    "<p>Just a reminder: your spot for <b>" + esc_(event.name) + "</b> isn't confirmed yet, because we haven't received your e-transfer.</p>" +
+    "<table style=\"font-size:16px;border-collapse:collapse\">" +
+    "<tr><td style=\"padding:4px 16px 4px 0;color:#666\">Amount</td><td><b>" + moneyText_(order.total) + "</b> (exactly)</td></tr>" +
+    "<tr><td style=\"padding:4px 16px 4px 0;color:#666\">Send to</td><td><b>" + esc_(config.etransferEmail) + "</b></td></tr>" +
+    "<tr><td style=\"padding:4px 16px 4px 0;color:#666\">Message</td><td><b style=\"font-size:20px;letter-spacing:1px\">" + esc_(order.code) + "</b></td></tr>" +
+    "</table>" +
+    "<p style=\"margin-top:16px\"><b>For:</b> " + people + "<br><b>When:</b> " + esc_(eventWhenText_(event)) + "<br><b>Where:</b> " + esc_(event.location || "TBA") + "</p>" +
+    "<p style=\"color:#666\">Already sent it? Thank you! It can take us a day to match it, so no need to send it again. " +
+    "Can't make it anymore? Just reply and we'll free up your spot.</p></div>";
+  try {
+    MailApp.sendEmail({
+      to: order.payerEmail,
+      subject: "Reminder: payment needed for " + event.name + " (" + order.code + ")",
+      htmlBody: html,
+      name: MAIL_FROM_NAME,
+      replyTo: config.etransferEmail
+    });
+    return true;
+  } catch (e) {
+    console.error("Reminder email failed for " + order.code + ": " + e.message);
+    return false;
+  }
+}
+
 /** To each person once their order is paid: their own ticket with a QR code and a link to the ticket page. */
 function sendTicketEmail_(event, ticket) {
   if (!canSendMail_(ticket.email)) return false;

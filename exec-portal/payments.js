@@ -1,6 +1,6 @@
 // CSS Exec Portal — Payments tab (Finance): match e-transfers to orders, mark paid, refund.
 
-const payState = { eventId: "", data: null, filter: "awaiting" };
+const payState = { eventId: "", data: null, filter: "awaiting", selected: new Set() };
 
 async function openPaymentsTab() {
   if (!eventsState.loaded) await loadEvents();
@@ -22,6 +22,8 @@ async function loadOrders() {
   const reply = await api("listOrders", { eventId: payState.eventId });
   if (!reply.ok) return handleEventError(reply, $("pay-status"));
   payState.data = reply;
+  // keep only ticks for orders that are still waiting for payment
+  payState.selected = new Set([...payState.selected].filter((id) => reply.orders.some((o) => o.id === id && o.status === "awaiting")));
   renderOrders();
 }
 
@@ -29,7 +31,8 @@ function renderOrders() {
   const data = payState.data;
   if (!data) return;
   const awaiting = data.orders.filter((o) => o.status === "awaiting").length;
-  $("pay-summary").textContent = T.paySummary(data.spotsTaken, data.event.capacity ? ` / ${data.event.capacity}` : "", awaiting);
+  $("pay-summary").textContent = T.paySummary(data.spotsTaken, data.event.capacity ? ` / ${data.event.capacity}` : "", awaiting) +
+    T.payMoney(money(data.money.received), money(data.money.received + data.money.awaiting));
 
   $("pay-unsent").hidden = !data.unsentEmails;
   $("pay-unsent").innerHTML = data.unsentEmails
@@ -38,6 +41,7 @@ function renderOrders() {
   const q = $("pay-search").value.trim().toLowerCase();
   const list = data.orders.filter((o) => {
     if (payState.filter === "awaiting" && o.status !== "awaiting") return false;
+    if (payState.filter === "overdue" && !isOverdue(o)) return false;
     if (payState.filter === "paid" && o.status !== "paid") return false;
     if (payState.filter === "closed" && o.status !== "refunded" && o.status !== "cancelled") return false;
     if (!q) return true;
@@ -46,6 +50,7 @@ function renderOrders() {
   });
   $("pay-status").textContent = list.length ? T.orderCount(list.length) : T.noOrders;
   $("orders").innerHTML = list.map(orderCard).join("");
+  renderFinanceExtras(list);
 }
 
 function orderCard(o) {
@@ -54,7 +59,7 @@ function orderCard(o) {
   return `
     <li class="card order" data-order="${o.id}">
       <div class="order-head">
-        <span class="order-code">${escapeHtml(o.code)}</span>
+        <span class="order-code">${o.status === "awaiting" ? `<input type="checkbox" class="pick" data-pick="${o.id}" ${payState.selected.has(o.id) ? "checked" : ""} aria-label="${T.pickOrder}"> ` : ""}${escapeHtml(o.code)}</span>
         <span><span class="pill ${statusClass}">${statusText}</span> <span class="order-total">${money(o.total)}</span></span>
       </div>
       <div class="order-meta">

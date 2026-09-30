@@ -13,7 +13,7 @@ const TABLES = {
            "ticketTypes", "questions", "codePrefix", "createdBy", "createdAt", "updatedBy", "updatedAt",
            "registrationCloses"],
   Orders: ["id", "code", "eventId", "payerName", "payerEmail", "etransferName", "total", "status",
-           "createdAt", "paidAt", "paidBy", "notes"],
+           "createdAt", "paidAt", "paidBy", "notes", "remindedAt"],
   Tickets: ["id", "secret", "orderId", "eventId", "name", "email", "ucid", "memberId", "ticketType",
             "price", "answers", "flag", "status", "checkedInAt", "checkedInBy", "createdAt", "emailedAt"],
   Log: ["time", "who", "action", "target", "details"]

@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex">
   <title>CSS Exec Portal</title>
-  <link rel="stylesheet" href="styles.css?v=0.3.0">
+  <link rel="stylesheet" href="styles.css?v=0.3.1">
 </head>
 <body>
   <div id="demo-banner" class="demo-banner" hidden></div>
@@ -182,16 +182,22 @@
       <div class="payments-top">
         <label for="pay-event" class="visually-hidden" data-t="payEvent"></label>
         <select id="pay-event"></select>
-        <p id="pay-summary" class="muted small"></p>
+        <div class="row-between">
+          <p id="pay-summary" class="muted small"></p>
+          <button id="add-order-button" class="secondary small-button" data-t="addOrder"></button>
+        </div>
         <div id="pay-unsent" class="notice-box" hidden></div>
+        <div id="pay-overdue" class="notice-box" hidden></div>
         <div class="chips" id="pay-filters">
           <button class="chip active" data-filter="awaiting" data-t="filterAwaiting"></button>
+          <button class="chip" data-filter="overdue"></button>
           <button class="chip" data-filter="paid" data-t="filterPaid"></button>
           <button class="chip" data-filter="closed" data-t="filterClosed"></button>
           <button class="chip" data-filter="all" data-t="filterAll"></button>
         </div>
         <input id="pay-search" class="search" type="search" autocomplete="off">
       </div>
+      <div id="bulk-bar" class="bulk-bar" hidden></div>
       <p id="pay-status" class="muted small" aria-live="polite"></p>
       <ul id="orders" class="results"></ul>
      </div>
@@ -263,6 +269,35 @@
     </main>
   </div>
 
+  <!-- Add a paid registration -->
+  <dialog id="add-dialog" class="edit-dialog">
+    <form id="add-form" class="editor" novalidate>
+      <h2 id="add-title"></h2>
+      <p class="muted small" data-t="addHint"></p>
+      <label for="add-name" data-t="editName"></label>
+      <input id="add-name" maxlength="80" autocomplete="off">
+      <label for="add-email" data-t="editEmail"></label>
+      <input id="add-email" type="email" maxlength="120" autocomplete="off">
+      <p class="muted small" data-t="addEmailHint"></p>
+      <label for="add-type" data-t="editType"></label>
+      <select id="add-type"></select>
+      <div class="grid-2">
+        <div><label for="add-ucid" data-t="walkInUcid"></label><input id="add-ucid" inputmode="numeric" maxlength="12" autocomplete="off"></div>
+        <div><label for="add-member" data-t="walkInMemberId"></label><input id="add-member" maxlength="20" autocomplete="off"></div>
+      </div>
+      <div id="add-answers"></div>
+      <label for="add-etransfer" data-t="editEtransferName"></label>
+      <input id="add-etransfer" maxlength="80" autocomplete="off">
+      <label for="add-notes" data-t="editNotes"></label>
+      <input id="add-notes" maxlength="200" autocomplete="off">
+      <p id="add-error" class="error" role="alert" hidden></p>
+      <div class="button-row">
+        <button type="button" id="add-cancel" class="secondary" data-t="cancel"></button>
+        <button type="submit" id="add-save" class="primary" data-t="addSave"></button>
+      </div>
+    </form>
+  </dialog>
+
   <!-- Edit person -->
   <dialog id="edit-dialog" class="edit-dialog">
     <form id="edit-form" class="editor" novalidate>
@@ -314,12 +349,13 @@
   </dialog>
 
   <script src="config.js?v=0.2.4"></script>
-  <script src="strings.js?v=0.3.0"></script>
+  <script src="strings.js?v=0.3.1"></script>
   <script src="mock.js?v=0.2.4"></script>
   <script src="app.js?v=0.3.0"></script>
   <script src="events.js?v=0.3.0"></script>
-  <script src="payments.js?v=0.3.0"></script>
+  <script src="payments.js?v=0.3.1"></script>
   <script src="edit.js?v=0.3.0"></script>
+  <script src="finance.js?v=0.3.1"></script>
   <script src="attendees.js?v=0.3.0"></script>
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
   <script src="door.js?v=0.3.0"></script>

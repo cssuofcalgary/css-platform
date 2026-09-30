@@ -17,7 +17,7 @@ function listOrders_(eventId) {
       return {
         id: o.id, code: o.code, payerName: o.payerName, payerEmail: o.payerEmail,
         etransferName: o.etransferName, total: Number(o.total) || 0, status: o.status,
-        createdAt: o.createdAt, paidAt: o.paidAt, paidBy: o.paidBy, notes: o.notes,
+        createdAt: o.createdAt, paidAt: o.paidAt, paidBy: o.paidBy, notes: o.notes, remindedAt: o.remindedAt || "",
         tickets: tickets.filter(function (t) { return t.orderId === o.id; }).map(function (t) {
           return {
             id: t.id, name: t.name, email: t.email, ucid: t.ucid, memberId: t.memberId,
@@ -35,6 +35,11 @@ function listOrders_(eventId) {
     event: { id: event.id, name: event.name, capacity: event.capacity, capacityRule: event.capacityRule,
              ticketTypes: event.ticketTypes, questions: event.questions },
     orders: orders,
+    money: {
+      received: orders.filter(function (o) { return o.status === "paid"; }).reduce(function (s, o) { return s + o.total; }, 0),
+      awaiting: orders.filter(function (o) { return o.status === "awaiting"; }).reduce(function (s, o) { return s + o.total; }, 0)
+    },
+    reminderHours: REMINDER_AFTER_HOURS,
     spotsTaken: spotsTaken_(event),
     unsentEmails: tickets.filter(function (t) { return t.status === "paid" && !t.emailedAt; }).length
   };
@@ -43,30 +48,123 @@ function listOrders_(eventId) {
 /** Finance: the e-transfer arrived. `force` = go over capacity anyway (Finance was warned). */
 function markOrderPaid_(session, orderId, force, siteUrl) {
   rememberSiteUrl_(siteUrl);
-  const result = withLock_(function () {
-    const order = readRows_("Orders").filter(function (o) { return o.id === orderId; })[0];
-    if (!order) throw new ApiError_("NOT_FOUND", "Order not found.");
-    if (order.status === "paid") return { already: true, order: order };
-    if (order.status !== "awaiting") throw new ApiError_("BAD_REQUEST", "This order was " + order.status + ". It can't be marked paid.");
-
-    const event = findEvent_(function (e) { return e.id === order.eventId; });
-    const tickets = readRows_("Tickets").filter(function (t) { return t.orderId === order.id && t.status === "awaiting"; });
-    if (event && event.capacity && event.capacityRule === "paid" && !force) {
-      const taken = spotsTaken_(event);
-      if (taken + tickets.length > event.capacity) {
-        throw new ApiError_("OVER_CAPACITY", "This would make " + (taken + tickets.length) + " paid tickets, over the capacity of " + event.capacity + ".");
-      }
-    }
-
-    const now = new Date().toISOString();
-    updateRow_("Orders", order.id, { status: "paid", paidAt: now, paidBy: session.name });
-    tickets.forEach(function (t) { updateRow_("Tickets", t.id, { status: "paid" }); });
-    log_(session.name, "order.paid", order.code, { total: order.total, tickets: tickets.length, overCapacity: !!force });
-    return { already: false, order: order };
-  });
-
+  const result = withLock_(function () { return markPaidLocked_(session, orderId, force); });
   const sent = sendPendingTicketEmails_(result.order.id);
   return { ok: true, alreadyPaid: result.already, emailsSent: sent.sent, emailsWaiting: sent.waiting };
+}
+
+/** The part of "mark paid" that changes data. Call it while holding the lock. */
+function markPaidLocked_(session, orderId, force) {
+  const order = readRows_("Orders").filter(function (o) { return o.id === orderId; })[0];
+  if (!order) throw new ApiError_("NOT_FOUND", "Order not found.");
+  if (order.status === "paid") return { already: true, order: order };
+  if (order.status !== "awaiting") throw new ApiError_("BAD_REQUEST", "This order was " + order.status + ". It can't be marked paid.");
+
+  const event = findEvent_(function (e) { return e.id === order.eventId; });
+  const tickets = readRows_("Tickets").filter(function (t) { return t.orderId === order.id && t.status === "awaiting"; });
+  if (event && event.capacity && event.capacityRule === "paid" && !force) {
+    const taken = spotsTaken_(event);
+    if (taken + tickets.length > event.capacity) {
+      throw new ApiError_("OVER_CAPACITY", "This would make " + (taken + tickets.length) + " paid tickets, over the capacity of " + event.capacity + ".");
+    }
+  }
+
+  const now = new Date().toISOString();
+  updateRow_("Orders", order.id, { status: "paid", paidAt: now, paidBy: session.name });
+  tickets.forEach(function (t) { updateRow_("Tickets", t.id, { status: "paid" }); });
+  log_(session.name, "order.paid", order.code, { total: order.total, tickets: tickets.length, overCapacity: !!force });
+  return { already: false, order: order };
+}
+
+/**
+ * Finance: several e-transfers at once. Orders that would go over capacity are skipped
+ * (and reported), never forced. The page sends a few at a time, so one call stays quick.
+ */
+const MAX_BULK_ORDERS = 10;
+
+function markOrdersPaid_(session, orderIds, siteUrl) {
+  rememberSiteUrl_(siteUrl);
+  const ids = [];
+  (Array.isArray(orderIds) ? orderIds : []).forEach(function (id) { if (id && ids.indexOf(id) === -1) ids.push(String(id)); });
+  if (!ids.length) throw new ApiError_("BAD_REQUEST", "Pick at least one order.");
+  if (ids.length > MAX_BULK_ORDERS) throw new ApiError_("BAD_REQUEST", "Up to " + MAX_BULK_ORDERS + " orders at a time.");
+
+  const outcomes = withLock_(function () {
+    return ids.map(function (id) {
+      try {
+        const r = markPaidLocked_(session, id, false);
+        return { orderId: id, code: r.order.code, ok: true, already: r.already };
+      } catch (err) {
+        if (!(err instanceof ApiError_)) throw err;
+        const o = readRows_("Orders").filter(function (x) { return x.id === id; })[0];
+        return { orderId: id, code: o ? o.code : id, ok: false, error: err.code, message: err.message };
+      }
+    });
+  });
+
+  let sent = 0, waiting = 0;
+  outcomes.forEach(function (o) {
+    if (!o.ok || o.already) return;
+    const r = sendPendingTicketEmails_(o.orderId);
+    sent += r.sent; waiting += r.waiting;
+  });
+  return { ok: true, results: outcomes, emailsSent: sent, emailsWaiting: waiting };
+}
+
+/**
+ * Finance: unpaid orders that have waited too long get a "please pay" email.
+ * `dryRun` only counts. An order is reminded again only after another REMINDER_AFTER_HOURS.
+ */
+function sendReminders_(session, eventId, dryRun) {
+  const event = findEvent_(function (e) { return e.id === eventId; });
+  if (!event) throw new ApiError_("NOT_FOUND", "Event not found.");
+  const today = Utilities.formatDate(new Date(), "America/Edmonton", "yyyy-MM-dd");
+  if (event.date < today) throw new ApiError_("BAD_REQUEST", "This event is over. No reminders needed.");
+
+  const cutoff = Date.now() - REMINDER_AFTER_HOURS * 3600 * 1000;
+  const isDue = function (o) {
+    if (o.status !== "awaiting") return false;
+    if (new Date(o.createdAt).getTime() > cutoff) return false;
+    if (!o.remindedAt) return true;
+    const when = new Date(o.remindedAt).getTime();
+    return !isNaN(when) && when <= cutoff;   // text like "test address, not sent" counts as already handled
+  };
+
+  let quota = 0;
+  try { quota = MailApp.getRemainingDailyQuota(); } catch (e) { /* unknown */ }
+
+  if (dryRun) {
+    const due = readRows_("Orders").filter(function (o) { return o.eventId === eventId && isDue(o); });
+    const real = due.filter(function (o) { return !isTestAddress_(o.payerEmail); });
+    return { ok: true, due: due.length, toEmail: real.length, emailsLeftToday: quota };
+  }
+
+  // Claim the orders while holding the lock, so two people pressing the button can't email everyone twice.
+  const claimed = withLock_(function () {
+    const now = new Date().toISOString();
+    const due = readRows_("Orders").filter(function (o) { return o.eventId === eventId && isDue(o); });
+    const list = [];
+    due.forEach(function (o) {
+      if (isTestAddress_(o.payerEmail)) { updateRow_("Orders", o.id, { remindedAt: "test address, not sent" }, o._row); return; }
+      if (list.length >= quota) return;
+      updateRow_("Orders", o.id, { remindedAt: now }, o._row);
+      list.push(o);
+    });
+    return list;
+  });
+
+  let sent = 0;
+  const failed = [];
+  const tickets = readRows_("Tickets");
+  claimed.forEach(function (o) {
+    const mine = tickets.filter(function (t) { return t.orderId === o.id && t.status === "awaiting"; });
+    if (sendReminderEmail_(event, o, mine)) sent++; else failed.push(o);
+  });
+  if (failed.length) {
+    withLock_(function () { failed.forEach(function (o) { updateRow_("Orders", o.id, { remindedAt: "" }); }); });
+  }
+  log_(session.name, "reminders.send", event.id, { sent: sent, failed: failed.length });
+  return { ok: true, sent: sent, failed: failed.length };
 }
 
 /** Refund (paid) or cancel (not paid yet). The spot opens up again; nothing is deleted. */
