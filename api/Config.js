@@ -9,6 +9,9 @@
  *   ADMIN_PASSWORD       Admin password: everything execs can do, plus admin-only tools. Optional.
  *   MEMBERSHIP_TAB       Tab with the member rows. Default: "Form Responses 1".
  *   ETRANSFER_EMAIL      Where people send e-transfers. Default: css.uofcalgary@gmail.com.
+ *   CONTACT_EMAIL, INSTAGRAM_URL   Shown at the bottom of the public pages.
+ *
+ * All of these (and both passwords) can also be changed from the Exec Portal's Settings tab (admin only).
  *
  * Set automatically by the system (don't edit): DATA_SHEET_ID, IMAGE_FOLDER_ID.
  */
@@ -26,7 +29,9 @@ function getConfig_() {
     membershipTab: String(props.getProperty("MEMBERSHIP_TAB") || "Form Responses 1").trim(),
     password: String(props.getProperty("EXEC_PASSWORD") || ""),
     adminPassword: String(props.getProperty("ADMIN_PASSWORD") || ""),
-    etransferEmail: String(props.getProperty("ETRANSFER_EMAIL") || "css.uofcalgary@gmail.com").trim()
+    etransferEmail: String(props.getProperty("ETRANSFER_EMAIL") || "css.uofcalgary@gmail.com").trim(),
+    contactEmail: String(props.getProperty("CONTACT_EMAIL") || "css.uofcalgary@gmail.com").trim(),
+    instagramUrl: String(props.getProperty("INSTAGRAM_URL") || "https://www.instagram.com/ucalgary.css/").trim()
   };
 }
 

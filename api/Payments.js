@@ -394,6 +394,7 @@ function getTicket_(secret) {
       name: event.name, slug: event.slug, date: event.date, startTime: event.startTime,
       endTime: event.endTime, location: event.location, imageUrl: event.imageUrl
     },
+    site: siteInfo_(),
     etransferEmail: getConfig_().etransferEmail,
     orderTotal: Number(order.total) || 0
   };

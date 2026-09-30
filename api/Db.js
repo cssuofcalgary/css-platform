@@ -160,6 +160,21 @@ function readRows_(name) {
   return (DB_.rows[name] = rows);
 }
 
+/** The last `count` rows of a table (newest last), without reading the whole sheet. Used for the Log, which only grows. */
+function readLastRows_(name, count) {
+  const sheet = table_(name);
+  const header = headerFor_(name);
+  const last = retry_(function () { return sheet.getLastRow(); });
+  if (last < 2) return [];
+  const first = Math.max(2, last - count + 1);
+  const values = retry_(function () { return sheet.getRange(first, 1, last - first + 1, header.length).getValues(); });
+  return values.filter(function (v) { return !v.every(function (x) { return x === ""; }); }).map(function (v) {
+    const row = {};
+    header.forEach(function (column, c) { if (column) row[column] = fromCell_(column, v[c]); });
+    return row;
+  });
+}
+
 function insertRow_(name, obj) {
   const sheet = table_(name);
   const header = headerFor_(name);

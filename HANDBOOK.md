@@ -83,6 +83,16 @@ If you see "ticket emails waiting (daily email limit)", press **Send now** later
 
 No signal? Things get slow, not broken. Before the event, keep the Payments tab open or print the list.
 
+## Activity tab (everyone)
+A plain list of what happened, newest first: "Kevin marked TNM-4408 paid · 6:02 pm". Filter by **event**, by **person**, by kind (Payments, Door, Edits, Events, Settings), or search a code or name. Use it to settle "I paid!" or "who checked them in?".
+
+## Settings tab (admin password only)
+- **Payments and contact:** the e-transfer email, the contact email and the Instagram link shown on the public pages.
+- **Membership sheet:** each year, paste the new sheet's link and press **Test and save**. It reads the sheet first and tells you how many members it found, so a wrong link can't break anything.
+- **Passwords:** type the new one twice. Everyone else is signed out and needs the new password. Never write a password in a document or chat.
+- **Sign everyone else out:** if a phone or laptop was left signed in.
+- **Health check:** shows whether the data sheet and Membership sheet are reachable, how many emails are left today, and the last error the system saw. Run it if something feels off.
+
 ## Good to know
 - Everything you do is saved in a change log with your name.
 - You never need to open Google Sheets or Google Drive. If you think you have to, ask the President first.

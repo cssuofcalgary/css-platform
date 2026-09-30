@@ -313,6 +313,15 @@ body.phone .door-live-num { font-size: 36px; }
 .bulk-buttons { display: flex; flex-wrap: wrap; gap: 4px 14px; align-items: center; }
 .bulk-info { font-size: 14px; font-weight: 600; }
 
+/* Activity and Settings */
+.act-day { font-weight: 700; margin-top: 10px; color: var(--muted); font-size: 14px; }
+.act { display: flex; gap: 12px; padding: 10px 14px; align-items: baseline; }
+.act-time { color: var(--muted); font-size: 13px; white-space: nowrap; min-width: 62px; }
+.sub-title { margin: 0 0 4px; font-size: 18px; }
+.good-text { color: var(--good-text); font-weight: 600; }
+#tab-settings .card { margin-top: 12px; }
+#tab-settings .editor input + input { margin-top: 6px; }
+
 /* Attendees */
 .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; margin: 8px 0 14px; }
 .tile { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 14px; }

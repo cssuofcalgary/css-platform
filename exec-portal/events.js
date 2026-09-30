@@ -10,10 +10,14 @@ function switchTab(name) {
   $("tab-events").hidden = name !== "events";
   $("tab-payments").hidden = name !== "payments";
   $("tab-door").hidden = name !== "door";
+  $("tab-activity").hidden = name !== "activity";
+  $("tab-settings").hidden = name !== "settings";
   if (name !== "door" && doorState.scanner) stopCamera();
   if (name === "events") { showEventsList(); if (!eventsState.loaded) loadEvents(); }
   if (name === "payments") openPaymentsTab();
   if (name === "door") openDoorTab();
+  if (name === "activity") openActivityTab();
+  if (name === "settings") openSettingsTab();
   if (name === "members") $("search-input").focus();
 }
 

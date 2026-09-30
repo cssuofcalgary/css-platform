@@ -137,6 +137,7 @@ function publicEvents_() {
   const today = Utilities.formatDate(new Date(), "America/Edmonton", "yyyy-MM-dd");
   return {
     ok: true,
+    site: siteInfo_(),
     events: allEvents_()
       .filter(function (e) { return e.status === "published" && e.date >= today; })
       .reverse()
@@ -147,7 +148,7 @@ function publicEvents_() {
 function publicEvent_(slug) {
   const event = findEvent_(function (e) { return e.slug === String(slug || "").toLowerCase(); });
   if (!event || event.status === "draft" || event.status === "archived") throw new ApiError_("NOT_FOUND", "Event not found.");
-  return { ok: true, event: publicEventView_(event) };
+  return { ok: true, site: siteInfo_(), event: publicEventView_(event) };
 }
 
 /** Only what the public may see. */

@@ -55,10 +55,12 @@ The old system (`../CSS Ticketing System/`) keeps running until this one is prov
 | `api/Events.js` | Events: validation, save, publish/close, image upload, public event views |
 | `api/Orders.js` | Registration: one Order (payment code) + one Ticket per person, membership check (flags, never blocks), duplicate check, anti-spam |
 | `api/Payments.js` | Finance: list orders, mark paid (capacity check, `force` to override), refund/cancel (never deletes), resend tickets, send waiting emails. Public ticket lookup by secret. Remembers the public site address for email links (`PUBLIC_SITE_URL` property) |
+| `api/Settings.js` | Admin only: read/save settings (validated; a new Membership sheet is really read before it's accepted), passwords, "sign everyone out" (a session *epoch*: every session remembers the epoch it was made in, changing it invalidates them all), health check, last-error memory |
+| `api/Activity.js` | Turns the Log tab into readable sentences, with filters (event, exec, group, text) |
 | `api/Summary.js` | `eventSummary`: the numbers, money, per-type counts, answers to custom questions and the attendee list for one event. Read-only |
 | `api/Door.js` | Door: entry open/closed, `scan` (ticket link / secret / TKT id → green / green-flag / orange / red, checks in under the lock), walk-ins (paid + checked in, always allowed), help-desk list |
 | `api/Mail.js` | Emails from the CSS Gmail (checks the daily limit first). **Addresses @example.com/.org/.net are never emailed** (use them for testing) |
-| `exec-portal/` | Exec Portal: `index.html`, `app.js` (sign-in + Members tab), `events.js` (Events tab), `payments.js` (Payments tab), `finance.js` (reminders, mark several paid, add a paid registration), `edit.js` (the Edit person panel), `attendees.js` (event numbers + attendee list), `door.js` (Door tab; camera via html5-qrcode from unpkg), `strings.js` (**all text**), `config.js` (API URL + public site URL), `mock.js` (demo mode when API URL is empty) |
+| `exec-portal/` | Exec Portal: `index.html`, `app.js` (sign-in + Members tab), `events.js` (Events tab), `payments.js` (Payments tab), `finance.js` (reminders, mark several paid, add a paid registration), `activity.js` (Activity tab), `settings.js` (Settings tab, admin only), `edit.js` (the Edit person panel), `attendees.js` (event numbers + attendee list), `door.js` (Door tab; camera via html5-qrcode from unpkg), `strings.js` (**all text**), `config.js` (API URL + public site URL), `mock.js` (demo mode when API URL is empty) |
 | `public/` | Public site: `index.html`, `public.js` (event list, event page, registration form, payment screen), `ticket.html` + `ticket.js` (a person's ticket with QR; QR library from cdnjs), `public.css` (look copied from the member portal, member.ucalgarycss.ca: sage/clay/cream colours, Silkscreen + Source Serif 4 fonts from Google Fonts, zig-zag card, pandas; colours are variables at the top), `assets/` (pandas + CSS logo fallback; the banner and background pictures load from the CSS Google Drive), `strings.js` (**all text**), `config.js` (API URL, contact email, Instagram) |
 
 ## 4. Data tables ("CSS Platform Data")
@@ -90,6 +92,11 @@ Lists (`ticketTypes`, `questions`, `answers`) are stored as JSON text.
 | `saveEvent` `{event}` | yes | Create (no id) or update (with id). The slug (public link) never changes after creation |
 | `setEventStatus` `{eventId, status}` | yes | draft / published / closed / **archived** (archiving or restoring needs the **admin** password). Archived events vanish from the public site and the day-to-day tabs; nothing is deleted |
 | `updateTicket` `{ticketId, changes, orderChanges?, siteUrl}` | yes | Edit a person. `changes`: `name`, `email` (any exec; new email on a paid ticket = ticket re-sent) and, **admin only**, `ucid`, `memberId`, `ticketTypeId` (changes the price and the order total), `answers {questionLabel: value}`, `flag`. `orderChanges` (**admin only**): `payerName`, `payerEmail`, `etransferName`, `notes`. Only fields that really differ count. Changing member ID / UCID / ticket type re-checks the Membership sheet (other flags stay) unless `flag` is sent. Everything is logged with old and new values. Replies `total {was, now}` when the price changed |
+| `activityLog` `{filters: {eventId?, who?, group?, query?}}` | yes | The change log as sentences, newest first (max 300). `group`: payments / door / edits / events / settings |
+| `getSettings` | **admin** | Current settings (never passwords; only whether each is set) |
+| `saveSettings` `{settings}` | **admin** | Any of `etransferEmail`, `contactEmail`, `instagramUrl`, `membershipSheet`, `membershipTab`, `execPassword`, `adminPassword`. Passwords: 8+ characters, must differ. A password change signs everyone out and returns a fresh `token` for the caller. Logged by name only |
+| `signOutAll` | **admin** | Signs everyone out; returns a fresh `token` for the caller |
+| `healthCheck` | **admin** | Platform sheet, Membership sheet, email allowance, last error, whether the public site address is known |
 | `eventSummary` `{eventId}` | yes | `totals` (registered, paid, awaiting, checkedIn, notArrived, flagged), `money {received, awaiting}`, `spotsLeft`, `byType`, `questions` (each answer counted), `attendees` (every ticket + its order; no secrets) |
 | `undoCheckIn` `{ticketId}` | yes | Clears a check-in (logged) |
 | `listOrders` `{eventId}` | yes | Orders with their tickets (incl. ticket secrets, for help-desk links), the event's ticket types and questions, `money {received, awaiting}`, `reminderHours`, spots taken, unsent email count |
@@ -115,6 +122,10 @@ Lists (`ticketTypes`, `questions`, `answers`) are stored as JSON text.
 | `ADMIN_PASSWORD` | Admin sign-in (admin-only tools, coming later). Optional |
 | `MEMBERSHIP_TAB` | Default `Form Responses 1` |
 | `ETRANSFER_EMAIL` | Default `css.uofcalgary@gmail.com` |
+| `CONTACT_EMAIL`, `INSTAGRAM_URL` | Shown at the bottom of the public pages (the API sends them; `public/config.js` is only the fallback) |
+| `SESSION_EPOCH`, `LAST_ERROR` | Set **by the system**. Changing `SESSION_EPOCH` signs everyone out. `LAST_ERROR` = the last unexpected error, shown in the health check |
+
+Everything above except the automatic ones can be changed in the portal's **Settings** tab (admin). Script Properties is only needed if the admin password is lost.
 | `PUBLIC_SITE_URL` | Set **by the system** from the Exec Portal (its `PUBLIC_SITE_URL` config) whenever Finance marks paid. Used for ticket links in emails. After moving the public site to a new address, use "Resend tickets" to send fresh links |
 | `DATA_SHEET_ID`, `IMAGE_FOLDER_ID` | Set **by the system**. Only change if you deliberately point it at a restored copy (see RUNBOOK) |
 

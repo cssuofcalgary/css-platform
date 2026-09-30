@@ -64,7 +64,11 @@ If the sheet was **deleted**: restore it from Drive **Trash** (within 30 days). 
 To point the system at a **restored copy** instead: copy the copy's ID (the long part of its link between `/d/` and `/edit`) → Script Properties → set `DATA_SHEET_ID` to it.
 
 ## Change passwords
-Script Properties → edit `EXEC_PASSWORD` (or `ADMIN_PASSWORD`) → Save. Works immediately; no redeploy. Tell execs the new one in person.
+Easiest: sign in with the admin password → **Settings** → Passwords. Everyone else is signed out and must use the new one. Tell execs in person.
+**Lost the admin password?** Script Properties → edit `ADMIN_PASSWORD` → Save. Works immediately; no redeploy.
+
+## Something feels off / errors
+Settings → **Health check** shows what's reachable and the last error the system saw. Activity shows what changed and who did it.
 
 ## Emergency: switch back to the old system
 The old system (`../CSS Ticketing System/`: Google Forms, the old scanner and pay page) was never changed and still works. Run the event with it.

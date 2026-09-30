@@ -128,6 +128,7 @@ function showApp() {
   $("app-view").hidden = false;
   $("who-name").textContent = state.name;
   $("admin-badge").hidden = state.role !== "admin";
+  $("settings-tab-button").hidden = state.role !== "admin";
   showSearch();
   // Phones are for the door: open straight to the Door tab.
   // (The tab code loads after this file, so on first load wait until every script has run.)

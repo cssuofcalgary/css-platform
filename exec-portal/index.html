@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex">
   <title>CSS Exec Portal</title>
-  <link rel="stylesheet" href="styles.css?v=0.3.1">
+  <link rel="stylesheet" href="styles.css?v=0.3.2">
 </head>
 <body>
   <div id="demo-banner" class="demo-banner" hidden></div>
@@ -45,6 +45,8 @@
       <button class="tab" data-tab="events" data-t="tabEvents"></button>
       <button class="tab" data-tab="payments" data-t="tabPayments"></button>
       <button class="tab" data-tab="door" data-t="tabDoor"></button>
+      <button class="tab" data-tab="activity" data-t="tabActivity"></button>
+      <button class="tab" id="settings-tab-button" data-tab="settings" data-t="tabSettings" hidden></button>
     </nav>
 
     <main class="content">
@@ -266,6 +268,82 @@
         <ul id="helpdesk-flagged" class="results"></ul>
       </details>
      </div>
+     <div id="tab-activity" hidden>
+      <div class="payments-top">
+        <div class="grid-2">
+          <select id="act-event" aria-label="Event"></select>
+          <select id="act-who" aria-label="Who"></select>
+        </div>
+        <input id="act-search" class="search" type="search" autocomplete="off">
+        <div class="chips" id="act-groups">
+          <button class="chip active" data-group="all" data-t="actAll"></button>
+          <button class="chip" data-group="payments" data-t="actPayments"></button>
+          <button class="chip" data-group="door" data-t="actDoor"></button>
+          <button class="chip" data-group="edits" data-t="actEdits"></button>
+          <button class="chip" data-group="events" data-t="actEvents"></button>
+          <button class="chip" data-group="settings" data-t="actSettings"></button>
+        </div>
+      </div>
+      <p id="act-status" class="muted small" aria-live="polite"></p>
+      <ul id="act-list" class="results"></ul>
+     </div>
+
+     <div id="tab-settings" hidden>
+      <h2 class="section-title" data-t="tabSettings"></h2>
+      <p id="set-status" class="muted small"></p>
+
+      <form id="set-general-form" class="card editor" novalidate>
+        <h3 class="sub-title" data-t="setGeneralTitle"></h3>
+        <label for="set-etransfer" data-t="setEtransfer"></label>
+        <input id="set-etransfer" type="email" maxlength="120" autocomplete="off">
+        <p class="muted small" data-t="setEtransferHint"></p>
+        <label for="set-contact" data-t="setContact"></label>
+        <input id="set-contact" type="email" maxlength="120" autocomplete="off">
+        <label for="set-instagram" data-t="setInstagram"></label>
+        <input id="set-instagram" maxlength="200" autocomplete="off">
+        <p id="set-site" class="muted small"></p>
+        <p id="set-general-result" class="muted small"></p>
+        <button type="submit" id="set-general-save" class="primary" data-t="setSave"></button>
+      </form>
+
+      <form id="set-membership-form" class="card editor" novalidate>
+        <h3 class="sub-title" data-t="setMembershipTitle"></h3>
+        <p class="muted small" data-t="setMembershipHint"></p>
+        <label for="set-sheet" data-t="setSheet"></label>
+        <input id="set-sheet" maxlength="300" autocomplete="off">
+        <label for="set-tab" data-t="setTab"></label>
+        <input id="set-tab" maxlength="80" autocomplete="off">
+        <p id="set-membership-result" class="muted small"></p>
+        <button type="submit" id="set-membership-save" class="primary" data-t="setTestSave"></button>
+      </form>
+
+      <form id="set-password-form" class="card editor" novalidate autocomplete="off">
+        <h3 class="sub-title" data-t="setPasswordsTitle"></h3>
+        <p id="set-pw-note" class="muted small"></p>
+        <label for="set-exec-pw" data-t="setExecPw"></label>
+        <input id="set-exec-pw" type="password" autocomplete="new-password">
+        <input id="set-exec-pw2" type="password" autocomplete="new-password" aria-label="Repeat">
+        <label for="set-admin-pw" data-t="setAdminPw"></label>
+        <input id="set-admin-pw" type="password" autocomplete="new-password">
+        <input id="set-admin-pw2" type="password" autocomplete="new-password" aria-label="Repeat">
+        <p class="muted small" data-t="setPwHint"></p>
+        <p id="set-password-result" class="muted small"></p>
+        <button type="submit" id="set-password-save" class="primary" data-t="setPwSave"></button>
+      </form>
+
+      <div class="card editor">
+        <h3 class="sub-title" data-t="setSessionsTitle"></h3>
+        <p class="muted small" data-t="setSessionsHint"></p>
+        <button id="set-signout-all" class="secondary" data-t="setSignOutAll"></button>
+        <p id="set-signout-result" class="muted small"></p>
+      </div>
+
+      <div class="card editor">
+        <h3 class="sub-title" data-t="setHealthTitle"></h3>
+        <button id="set-health-button" class="secondary" data-t="setHealthRun"></button>
+        <div id="set-health-result"></div>
+      </div>
+     </div>
     </main>
   </div>
 
@@ -349,13 +427,15 @@
   </dialog>
 
   <script src="config.js?v=0.2.4"></script>
-  <script src="strings.js?v=0.3.1"></script>
+  <script src="strings.js?v=0.3.2"></script>
   <script src="mock.js?v=0.2.4"></script>
-  <script src="app.js?v=0.3.0"></script>
-  <script src="events.js?v=0.3.0"></script>
+  <script src="app.js?v=0.3.2"></script>
+  <script src="events.js?v=0.3.2"></script>
   <script src="payments.js?v=0.3.1"></script>
   <script src="edit.js?v=0.3.0"></script>
   <script src="finance.js?v=0.3.1"></script>
+  <script src="activity.js?v=0.3.2"></script>
+  <script src="settings.js?v=0.3.2"></script>
   <script src="attendees.js?v=0.3.0"></script>
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
   <script src="door.js?v=0.3.0"></script>

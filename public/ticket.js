@@ -11,10 +11,19 @@ async function api(action, details = {}) {
       headers: { "Content-Type": "text/plain;charset=utf-8" },
       body: JSON.stringify({ action, ...details })
     });
-    return await res.json();
+    const data = await res.json();
+    if (data && data.site) applySite(data.site);
+    return data;
   } catch (err) {
     return { ok: false, error: "NETWORK" };
   }
+}
+
+/** Contact email + Instagram come from the Exec Portal's Settings (config.js is only the fallback). */
+function applySite(site) {
+  if (!site) return;
+  if (site.contactEmail) { $("contact-link").textContent = site.contactEmail; $("contact-link").href = "mailto:" + site.contactEmail; }
+  if (/^https:\/\//.test(site.instagramUrl || "")) $("instagram-link").href = site.instagramUrl;
 }
 
 async function start() {

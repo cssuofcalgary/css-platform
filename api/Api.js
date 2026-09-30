@@ -29,6 +29,7 @@ function doPost(e) {
   } catch (err) {
     if (err instanceof ApiError_) return json_({ ok: false, error: err.code, message: err.message });
     console.error(err);
+    rememberError_(request.action, err);
     if (isTransient_(err)) return json_({ ok: false, error: "TEMPORARY", message: "Google was slow for a moment. Try again." });
     return json_({ ok: false, error: "SERVER_ERROR", message: String(err && err.message || err) });
   }
@@ -123,6 +124,24 @@ function route_(req) {
     case "updateTicket":
       return updateTicket_(requireSession_(req.token), req.ticketId, req.changes, req.siteUrl, req.orderChanges);
 
+    case "activityLog":
+      requireSession_(req.token);
+      return activityLog_(req.filters);
+
+    case "getSettings":
+      requireAdmin_(req.token);
+      return getSettings_();
+
+    case "saveSettings":
+      return saveSettings_(requireAdmin_(req.token), req.token, req.settings);
+
+    case "signOutAll":
+      return signOutAll_(requireAdmin_(req.token));
+
+    case "healthCheck":
+      requireAdmin_(req.token);
+      return healthCheck_();
+
     case "eventSummary":
       requireSession_(req.token);
       return eventSummary_(req.eventId);
@@ -163,15 +182,23 @@ function login_(password, name) {
   const who = String(name || "").trim().slice(0, 60);
   if (!who) throw new ApiError_("NAME_NEEDED", "Pick your name.");
 
+  return { ok: true, token: startSession_(who, role), name: who, role: role };
+}
+
+/** A new signed-in session. It carries the current "epoch"; signing everyone out changes the epoch. */
+function startSession_(name, role) {
   const token = Utilities.getUuid();
-  cache.put("session_" + token, JSON.stringify({ name: who, role: role, since: new Date().toISOString() }), SESSION_SECONDS);
-  return { ok: true, token: token, name: who, role: role };
+  CacheService.getScriptCache().put("session_" + token,
+    JSON.stringify({ name: name, role: role, since: new Date().toISOString(), epoch: currentEpoch_() }), SESSION_SECONDS);
+  return token;
 }
 
 function requireSession_(token) {
   const raw = token ? CacheService.getScriptCache().get("session_" + token) : null;
   if (!raw) throw new ApiError_("NOT_LOGGED_IN", "Please log in again.");
-  return JSON.parse(raw);
+  const session = JSON.parse(raw);
+  if ((session.epoch || "0") !== currentEpoch_()) throw new ApiError_("NOT_LOGGED_IN", "Please log in again.");   // everyone was signed out
+  return session;
 }
 
 /** For admin-only actions (settings, change log, deleting, year rollover). */
