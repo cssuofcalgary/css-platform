@@ -14,8 +14,10 @@
 // Roughly 100 emails are sent (the CSS Gmail can send 500 a day).
 //
 // Options:  --regs 50 --paid 25 --burst 30   (burst = most requests in flight at once during the door test)
+//           --raw   no automatic retries (harshest view); default behaves like the real pages
 
 import readline from "node:readline";
+import { randomUUID } from "node:crypto";
 
 const API = process.env.CSS_API || "https://script.google.com/macros/s/AKfycbxJ_a_cHyRXadK17ocIebhE2XDFcpEADCzSqOVXwdCgIQe1T-UPi-efzgla2mn7ML2d/exec";   // CSS_API only for dry runs against a local copy
 const SITE = "https://events.ucalgarycss.ca/";
@@ -42,6 +44,25 @@ async function call(action, body = {}) {
   } catch (err) {
     return { ok: false, error: "NETWORK", message: String(err.message || err), _ms: Date.now() - started };
   }
+}
+
+// Default = behave like the real pages: "busy" is retried automatically (up to 4 tries), and a registration carries one
+// requestId so a retry can never make a second order. --raw = no retries at all (the harshest view of the server).
+const RAW = process.argv.includes("--raw");
+let retriedRequests = 0, retryCount = 0;
+async function send(action, body = {}) {
+  if (RAW) return call(action, body);
+  const started = Date.now();
+  let r, tries = 0;
+  for (let attempt = 1; attempt <= 4; attempt++) {
+    tries = attempt;
+    r = await call(action, body);
+    const again = !r.ok && (r.error === "BUSY" || (action === "register" && ["TEMPORARY", "NETWORK"].includes(r.error)));
+    if (!again || attempt === 4) break;
+    await new Promise((res) => setTimeout(res, 1200 * attempt));
+  }
+  if (tries > 1) { retriedRequests++; retryCount += tries - 1; }
+  return { ...r, _ms: Date.now() - started, _tries: tries };
 }
 
 /** Runs tasks with at most `limit` in flight (limit >= tasks.length = all at once). */
@@ -103,7 +124,7 @@ const plan = Array.from({ length: REGS }, (_, i) => {
   return { n, kind, people, tickets: people.length };
 });
 const t0 = Date.now();
-const regs = await pool(plan.map((p) => () => call("register", { slug: saved.event.slug, people: p.people, etransferName: p.people[0].name, website: "" })), REGS);
+const regs = await pool(plan.map((p) => () => send("register", { slug: saved.event.slug, people: p.people, etransferName: p.people[0].name, website: "", requestId: randomUUID() })), REGS);
 console.log(`All ${REGS} sent; everything answered after ${((Date.now() - t0) / 1000).toFixed(1)}s. ${timing(regs)}`);
 console.log("   results:", JSON.stringify(tally(regs)));
 regs.filter((r) => !r.ok).slice(0, 5).forEach((r) => console.log("   sample failure:", r.error, "-", r.message));
@@ -124,7 +145,7 @@ heading(`Step 2: Finance marks ${PAID} orders (+3 flagged ones) paid at the same
 const awaitingOrders = (all.orders || []).filter((o) => o.status === "awaiting");
 // PAID normal orders, plus 3 flagged ones so the help-desk path (paid but flagged) is tested too
 const toPay = awaitingOrders.filter((o) => !o.tickets.some((t) => t.flag)).slice(0, PAID).concat(awaitingOrders.filter((o) => o.tickets.some((t) => t.flag)).slice(0, 3));
-const paid = await pool(toPay.map((o) => () => call("markOrderPaid", { token: sessions[0], orderId: o.id, siteUrl: SITE })), toPay.length);
+const paid = await pool(toPay.map((o) => () => send("markOrderPaid", { token: sessions[0], orderId: o.id, siteUrl: SITE })), toPay.length);
 console.log(`   ${timing(paid)}; results:`, JSON.stringify(tally(paid)));
 paid.filter((r) => !r.ok).slice(0, 5).forEach((r) => console.log("   sample failure:", r.error, "-", r.message));
 await new Promise((r) => setTimeout(r, 3000));
@@ -146,12 +167,12 @@ const flagged = tickets.filter((t) => t.flag);
 need("there were paid tickets to scan", payable.length);
 const scanTasks = [];
 payable.forEach((t, i) => {
-  scanTasks.push(() => call("scan", { token: sessions[i % 3], eventId, code: t.secret }).then((r) => ({ r, t, kind: "valid" })));
-  scanTasks.push(() => call("scan", { token: sessions[(i + 1) % 3], eventId, code: `${SITE}ticket.html?t=${t.secret}` }).then((r) => ({ r, t, kind: "valid" })));
+  scanTasks.push(() => send("scan", { token: sessions[i % 3], eventId, code: t.secret }).then((r) => ({ r, t, kind: "valid" })));
+  scanTasks.push(() => send("scan", { token: sessions[(i + 1) % 3], eventId, code: `${SITE}ticket.html?t=${t.secret}` }).then((r) => ({ r, t, kind: "valid" })));
 });
-unpaid.slice(0, 10).forEach((t) => scanTasks.push(() => call("scan", { token: sessions[0], eventId, code: t.secret }).then((r) => ({ r, t, kind: "unpaid" }))));
-flagged.slice(0, 5).forEach((t) => scanTasks.push(() => call("scan", { token: sessions[1], eventId, code: t.secret }).then((r) => ({ r, t, kind: "flagged" }))));
-for (let i = 0; i < 5; i++) scanTasks.push(() => call("scan", { token: sessions[2], eventId, code: `${SITE}ticket.html?t=${"f".repeat(31)}${i}` }).then((r) => ({ r, t: null, kind: "fake" })));
+unpaid.slice(0, 10).forEach((t) => scanTasks.push(() => send("scan", { token: sessions[0], eventId, code: t.secret }).then((r) => ({ r, t, kind: "unpaid" }))));
+flagged.slice(0, 5).forEach((t) => scanTasks.push(() => send("scan", { token: sessions[1], eventId, code: t.secret }).then((r) => ({ r, t, kind: "flagged" }))));
+for (let i = 0; i < 5; i++) scanTasks.push(() => send("scan", { token: sessions[2], eventId, code: `${SITE}ticket.html?t=${"f".repeat(31)}${i}` }).then((r) => ({ r, t: null, kind: "fake" })));
 scanTasks.sort(() => Math.random() - 0.5);   // interleave, like a real queue
 const s0 = Date.now();
 const scans = await pool(scanTasks, BURST);
@@ -173,6 +194,9 @@ const checkedIn = Object.keys(greens).length;
 check("the door counter matches the green scans", final.ok && final.totals.checkedIn === checkedIn, `server says ${final.ok ? final.totals.checkedIn : "?"}, greens ${checkedIn}`);
 const transportErrors = scans.filter((x) => !x.r.ok).length;
 check("no scan failed to reach the server", transportErrors === 0, transportErrors ? `${transportErrors} failed: a real scanner would have to rescan` : "");
+
+console.log(`
+Retries (${RAW ? "off, --raw" : "on, like the real pages"}): ${retriedRequests} requests needed a retry, ${retryCount} retries in total.`);
 
 // 5. a warm, quiet read, for comparison
 heading("Step 4: how fast are the screens now?");
