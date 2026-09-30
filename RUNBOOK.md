@@ -24,7 +24,7 @@ Open the **web app URL** (README section 2) in a browser.
 | Member info looks out of date | Search data refreshes every 5 min | Wait 5 min |
 | Event image doesn't show | The image file was deleted or unshared in Drive | Edit the event and upload the image again |
 | "Invalid Date" on a page | Someone typed into the data sheet by hand | Edit the event in the portal and save. Avoid editing the sheet directly |
-| Old pages show old behaviour after a fix | Browser cache | Refresh (Ctrl+Shift+R) |
+| Old pages show old behaviour after a fix (e.g. a new tab is missing) | Browser/GitHub cache (up to 10 min) | Open in a private/incognito tab, or wait 10 min and refresh. Whoever published should bump the `?v=` numbers (README section 7) |
 | Someone says they didn't get the "registration received" email | Daily email limit hit, typo in their email, or spam folder | Their payment screen already showed everything. Check the email they typed (Log / Orders tab). The limit resets daily |
 | "Too many registrations from this email" | Same email registered 5 times in 10 min | Wait 10 minutes (anti-spam) |
 | Registration says "closed" | Event is a draft or closed | Events tab → Publish / Reopen |

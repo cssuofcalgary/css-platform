@@ -117,11 +117,14 @@ button.link {
 .tabs {
   display: flex;
   gap: 4px;
+  overflow-x: auto;
+  scrollbar-width: none;
   padding: 8px 16px 0;
   max-width: 720px;
   margin: 0 auto;
 }
 .tab {
+  flex: 0 0 auto;
   border: 0;
   background: none;
   padding: 8px 12px;
