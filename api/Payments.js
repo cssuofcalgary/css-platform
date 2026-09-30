@@ -411,6 +411,7 @@ function rememberSiteUrl_(url) {
 }
 
 function ticketLink_(ticket) {
-  const base = PropertiesService.getScriptProperties().getProperty("PUBLIC_SITE_URL") || "";
+  // Public registrations never pass a site address, so fall back to the live site rather than a broken relative link.
+  const base = PropertiesService.getScriptProperties().getProperty("PUBLIC_SITE_URL") || "https://events.ucalgarycss.ca/";
   return base + "ticket.html?t=" + encodeURIComponent(ticket.secret);
 }

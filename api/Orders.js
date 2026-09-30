@@ -98,7 +98,13 @@ function register_(req) {
   });
 
   // Email after the lock is released, so a slow send never holds up scans or other registrations.
-  done.reply.emailSent = sendRegistrationEmail_(event, done.order, done.created);
+  if (done.order.status === "paid") {
+    // Free event (RSVP): everyone gets their QR ticket straight away, instead of a "payment needed" style email.
+    const sent = sendPendingTicketEmails_(done.order.id);
+    done.reply.emailSent = sent.sent > 0;
+  } else {
+    done.reply.emailSent = sendRegistrationEmail_(event, done.order, done.created);
+  }
   return done.reply;
 }
 

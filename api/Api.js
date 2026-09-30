@@ -115,6 +115,9 @@ function route_(req) {
     case "sendReminders":
       return sendReminders_(requireSession_(req.token), req.eventId, !!req.dryRun);
 
+    case "emailAttendees":
+      return emailAttendees_(requireSession_(req.token), req.eventId, req.audience, req.subject, req.message, !!req.dryRun);
+
     case "addOrder":
       return addOrder_(requireSession_(req.token), req.eventId, req.order, !!req.force, req.siteUrl);
 

@@ -13,7 +13,7 @@ const ACTIVITY_GROUPS = {
   door: ["checkin", "checkin.desk", "checkin.undo", "walkin", "entry.open", "entry.close", "entry.autoclose"],
   system: ["backup"],
   edits: ["ticket.edit"],
-  events: ["event.create", "event.update", "event.status", "image.upload"],
+  events: ["event.create", "event.update", "event.status", "image.upload", "event.email"],
   settings: ["settings.save", "sessions.clear"]
 };
 
@@ -85,6 +85,7 @@ function activitySummary_(r, events) {
     case "event.create": return "created the event " + (d.name || "");
     case "event.update": return "edited the event " + (d.name || "");
     case "event.status": return "set " + (eventName || "an event") + " to " + d.status;
+    case "event.email": return "emailed " + (d.sent || 0) + " " + (d.audience === "paid" ? "paid" : d.audience === "awaiting" ? "unpaid" : "registered") + " attendee" + (d.sent === 1 ? "" : "s") + (eventName ? " of " + eventName : "") + ": " + (d.subject || "");
     case "image.upload": return "uploaded an event image";
     case "settings.save": return "changed settings: " + (d.changed || []).join(", ");
     case "sessions.clear": return "signed everyone out";

@@ -72,6 +72,8 @@ Easiest: sign in with the admin password → **Settings** → Passwords. Everyon
 **Lost the admin password?** Script Properties → edit `ADMIN_PASSWORD` → Save. Works immediately; no redeploy.
 
 ## Something feels off / errors
+"That's N emails but only M are left today" when emailing everyone: the daily limit (about 100). Pick a smaller group (paid only), or send the rest tomorrow.
+
 A door volunteer can't sign in ("Door scanning is closed"): an exec has to open entry for the event (Door tab → entry toggle). Forgot the door password: Settings → Passwords → set a new one, or remove it.
 
 An email says something odd after a wording change: Settings → Email wording → pick it → **Use standard wording**.
