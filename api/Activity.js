@@ -10,7 +10,8 @@ const ACTIVITY_MAX = 300;
 /** Groups the filter chips use. */
 const ACTIVITY_GROUPS = {
   payments: ["order.paid", "order.refunded", "order.cancelled", "order.create", "order.manual", "tickets.resend", "reminders.send"],
-  door: ["checkin", "checkin.desk", "checkin.undo", "walkin", "entry.open", "entry.close"],
+  door: ["checkin", "checkin.desk", "checkin.undo", "walkin", "entry.open", "entry.close", "entry.autoclose"],
+  system: ["backup"],
   edits: ["ticket.edit"],
   events: ["event.create", "event.update", "event.status", "image.upload"],
   settings: ["settings.save", "sessions.clear"]
@@ -72,6 +73,8 @@ function activitySummary_(r, events) {
     case "walkin": return "added walk-in " + d.name + " (" + d.type + ", " + money(d.total) + " " + d.method + ") " + r.target;
     case "entry.open": return "opened entry" + (eventName ? " for " + eventName : "");
     case "entry.close": return "closed entry" + (eventName ? " for " + eventName : "");
+    case "entry.autoclose": return "entry closed automatically" + (d.name ? " for " + d.name : "") + " (the event is over)";
+    case "backup": return "backed up the data (" + (d.file || "") + ")";
     case "ticket.edit": {
       const parts = Object.keys(d.to || {}).map(function (k) {
         const show = function (v) { return typeof v === "object" ? JSON.stringify(v) : (v === "" || v === undefined ? "(blank)" : String(v)); };

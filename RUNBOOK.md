@@ -72,6 +72,10 @@ Easiest: sign in with the admin password → **Settings** → Passwords. Everyon
 **Lost the admin password?** Script Properties → edit `ADMIN_PASSWORD` → Save. Works immediately; no redeploy.
 
 ## Something feels off / errors
+Health check says "No backup yet" or "Last good backup was N hours ago": in Apps Script open `Jobs`, pick `installJobs`, press Run (sets the timers again and takes a backup). If it asks for permission, allow it.
+
+Need to undo a bad change to the data: Drive → "CSS Platform Backups" → open the newest copy, copy the tab back into "CSS Platform Data".
+
 Settings → **Health check** shows what's reachable and the last error the system saw. Activity shows what changed and who did it.
 
 ## Emergency: switch back to the old system

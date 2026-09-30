@@ -57,6 +57,7 @@ The old system (`../CSS Ticketing System/`) keeps running until this one is prov
 | `api/TestKit.js` | Stress-test kit, run **by hand from the Apps Script editor** (not reachable from the web): `buildStressTest()` makes two closed test events, 46 varied fake attendees (all @example.com) and emails a sheet of 50 QR codes with the expected result of each scan; `emailStressTestSheet()` re-sends it; `removeStressTest()` archives both events. Run `buildStressTest` once |
 | `api/MyTickets.js` | "Find my tickets / pass" lookups (email or UCID + last name) and the private-link tickets for the member portal |
 | `api/Payments.js` | Finance: list orders, mark paid (capacity check, `force` to override), refund/cancel (never deletes), resend tickets, send waiting emails. Public ticket lookup by secret. Remembers the public site address for email links (`PUBLIC_SITE_URL` property) |
+| `api/Jobs.js` | Background timers. `installJobs` (run once in the editor) sets `nightlyJob` (about 3 am: backup copy of the data sheet into the Drive folder "CSS Platform Backups", keeps 14, older ones go to the Drive bin; then a health check; emails the CSS Gmail only if something is wrong, at most once a day) and `hourlyJob` (closes entry 4 hours after an event's end time if someone forgot). Both log as "system". Needs the `script.scriptapp` permission (in `appsscript.json`) |
 | `api/Settings.js` | Admin only: read/save settings (validated; a new Membership sheet is really read before it's accepted), passwords, "sign everyone out" (a session *epoch*: every session remembers the epoch it was made in, changing it invalidates them all), health check, last-error memory |
 | `api/Activity.js` | Turns the Log tab into readable sentences, with filters (event, exec, group, text) |
 | `api/Summary.js` | `eventSummary`: the numbers, money, per-type counts, answers to custom questions and the attendee list for one event. Read-only |
@@ -147,6 +148,7 @@ Lists (`ticketTypes`, `questions`, `answers`) are stored as JSON text.
 | `CONTACT_EMAIL`, `INSTAGRAM_URL` | Shown at the bottom of the public pages (the API sends them; `public/config.js` is only the fallback) |
 | `LINK_KEY` | Set **by the system** the first time a private link is made. Signs the links in "Find my pass / tickets" emails. **Delete it to cancel every link ever sent** (a new one is made automatically; members just ask for a new link) |
 | `PRESIDENT_NAME` | Optional. Name in the signature of every email. Default "Gordon Chen". Change it when the President changes |
+| `BACKUP_FOLDER_ID`, `LAST_BACKUP`, `LAST_GOOD_BACKUP`, `ALERT_SENT_DAY` | Set **by the system** by the nightly job (backup folder, when the last backup ran, the once-a-day alert limit) |
 | `SESSION_EPOCH`, `LAST_ERROR` | Set **by the system**. Changing `SESSION_EPOCH` signs everyone out. `LAST_ERROR` = the last unexpected error, shown in the health check |
 
 Everything above except the automatic ones can be changed in the portal's **Settings** tab (admin). Script Properties is only needed if the admin password is lost.

@@ -102,6 +102,7 @@ A plain list of what happened, newest first: "Kevin marked TNM-4408 paid · 6:02
 - **Membership sheet:** each year, paste the new sheet's link and press **Test and save**. It reads the sheet first and tells you how many members it found, so a wrong link can't break anything.
 - **Passwords:** type the new one twice. Everyone else is signed out and needs the new password. Never write a password in a document or chat.
 - **Sign everyone else out:** if a phone or laptop was left signed in.
+- **Backups and alerts:** every night the system copies the data sheet into a Drive folder called "CSS Platform Backups" (in the CSS Gmail's Drive) and keeps the last 14. If a check fails, it emails the CSS Gmail (once a day at most). Health check shows the time of the last backup. To restore, open the newest backup, copy the tabs you need back into "CSS Platform Data". Entry also closes by itself 4 hours after an event ends.
 - **Health check:** shows whether the data sheet and Membership sheet are reachable, how many emails are left today, and the last error the system saw. Run it if something feels off.
 
 ## Good to know
