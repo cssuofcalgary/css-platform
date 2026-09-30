@@ -20,6 +20,7 @@ Open the **web app URL** (README section 2) in a browser.
 | "The system isn't set up yet" | A Script Property is missing | Editor → ⚙ Project Settings → Script Properties. `MEMBERSHIP_SHEET_ID` and `EXEC_PASSWORD` must exist |
 | "That password isn't right" for everyone | The password was changed | Check `EXEC_PASSWORD` in Script Properties |
 | "Too many wrong tries" | 10 wrong passwords in 10 min | Wait 10 minutes |
+| "Connection is slow. Trying again…" (yellow bar) | Google was slow. The portal retries lookups by itself, up to 3 times | Wait a few seconds. Nothing to do. If a *change* (mark paid, edit) says "Google was slow", check the person's row before pressing again |
 | "The system is busy" | Many changes at the same moment | Try again in a few seconds |
 | Member info looks out of date | Search data refreshes every 5 min | Wait 5 min |
 | Event image doesn't show | The image file was deleted or unshared in Drive | Edit the event and upload the image again |

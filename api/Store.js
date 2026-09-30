@@ -17,11 +17,22 @@ function loadMembers_() {
   if (!config.membershipSheetId) {
     throw new ApiError_("SETUP_NEEDED", "MEMBERSHIP_SHEET_ID is missing from Script Properties.");
   }
-  const spreadsheet = SpreadsheetApp.openById(config.membershipSheetId);
-  const sheet = spreadsheet.getSheetByName(config.membershipTab) || spreadsheet.getSheets()[0];
-  const members = rowsToMembers_(sheet.getDataRange().getValues());
+  let members;
+  try {
+    members = retry_(function () {
+      const spreadsheet = SpreadsheetApp.openById(config.membershipSheetId);
+      const sheet = spreadsheet.getSheetByName(config.membershipTab) || spreadsheet.getSheets()[0];
+      return rowsToMembers_(sheet.getDataRange().getValues());
+    });
+  } catch (err) {
+    // Google is having a moment: an older copy (up to 6 h) beats an error page.
+    const older = cacheGetJson_(cache, "members_old");
+    if (older) return older;
+    throw err;
+  }
 
   cachePutJson_(cache, "members", members, MEMBER_CACHE_SECONDS);
+  cachePutJson_(cache, "members_old", members, 21600);
   return members;
 }
 

@@ -17,18 +17,25 @@ async function openDoorTab() {
   showIdle();
   await loadDoor();
   clearInterval(doorState.refreshTimer);
-  doorState.refreshTimer = setInterval(() => { if (!$("tab-door").hidden) loadDoor(); }, 30000);
+  doorState.refreshTimer = setInterval(() => { if (!$("tab-door").hidden && !doorState.busy) loadDoor(true); }, 30000);
 }
 
-async function loadDoor() {
+/** `quiet` = the background refresh: if it fails, keep showing what we have instead of covering the scan result. */
+async function loadDoor(quiet) {
   const reply = await api("doorList", { eventId: doorState.eventId });
-  if (!reply.ok) return handleEventError(reply, $("scan-result"));
+  if (!reply.ok) {
+    if (quiet && reply.error !== "NOT_LOGGED_IN") return;
+    return handleEventError(reply, $("scan-result"));
+  }
   doorState.data = reply;
   renderDoor();
 }
 
 function renderDoor() {
   const d = doorState.data;
+  $("live-inside").textContent = d.counts.checkedIn;
+  $("live-total").textContent = d.counts.paid;
+  $("live-sub").textContent = d.counts.awaiting ? T.liveNotPaid(d.counts.awaiting) : "";
   $("entry-toggle").textContent = d.event.entryOpen ? T.entryOpen : T.entryClosed;
   $("door-counts").textContent = T.doorCounts(d.counts.checkedIn, d.counts.paid, d.counts.awaiting);
 

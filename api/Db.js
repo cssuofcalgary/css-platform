@@ -28,11 +28,35 @@ const JSON_COLUMNS = { ticketTypes: true, questions: true, answers: true };
  */
 const DB_ = { spreadsheet: null, sheets: {}, headers: {}, rows: {} };
 
+/**
+ * Google's spreadsheet service fails now and then for no reason ("Service Spreadsheets
+ * timed out", "Server error occurred"). These are momentary, so try again a couple of
+ * times before giving up. Only used for reads and for writes that are safe to repeat.
+ */
+function isTransient_(err) {
+  return /timed out|service spreadsheets|server error|internal error|try again|temporar|unavailable|backend/i
+    .test(String(err && err.message || err));
+}
+
+function retry_(fn) {
+  let last;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      return fn();
+    } catch (err) {
+      if (err instanceof ApiError_ || !isTransient_(err)) throw err;
+      last = err;
+      Utilities.sleep(400 * (attempt + 1));
+    }
+  }
+  throw last;
+}
+
 function dataSpreadsheet_() {
   if (DB_.spreadsheet) return DB_.spreadsheet;
   const props = PropertiesService.getScriptProperties();
   const existing = props.getProperty("DATA_SHEET_ID");
-  if (existing) return (DB_.spreadsheet = SpreadsheetApp.openById(existing));
+  if (existing) return (DB_.spreadsheet = retry_(function () { return SpreadsheetApp.openById(existing); }));
 
   const lock = LockService.getScriptLock();
   lock.waitLock(20000);
@@ -52,7 +76,7 @@ function table_(name) {
   if (DB_.sheets[name]) return DB_.sheets[name];
   const spreadsheet = dataSpreadsheet_();
   const columns = TABLES[name];
-  let sheet = spreadsheet.getSheetByName(name);
+  let sheet = retry_(function () { return spreadsheet.getSheetByName(name); });
 
   if (!sheet) {
     sheet = spreadsheet.insertSheet(name);
@@ -65,7 +89,7 @@ function table_(name) {
     return (DB_.sheets[name] = sheet);
   }
 
-  const header = headerOf_(sheet);
+  const header = retry_(function () { return headerOf_(sheet); });
   const missing = columns.filter(function (c) { return header.indexOf(c) === -1; });
   if (missing.length) {
     sheet.getRange(1, header.length + 1, 1, missing.length).setValues([missing]).setFontWeight("bold");
@@ -121,7 +145,7 @@ function fromCell_(column, value) {
 function readRows_(name) {
   if (DB_.rows[name]) return DB_.rows[name];
   const sheet = table_(name);
-  const values = sheet.getDataRange().getValues();
+  const values = retry_(function () { return sheet.getDataRange().getValues(); });
   const rows = [];
   if (values.length >= 2) {
     const header = values[0].map(String);
@@ -150,6 +174,10 @@ function insertRow_(name, obj) {
  * `rowHint` (a row's `_row` from readRows_) skips the search, after checking the id is still there.
  */
 function updateRow_(name, id, changes, rowHint) {
+  return retry_(function () { return updateRowOnce_(name, id, changes, rowHint); });   // writing the same values twice is harmless
+}
+
+function updateRowOnce_(name, id, changes, rowHint) {
   const sheet = table_(name);
   const header = headerFor_(name);
   const idCol = header.indexOf("id");

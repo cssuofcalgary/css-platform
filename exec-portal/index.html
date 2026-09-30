@@ -5,10 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex">
   <title>CSS Exec Portal</title>
-  <link rel="stylesheet" href="styles.css?v=0.2.4">
+  <link rel="stylesheet" href="styles.css?v=0.3.0">
 </head>
 <body>
   <div id="demo-banner" class="demo-banner" hidden></div>
+  <div id="toast" class="toast" role="status" hidden></div>
+  <div id="connection-notice" class="connection-notice" role="status" hidden></div>
 
   <!-- Sign-in -->
   <main id="login-view" class="login" hidden>
@@ -76,10 +78,44 @@
         <button id="toggle-archived" class="link small" hidden></button>
       </section>
 
+      <section id="event-detail-view" hidden>
+        <button id="detail-back-button" class="link" data-t="backToEvents"></button>
+        <div class="row-between">
+          <h2 id="detail-title" class="section-title"></h2>
+          <button id="detail-refresh" class="link" data-t="refreshed"></button>
+        </div>
+        <p id="detail-status" class="muted small" aria-live="polite"></p>
+        <div id="detail-tiles" class="tiles"></div>
+        <div id="detail-types" class="detail-block"></div>
+        <div id="detail-questions" class="detail-block"></div>
+        <h3 class="section-title" data-t="attendeesTitle"></h3>
+        <input id="att-search" class="search" type="search" autocomplete="off">
+        <div class="row-between att-tools">
+          <div class="chips" id="att-filters">
+            <button class="chip active" data-filter="active" data-t="attFilterActive"></button>
+            <button class="chip" data-filter="paid" data-t="attFilterPaid"></button>
+            <button class="chip" data-filter="awaiting" data-t="attFilterAwaiting"></button>
+            <button class="chip" data-filter="inside" data-t="attFilterInside"></button>
+            <button class="chip" data-filter="notArrived" data-t="attFilterNotArrived"></button>
+            <button class="chip" data-filter="flagged" data-t="attFilterFlagged"></button>
+            <button class="chip" data-filter="closed" data-t="attFilterClosed"></button>
+            <button class="chip" data-filter="all" data-t="attFilterAll"></button>
+          </div>
+          <select id="att-sort" class="att-sort">
+            <option value="name" data-t="attSortName"></option>
+            <option value="type" data-t="attSortType"></option>
+            <option value="newest" data-t="attSortNewest"></option>
+          </select>
+        </div>
+        <p id="att-count" class="muted small"></p>
+        <ul id="att-list" class="results"></ul>
+      </section>
+
       <section id="event-editor-view" hidden>
         <button id="editor-back-button" class="link" data-t="backToEvents"></button>
         <form id="event-form" class="card editor" novalidate>
           <h2 id="editor-title"></h2>
+          <p id="editor-hint" class="muted small" hidden></p>
 
           <label for="ev-name" data-t="evName"></label>
           <input id="ev-name" required maxlength="120">
@@ -161,6 +197,11 @@
      </div>
      <div id="tab-door" hidden>
       <div class="door-top">
+        <div class="door-live" aria-live="polite">
+          <span class="door-live-num"><span id="live-inside">0</span> / <span id="live-total">0</span></span>
+          <span class="door-live-label" data-t="liveInside"></span>
+          <span id="live-sub" class="door-live-sub"></span>
+        </div>
         <label for="door-event" class="visually-hidden" data-t="payEvent"></label>
         <select id="door-event"></select>
         <div class="row-between">
@@ -222,13 +263,65 @@
     </main>
   </div>
 
+  <!-- Edit person -->
+  <dialog id="edit-dialog" class="edit-dialog">
+    <form id="edit-form" class="editor" novalidate>
+      <h2 data-t="editTitle"></h2>
+      <p id="edit-who" class="muted small"></p>
+
+      <label for="ed-name" data-t="editName"></label>
+      <input id="ed-name" maxlength="80" autocomplete="off">
+      <label for="ed-email" data-t="editEmail"></label>
+      <input id="ed-email" type="email" maxlength="120" autocomplete="off">
+      <p class="muted small" data-t="editEmailHint"></p>
+
+      <p id="edit-locked" class="muted small" hidden data-t="editAdminLocked"></p>
+
+      <div id="edit-admin" hidden>
+        <fieldset>
+          <legend data-t="editAdminTitle"></legend>
+          <div class="grid-2">
+            <div><label for="ed-ucid" data-t="editUcid"></label><input id="ed-ucid" inputmode="numeric" maxlength="12" autocomplete="off"></div>
+            <div><label for="ed-member" data-t="editMemberId"></label><input id="ed-member" maxlength="20" autocomplete="off"></div>
+          </div>
+          <label for="ed-type" data-t="editType"></label>
+          <select id="ed-type"></select>
+          <p class="muted small" data-t="editMemberHint"></p>
+          <label for="ed-flag" data-t="editFlag"></label>
+          <input id="ed-flag" maxlength="200" autocomplete="off">
+          <p class="muted small" data-t="editFlagHint"></p>
+          <div id="ed-answers"></div>
+        </fieldset>
+        <fieldset>
+          <legend id="ed-order-title"></legend>
+          <label for="ed-payer-name" data-t="editPayerName"></label>
+          <input id="ed-payer-name" maxlength="80" autocomplete="off">
+          <label for="ed-payer-email" data-t="editPayerEmail"></label>
+          <input id="ed-payer-email" type="email" maxlength="120" autocomplete="off">
+          <label for="ed-etransfer" data-t="editEtransferName"></label>
+          <input id="ed-etransfer" maxlength="80" autocomplete="off">
+          <label for="ed-notes" data-t="editNotes"></label>
+          <input id="ed-notes" maxlength="400" autocomplete="off">
+        </fieldset>
+      </div>
+
+      <p id="edit-error" class="error" role="alert" hidden></p>
+      <div class="button-row">
+        <button type="button" id="edit-cancel" class="secondary" data-t="cancel"></button>
+        <button type="submit" id="edit-save" class="primary" data-t="editSave"></button>
+      </div>
+    </form>
+  </dialog>
+
   <script src="config.js?v=0.2.4"></script>
-  <script src="strings.js?v=0.2.4"></script>
+  <script src="strings.js?v=0.3.0"></script>
   <script src="mock.js?v=0.2.4"></script>
-  <script src="app.js?v=0.2.5"></script>
-  <script src="events.js?v=0.2.4"></script>
-  <script src="payments.js?v=0.2.4"></script>
+  <script src="app.js?v=0.3.0"></script>
+  <script src="events.js?v=0.3.0"></script>
+  <script src="payments.js?v=0.3.0"></script>
+  <script src="edit.js?v=0.3.0"></script>
+  <script src="attendees.js?v=0.3.0"></script>
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
-  <script src="door.js?v=0.2.4"></script>
+  <script src="door.js?v=0.3.0"></script>
 </body>
 </html>

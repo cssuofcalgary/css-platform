@@ -50,14 +50,15 @@ The old system (`../CSS Ticketing System/`) keeps running until this one is prov
 | `api/Api.js` | Entry point. `doGet` = health check. `doPost` = routes every action. Login + sessions |
 | `api/Config.js` | Reads Script Properties. `checkSetup()` = one-click setup test (run from the editor) |
 | `api/Members.js` | Member model: turns Membership-sheet rows into Member objects, member search. Pure logic |
-| `api/Store.js` | Reads the Membership sheet (cached 5 min) |
-| `api/Db.js` | The platform data sheet: creates tabs, reads rows, inserts/updates **by id**, change log, lock |
+| `api/Store.js` | Reads the Membership sheet (cached 5 min; if Google fails, an older copy up to 6 h old is used instead of an error) |
+| `api/Db.js` | The platform data sheet: creates tabs, reads rows, inserts/updates **by id**, change log, lock. `retry_()` repeats a Sheets call up to 3 times when Google has a momentary failure (reads and updates only, never inserts) |
 | `api/Events.js` | Events: validation, save, publish/close, image upload, public event views |
 | `api/Orders.js` | Registration: one Order (payment code) + one Ticket per person, membership check (flags, never blocks), duplicate check, anti-spam |
 | `api/Payments.js` | Finance: list orders, mark paid (capacity check, `force` to override), refund/cancel (never deletes), resend tickets, send waiting emails. Public ticket lookup by secret. Remembers the public site address for email links (`PUBLIC_SITE_URL` property) |
+| `api/Summary.js` | `eventSummary`: the numbers, money, per-type counts, answers to custom questions and the attendee list for one event. Read-only |
 | `api/Door.js` | Door: entry open/closed, `scan` (ticket link / secret / TKT id → green / green-flag / orange / red, checks in under the lock), walk-ins (paid + checked in, always allowed), help-desk list |
 | `api/Mail.js` | Emails from the CSS Gmail (checks the daily limit first). **Addresses @example.com/.org/.net are never emailed** (use them for testing) |
-| `exec-portal/` | Exec Portal: `index.html`, `app.js` (sign-in + Members tab), `events.js` (Events tab), `payments.js` (Payments tab), `door.js` (Door tab; camera via html5-qrcode from unpkg), `strings.js` (**all text**), `config.js` (API URL + public site URL), `mock.js` (demo mode when API URL is empty) |
+| `exec-portal/` | Exec Portal: `index.html`, `app.js` (sign-in + Members tab), `events.js` (Events tab), `payments.js` (Payments tab), `edit.js` (the Edit person panel), `attendees.js` (event numbers + attendee list), `door.js` (Door tab; camera via html5-qrcode from unpkg), `strings.js` (**all text**), `config.js` (API URL + public site URL), `mock.js` (demo mode when API URL is empty) |
 | `public/` | Public site: `index.html`, `public.js` (event list, event page, registration form, payment screen), `ticket.html` + `ticket.js` (a person's ticket with QR; QR library from cdnjs), `public.css` (look copied from the member portal, member.ucalgarycss.ca: sage/clay/cream colours, Silkscreen + Source Serif 4 fonts from Google Fonts, zig-zag card, pandas; colours are variables at the top), `assets/` (pandas + CSS logo fallback; the banner and background pictures load from the CSS Google Drive), `strings.js` (**all text**), `config.js` (API URL, contact email, Instagram) |
 
 ## 4. Data tables ("CSS Platform Data")
@@ -88,7 +89,8 @@ Lists (`ticketTypes`, `questions`, `answers`) are stored as JSON text.
 | `listEvents` | yes | All events incl. drafts + `counts[eventId] = {awaiting, paid, checkedIn}` |
 | `saveEvent` `{event}` | yes | Create (no id) or update (with id). The slug (public link) never changes after creation |
 | `setEventStatus` `{eventId, status}` | yes | draft / published / closed / **archived** (archiving or restoring needs the **admin** password). Archived events vanish from the public site and the day-to-day tabs; nothing is deleted |
-| `updateTicket` `{ticketId, changes: {name?, email?}, siteUrl}` | yes | Fix a typo. New email on a paid ticket = ticket re-sent. Also updates the order's payer if it's the same person |
+| `updateTicket` `{ticketId, changes, orderChanges?, siteUrl}` | yes | Edit a person. `changes`: `name`, `email` (any exec; new email on a paid ticket = ticket re-sent) and, **admin only**, `ucid`, `memberId`, `ticketTypeId` (changes the price and the order total), `answers {questionLabel: value}`, `flag`. `orderChanges` (**admin only**): `payerName`, `payerEmail`, `etransferName`, `notes`. Only fields that really differ count. Changing member ID / UCID / ticket type re-checks the Membership sheet (other flags stay) unless `flag` is sent. Everything is logged with old and new values. Replies `total {was, now}` when the price changed |
+| `eventSummary` `{eventId}` | yes | `totals` (registered, paid, awaiting, checkedIn, notArrived, flagged), `money {received, awaiting}`, `spotsLeft`, `byType`, `questions` (each answer counted), `attendees` (every ticket + its order; no secrets) |
 | `undoCheckIn` `{ticketId}` | yes | Clears a check-in (logged) |
 | `listOrders` `{eventId}` | yes | Orders with their tickets (incl. ticket secrets, for help-desk links), spots taken, unsent email count |
 | `markOrderPaid` `{orderId, force?, siteUrl}` | yes | Order + its tickets → paid, emails each ticket. Refuses with `OVER_CAPACITY` unless `force` |

@@ -51,7 +51,9 @@ function renderEvents() {
           `<span class="pill neutral">${escapeHtml(t.name)} ${money(t.price)}</span>`).join("")}</div>
       </div>
       <div class="event-actions">
+        <button class="link" data-action="attendees" data-id="${e.id}">${T.attendees}</button>
         <button class="link" data-action="edit" data-id="${e.id}">${T.edit}</button>
+        <button class="link" data-action="duplicate" data-id="${e.id}">${T.duplicate}</button>
         ${e.status === "draft" ? `<button class="link" data-action="publish" data-id="${e.id}">${T.publish}</button>` : ""}
         ${e.status === "published" ? `<button class="link" data-action="close" data-id="${e.id}">${T.closeRegistration}</button>` : ""}
         ${e.status === "closed" ? `<button class="link" data-action="reopen" data-id="${e.id}">${T.reopen}</button>` : ""}
@@ -68,6 +70,8 @@ async function onEventsListClick(event) {
   const target = eventsState.events.find((e) => e.id === button.dataset.id);
   if (!target) return;
   if (button.dataset.action === "edit") return openEditor(target);
+  if (button.dataset.action === "attendees") return openAttendees(target);
+  if (button.dataset.action === "duplicate") return openEditor(copyOfEvent(target), false, T.duplicateTitle(target.name));
 
   const status = { publish: "published", close: "closed", reopen: "published", archive: "archived", restore: "closed" }[button.dataset.action];
   if (status === "published" && target.status === "draft" && !confirm(T.confirmPublish)) return;
@@ -81,7 +85,19 @@ async function onEventsListClick(event) {
 
 // ---- Editor -----------------------------------------------------------------
 
-function openEditor(existing) {
+/** A new event that starts as a copy of another: same prices, questions, capacity. The date is left for you to pick. */
+function copyOfEvent(source) {
+  const copy = JSON.parse(JSON.stringify(source));
+  ["id", "slug", "status", "entryOpen", "createdBy", "createdAt", "updatedBy", "updatedAt"].forEach((k) => delete copy[k]);
+  copy.name = `${source.name} (copy)`;
+  copy.date = "";
+  copy.registrationCloses = "";
+  copy.ticketTypes.forEach((t) => delete t.id);
+  copy.questions.forEach((q) => delete q.id);
+  return copy;
+}
+
+function openEditor(existing, isEdit = !!existing, title) {
   const e = existing || {
     name: "", date: "", startTime: "", endTime: "", location: "", description: "",
     capacity: null, capacityRule: "paid", imageFileId: "", imageUrl: "", codePrefix: "",
@@ -90,7 +106,9 @@ function openEditor(existing) {
   };
   eventsState.editing = JSON.parse(JSON.stringify(e));
 
-  $("editor-title").textContent = existing ? T.editEventTitle : T.newEventTitle;
+  $("editor-title").textContent = title || (isEdit ? T.editEventTitle : T.newEventTitle);
+  $("editor-hint").textContent = title ? T.duplicateHint : "";
+  $("editor-hint").hidden = !title;
   $("ev-name").value = e.name;
   $("ev-date").value = e.date;
   $("ev-start").value = e.startTime;
@@ -115,6 +133,7 @@ function openEditor(existing) {
 }
 
 function showEventsList() {
+  $("event-detail-view").hidden = true;
   $("event-editor-view").hidden = true;
   $("events-list-view").hidden = false;
 }

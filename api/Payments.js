@@ -32,7 +32,8 @@ function listOrders_(eventId) {
 
   return {
     ok: true,
-    event: { id: event.id, name: event.name, capacity: event.capacity, capacityRule: event.capacityRule },
+    event: { id: event.id, name: event.name, capacity: event.capacity, capacityRule: event.capacityRule,
+             ticketTypes: event.ticketTypes, questions: event.questions },
     orders: orders,
     spotsTaken: spotsTaken_(event),
     unsentEmails: tickets.filter(function (t) { return t.status === "paid" && !t.emailedAt; }).length
@@ -132,31 +133,148 @@ function resendTickets_(session, orderId, siteUrl) {
   return { ok: true, emailsSent: result.sent, emailsWaiting: result.waiting };
 }
 
-/** Finance/help desk: fix a typo in someone's name or email. A new email = their ticket is sent again. */
-function updateTicket_(session, ticketId, changes, siteUrl) {
+/**
+ * Fix someone's details. Any exec can change the name and email (a new email = their ticket is
+ * sent again). Everything else needs the admin password: UCID, member ID, ticket type (which
+ * changes the price), answers to the event's questions, the help-desk flag, and the order's
+ * payer / e-transfer name / notes. Only fields that really differ count as a change, and every
+ * change is written to the Log with the old and new values.
+ */
+function updateTicket_(session, ticketId, changes, siteUrl, orderChanges) {
   rememberSiteUrl_(siteUrl);
   changes = changes || {};
+  orderChanges = orderChanges || {};
+  const isAdmin = session.role === "admin";
+  const clean = function (v, max) { return String(v === undefined || v === null ? "" : v).trim().replace(/\s+/g, " ").slice(0, max); };
+  const looksLikeEmail = function (v) { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v); };
+
   const result = withLock_(function () {
     const ticket = readRows_("Tickets").filter(function (t) { return t.id === ticketId; })[0];
     if (!ticket) throw new ApiError_("NOT_FOUND", "Ticket not found.");
-    const name = changes.name === undefined ? ticket.name : String(changes.name).trim().replace(/\s+/g, " ").slice(0, 80);
-    const email = changes.email === undefined ? ticket.email : String(changes.email).trim().toLowerCase().slice(0, 120);
-    if (!name) throw new ApiError_("BAD_REQUEST", "Name can't be empty.");
-    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new ApiError_("BAD_REQUEST", "That email doesn't look right.");
-    const emailChanged = email !== ticket.email;
-    if (name === ticket.name && !emailChanged) return { changed: false };
-
-    updateRow_("Tickets", ticket.id, emailChanged && ticket.status === "paid"
-      ? { name: name, email: email, emailedAt: "" } : { name: name, email: email }, ticket._row);
     const order = readRows_("Orders").filter(function (o) { return o.id === ticket.orderId; })[0];
-    if (order && order.payerEmail === ticket.email && order.payerName === ticket.name) {
-      updateRow_("Orders", order.id, { payerName: name, payerEmail: email }, order._row);
+    const event = findEvent_(function (e) { return e.id === ticket.eventId; });
+
+    const next = {};          // changed Tickets columns
+    const orderNext = {};     // changed Orders columns
+    const adminOnly = [];     // what needed the admin password (for the error message)
+
+    // -- anyone: name, email
+    if (changes.name !== undefined) {
+      const name = clean(changes.name, 80);
+      if (!name) throw new ApiError_("BAD_REQUEST", "Name can't be empty.");
+      if (name !== ticket.name) next.name = name;
     }
-    log_(session.name, "ticket.edit", ticket.id, { from: { name: ticket.name, email: ticket.email }, to: { name: name, email: email } });
-    return { changed: true, resend: emailChanged && ticket.status === "paid", orderId: ticket.orderId };
+    if (changes.email !== undefined) {
+      const email = clean(changes.email, 120).toLowerCase();
+      if (email && !looksLikeEmail(email)) throw new ApiError_("BAD_REQUEST", "That email doesn't look right.");
+      if (email !== ticket.email) next.email = email;
+    }
+
+    // -- admin: UCID, member ID, ticket type, answers, flag
+    if (changes.ucid !== undefined) {
+      const ucid = String(changes.ucid).replace(/\D/g, "").slice(0, 12);
+      if (ucid !== ticket.ucid) { next.ucid = ucid; adminOnly.push("UCID"); }
+    }
+    if (changes.memberId !== undefined) {
+      const memberId = clean(changes.memberId, 20).toUpperCase();
+      if (memberId !== ticket.memberId) { next.memberId = memberId; adminOnly.push("member ID"); }
+    }
+    let type = event ? event.ticketTypes.filter(function (t) { return t.name === ticket.ticketType; })[0] : null;
+    if (changes.ticketTypeId !== undefined && changes.ticketTypeId !== "") {
+      const picked = event && event.ticketTypes.filter(function (t) { return t.id === changes.ticketTypeId; })[0];
+      if (!picked) throw new ApiError_("BAD_REQUEST", "That ticket type doesn't exist for this event.");
+      if (picked.name !== ticket.ticketType) {
+        next.ticketType = picked.name;
+        next.price = Number(picked.price) || 0;
+        type = picked;
+        adminOnly.push("ticket type");
+      }
+    }
+    if (changes.answers && typeof changes.answers === "object" && event) {
+      const answers = Object.assign({}, ticket.answers || {});
+      event.questions.forEach(function (q) {
+        if (changes.answers[q.label] === undefined) return;
+        const value = clean(changes.answers[q.label], 300);
+        if (value && q.type === "choice" && q.options.indexOf(value) === -1) {
+          throw new ApiError_("BAD_REQUEST", "Pick one of the options for \"" + q.label + "\".");
+        }
+        if (value) answers[q.label] = value; else delete answers[q.label];
+      });
+      if (JSON.stringify(answers) !== JSON.stringify(ticket.answers || {})) { next.answers = answers; adminOnly.push("answers"); }
+    }
+    if (changes.flag !== undefined) {
+      const flag = clean(changes.flag, 200);
+      if (flag !== (ticket.flag || "")) { next.flag = flag; adminOnly.push("help-desk flag"); }
+    } else if (next.ucid !== undefined || next.memberId !== undefined || next.ticketType !== undefined) {
+      // The member details changed: check the Membership sheet again. Other flags (e.g. duplicate email) stay.
+      const kept = String(ticket.flag || "").split("; ").filter(function (f) { return f && f.indexOf("Member price") !== 0; });
+      const person = {
+        memberId: next.memberId !== undefined ? next.memberId : ticket.memberId,
+        ucid: next.ucid !== undefined ? next.ucid : ticket.ucid,
+        needsMembership: !!(type && type.needsMembership)
+      };
+      const fresh = membershipFlag_(person, loadMembers_());
+      const flag = (fresh ? kept.concat([fresh]) : kept).join("; ");
+      if (flag !== (ticket.flag || "")) next.flag = flag;
+    }
+
+    // -- admin: the order
+    if (order) {
+      if (orderChanges.payerName !== undefined) {
+        const v = clean(orderChanges.payerName, 80);
+        if (!v) throw new ApiError_("BAD_REQUEST", "Payer name can't be empty.");
+        if (v !== order.payerName) { orderNext.payerName = v; adminOnly.push("payer name"); }
+      }
+      if (orderChanges.payerEmail !== undefined) {
+        const v = clean(orderChanges.payerEmail, 120).toLowerCase();
+        if (v && !looksLikeEmail(v)) throw new ApiError_("BAD_REQUEST", "The payer's email doesn't look right.");
+        if (v !== order.payerEmail) { orderNext.payerEmail = v; adminOnly.push("payer email"); }
+      }
+      if (orderChanges.etransferName !== undefined) {
+        const v = clean(orderChanges.etransferName, 80);
+        if (v !== (order.etransferName || "")) { orderNext.etransferName = v; adminOnly.push("e-transfer name"); }
+      }
+      if (orderChanges.notes !== undefined) {
+        const v = clean(orderChanges.notes, 400);
+        if (v !== (order.notes || "")) { orderNext.notes = v; adminOnly.push("order notes"); }
+      }
+    }
+
+    if (adminOnly.length && !isAdmin) {
+      throw new ApiError_("ADMIN_ONLY", "Changing " + adminOnly.join(", ") + " needs the admin password.");
+    }
+    if (!Object.keys(next).length && !Object.keys(orderNext).length) return { changed: false };
+
+    // The payer's own ticket keeps the order's payer details in step (unless they were set on purpose above).
+    if (order && order.payerEmail === ticket.email && order.payerName === ticket.name) {
+      if (next.name !== undefined && orderNext.payerName === undefined) orderNext.payerName = next.name;
+      if (next.email !== undefined && orderNext.payerEmail === undefined) orderNext.payerEmail = next.email;
+    }
+
+    // A different ticket type = a different price: recompute the order total.
+    let total = null;
+    if (next.price !== undefined && order) {
+      const now = readRows_("Tickets").filter(function (t) { return t.orderId === order.id && (t.status === "paid" || t.status === "awaiting"); });
+      const newTotal = now.reduce(function (sum, t) { return sum + (t.id === ticket.id ? next.price : Number(t.price) || 0); }, 0);
+      total = { was: Number(order.total) || 0, now: newTotal };
+      orderNext.total = newTotal;
+    }
+
+    const emailChanged = next.email !== undefined && ticket.status === "paid";
+    if (emailChanged) next.emailedAt = "";
+    if (Object.keys(next).length) updateRow_("Tickets", ticket.id, next, ticket._row);
+    if (order && Object.keys(orderNext).length) updateRow_("Orders", order.id, orderNext, order._row);
+
+    const from = {}, to = {};
+    Object.keys(next).forEach(function (k) { if (k !== "emailedAt") { from[k] = ticket[k]; to[k] = next[k]; } });
+    Object.keys(orderNext).forEach(function (k) { from["order." + k] = order[k]; to["order." + k] = orderNext[k]; });
+    log_(session.name, "ticket.edit", ticket.id, { name: ticket.name, order: order ? order.code : "", from: from, to: to });
+    return { changed: true, resend: emailChanged, orderId: ticket.orderId, total: total, orderStatus: order ? order.status : "" };
   });
+
+  if (!result.changed) return { ok: true, changed: false, emailsSent: 0 };
   const sent = result.resend ? sendPendingTicketEmails_(result.orderId) : { sent: 0, waiting: 0 };
-  return { ok: true, changed: result.changed, emailsSent: sent.sent };
+  return { ok: true, changed: true, emailsSent: sent.sent, total: result.total, orderStatus: result.orderStatus };
 }
 
 // ---- Public ticket page ---------------------------------------------------------

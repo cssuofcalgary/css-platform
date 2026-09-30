@@ -82,19 +82,13 @@ function orderCard(o) {
     </li>`;
 }
 
-async function editTicket(button) {
+function editTicket(button) {
   const order = payState.data.orders.find((o) => o.tickets.some((t) => t.id === button.dataset.editTicket));
   const ticket = order.tickets.find((t) => t.id === button.dataset.editTicket);
-  const name = prompt(T.promptName, ticket.name);
-  if (name === null) return;
-  const email = prompt(T.promptEmail, ticket.email);
-  if (email === null) return;
-  button.disabled = true;
-  const reply = await api("updateTicket", { ticketId: ticket.id, changes: { name, email }, siteUrl: new URL(PUBLIC_SITE_URL, location.href).href });
-  const result = button.closest(".order").querySelector(".order-result");
-  if (!reply.ok) { button.disabled = false; return handleEventError(reply, result); }
-  result.textContent = T.edited(reply.emailsSent);
-  setTimeout(loadOrders, 1500);
+  openEditDialog({ ticket, order, event: payState.data.event }, (message) => {
+    showToast(message);
+    loadOrders();
+  });
 }
 
 async function onOrdersClick(event) {

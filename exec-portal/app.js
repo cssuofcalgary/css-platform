@@ -11,20 +11,59 @@ const $ = (id) => document.getElementById(id);
 
 // ---- Talking to the API -----------------------------------------------------
 
+// Looking things up is safe to repeat, so a hiccup (Google being slow, a dropped connection) is retried
+// quietly. Anything that changes data (mark paid, scan, edit…) is never repeated automatically.
+const READ_ACTIONS = ["listEvents", "listOrders", "doorList", "eventSummary", "searchMembers", "getMember"];
+const REQUEST_TIMEOUT_MS = 35000;
+const RETRY_PAUSE_MS = 1200;
+
 async function api(action, details = {}) {
   const body = { action, token: state.token, ...details };
   if (!API_URL) return MockApi.handle(body);   // demo mode
+  const tries = READ_ACTIONS.includes(action) ? 3 : 1;
+  let reply = { ok: false, error: "NETWORK" };
+  for (let attempt = 1; attempt <= tries; attempt++) {
+    reply = await sendOnce(body);
+    const hiccup = !reply.ok && ["NETWORK", "TEMPORARY", "BUSY"].includes(reply.error);
+    if (!hiccup || attempt === tries) break;
+    setConnectionNotice(true);
+    await new Promise((resolve) => setTimeout(resolve, RETRY_PAUSE_MS * attempt));
+  }
+  setConnectionNotice(false);
+  return reply;
+}
+
+async function sendOnce(body) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);   // never wait forever
   try {
     const res = await fetch(API_URL, {
       method: "POST",
       // text/plain avoids a browser pre-check that Apps Script can't answer
       headers: { "Content-Type": "text/plain;charset=utf-8" },
-      body: JSON.stringify(body)
+      body: JSON.stringify(body),
+      signal: controller.signal
     });
     return await res.json();
   } catch (err) {
     return { ok: false, error: "NETWORK" };
+  } finally {
+    clearTimeout(timer);
   }
+}
+
+let toastTimer = null;
+function showToast(message) {
+  const box = $("toast");
+  box.textContent = message;
+  box.hidden = false;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { box.hidden = true; }, 8000);
+}
+
+function setConnectionNotice(on) {
+  const box = $("connection-notice");
+  if (box) box.hidden = !on;
 }
 
 function errorText(reply) {
@@ -209,6 +248,8 @@ function fillText() {
   $("search-input").placeholder = T.searchPlaceholder;
   $("name-input").placeholder = T.namePlaceholder;
   $("pay-search").placeholder = T.paySearchPlaceholder;
+  $("att-search").placeholder = T.attSearchPlaceholder;
+  $("connection-notice").textContent = T.reconnecting;
   $("search-status").textContent = T.searchHint;
   document.title = T.appTitle;
 }

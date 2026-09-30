@@ -29,6 +29,7 @@ function doPost(e) {
   } catch (err) {
     if (err instanceof ApiError_) return json_({ ok: false, error: err.code, message: err.message });
     console.error(err);
+    if (isTransient_(err)) return json_({ ok: false, error: "TEMPORARY", message: "Google was slow for a moment. Try again." });
     return json_({ ok: false, error: "SERVER_ERROR", message: String(err && err.message || err) });
   }
 }
@@ -111,7 +112,11 @@ function route_(req) {
       return undoCheckIn_(requireSession_(req.token), req.ticketId);
 
     case "updateTicket":
-      return updateTicket_(requireSession_(req.token), req.ticketId, req.changes, req.siteUrl);
+      return updateTicket_(requireSession_(req.token), req.ticketId, req.changes, req.siteUrl, req.orderChanges);
+
+    case "eventSummary":
+      requireSession_(req.token);
+      return eventSummary_(req.eventId);
 
     case "walkIn":
       return walkIn_(requireSession_(req.token), req.eventId, req.walkIn);

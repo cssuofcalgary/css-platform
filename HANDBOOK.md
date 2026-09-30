@@ -28,7 +28,9 @@ Wrong password 10 times → sign-in pauses for 10 minutes.
 
 ## After publishing
 In the Events list, each event has:
+- **Attendees:** the numbers for that event (registered, paid, checked in, money received, spots left), how many of each ticket type, and **how many picked each answer** (e.g. "Milk tea 32, Taro 18", handy for ordering). Below is everyone registered: search, filter (Paid, Awaiting, Checked in, Not arrived, Flagged…) and sort. **Edit** works here too.
 - **Edit:** change anything. The public link never changes.
+- **Duplicate:** starts a new event with the same prices, questions, capacity and picture. Pick the new date, check the details, save.
 - **Close registration:** the page stays up but says registration is closed. **Reopen** undoes it.
 - **Archive** *(admin password only)*: hides a finished or test event everywhere. Nothing is deleted. **Show archived events** → **Restore** brings it back.
 - **Public page ↗:** the link to share (Instagram, group chats). All upcoming events: https://cssuofcalgary.github.io/css-platform/public/
@@ -54,11 +56,13 @@ The Events list shows how many people have **paid** and how many are **awaiting 
 **Refund / cancel:** opens the spot again. For a paid order, send the money back by e-transfer yourself; the system only records it. Nothing is ever deleted.
 **Resend tickets:** someone lost their email, or it went to spam.
 **Ticket ↗:** opens that person's ticket (handy at the help desk).
-**Edit** (next to a person): fix a typo in their name or email. A new email gets their ticket sent again automatically.
+**Edit** (next to a person, here and in Attendees): opens a form.
+- **Any exec:** name and email. A new email gets their ticket sent again automatically.
+- **Admin password only:** UCID, member ID (the membership is checked again), **ticket type** (the price and the order total change; the message tells you whether to collect or refund the difference), answers to the event's questions, the help-desk warning (clear it if it was sorted out), and the order's payer name/email, e-transfer name and notes. Everything is saved in the change log with the old and new values.
 If you see "ticket emails waiting (daily email limit)", press **Send now** later, or the next day. Gmail allows about 100 emails a day.
 
 ## Door tab (event night)
-1. Pick the event (tonight's is picked automatically).
+1. Pick the event (tonight's is picked automatically). The big number at the top is **how many are inside / how many have paid**.
 2. Tap **Entry CLOSED** to **open entry** when doors open. Scanners only let people in while it's open.
 3. **📷 Start scanning** and allow the camera. Point it at the QR on the person's phone (a screenshot is fine).
    - 🟢 **Green:** let them in. Their answers (e.g. drink) show underneath.
