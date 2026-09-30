@@ -7,8 +7,8 @@
  *
  * Every email uses the same paper-ticket look as the member pass email: sage header with the
  * CSS banner, cream card, dashed dividers, pandas, and a signature. Change the look in
- * emailShell_() below and all emails follow. The signer defaults to "Gordon Chen" (President);
- * set the Script Property PRESIDENT_NAME when the role changes hands.
+ * emailShell_() below and all emails follow. The words, signature and button colour are
+ * editable from the Exec Portal (see EmailTemplates.js).
  */
 
 const MAIL_FROM_NAME = "Chinese Students' Society (UCalgary)";
@@ -40,8 +40,7 @@ function canSendMail_(to) {
  * o = { preheader, title, subtitle, body (HTML), button: {label, url} (optional), footerNote (optional) }
  */
 function emailShell_(o) {
-  const props = PropertiesService.getScriptProperties();
-  const signer = String(props.getProperty("PRESIDENT_NAME") || "Gordon Chen");
+  const brand = emailBrand_();
   const contact = getConfig_();
   const links = [["Website", "https://ucalgarycss.ca/"], ["Instagram", contact.instagramUrl], ["Events", "https://events.ucalgarycss.ca/"]];
   const linkHtml = links.map(function (l) {
@@ -83,7 +82,7 @@ function emailShell_(o) {
     "<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\"><tr><td style=\"border-top:2px dashed #cdb877;font-size:0;line-height:0;\">&nbsp;</td></tr></table></td></tr>" +
     "<tr><td bgcolor=\"#f3ecda\" class=\"pad\" style=\"background-color:#f3ecda;padding:22px 32px 30px;border-left:1px solid #e7ddc0;border-right:1px solid #e7ddc0;\">" +
     "<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\"><tr><td style=\"vertical-align:bottom;\">" +
-    "<p style=\"margin:0;font-family:" + MAIL_SERIF + ";font-size:14px;color:#6b6153;line-height:1.65;\"><strong style=\"color:#2a2520;font-family:" + MAIL_MONO + ";font-size:13px;\">" + esc_(signer) + "</strong><br>President &mdash; Chinese Students' Society (CSS)<br>University of Calgary</p>" +
+    "<p style=\"margin:0;font-family:" + MAIL_SERIF + ";font-size:14px;color:#6b6153;line-height:1.65;\"><strong style=\"color:#2a2520;font-family:" + MAIL_MONO + ";font-size:13px;\">" + esc_(brand.signerName) + "</strong><br>" + esc_(brand.signerRole) + "<br>University of Calgary</p>" +
     "<p style=\"margin:12px 0 0;\">" + linkHtml + "</p></td>" +
     "<td align=\"right\" style=\"vertical-align:bottom;width:85px;padding-left:16px;\"><img src=\"" + MAIL_IMG.bottomPanda + "\" width=\"80\" alt=\"\" style=\"display:block;border:0;height:auto;\"></td></tr></table></td></tr>" +
     "<tr><td bgcolor=\"#f3ecda\" style=\"height:6px;background-color:#f3ecda;border-bottom:3px solid #a8822e;border-left:1px solid #e7ddc0;border-right:1px solid #e7ddc0;border-radius:0 0 6px 6px;font-size:0;line-height:0;\">&nbsp;</td></tr>" +
@@ -95,9 +94,10 @@ function emailShell_(o) {
 
 /** The chestnut call-to-action button. */
 function mailButton_(label, url) {
+  const c = emailBrand_().buttonColor;
   return "<table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" align=\"center\"><tr>" +
-    "<td align=\"center\" bgcolor=\"#824a24\" style=\"border-radius:4px;background-color:#824a24;\">" +
-    "<a href=\"" + esc_(url) + "\" style=\"display:inline-block;padding:14px 30px;font-family:" + MAIL_MONO + ";font-size:13px;font-weight:700;letter-spacing:1.5px;color:#f3ecda;text-decoration:none;text-transform:uppercase;border-radius:4px;background-color:#824a24;border:1px solid #6c3c1a;\">" +
+    "<td align=\"center\" bgcolor=\"" + c + "\" style=\"border-radius:4px;background-color:" + c + ";\">" +
+    "<a href=\"" + esc_(url) + "\" style=\"display:inline-block;padding:14px 30px;font-family:" + MAIL_MONO + ";font-size:13px;font-weight:700;letter-spacing:1.5px;color:#f3ecda;text-decoration:none;text-transform:uppercase;border-radius:4px;background-color:" + c + ";border:1px solid " + c + ";\">" +
     label + " &rarr;</a></td></tr></table>";
 }
 
@@ -127,39 +127,51 @@ function sendStyled_(to, subject, html, plain) {
 }
 
 // ---- The emails --------------------------------------------------------------------
+// Each email has a build function (returns { subject, html, plain }) and a send function.
+// The words (subject, title, subtitle, intro, closing) come from EmailTemplates.js, so the admin
+// can change them in the portal; the layout and the detail boxes stay here.
+
+function paymentBox_(order, config) {
+  return mailBox_(mailRows_([
+    ["Amount", "<span style=\"font-size:18px;\">" + moneyText_(order.total) + "</span> (exactly)"],
+    ["Send to", esc_(config.etransferEmail)],
+    ["Message", "<span style=\"font-size:22px;letter-spacing:2px;\">" + esc_(order.code) + "</span>"]
+  ]));
+}
+
+/** Fill-ins shared by the order emails. */
+function orderVars_(event, order, tickets) {
+  return {
+    name: String(order.payerName || (tickets[0] && tickets[0].name) || ""),
+    event: event.name, code: order.code, amount: moneyText_(order.total),
+    when: eventWhenText_(event), where: event.location || "TBA"
+  };
+}
+
+function buildRegistrationEmail_(event, order, tickets) {
+  const config = getConfig_();
+  const isFree = order.status === "paid";
+  const t = mailText_(isFree ? "registrationFree" : "registration", orderVars_(event, order, tickets));
+  const people = tickets.map(function (x) {
+    return "<tr><td style=\"padding:3px 14px 3px 0;\">" + esc_(x.name) + "</td><td style=\"padding:3px 14px 3px 0;color:#6b6153;\">" + esc_(x.ticketType) +
+      "</td><td style=\"padding:3px 0;\" align=\"right\">" + moneyText_(x.price) + "</td></tr>";
+  }).join("");
+  const body = t.intro + (isFree ? "" : paymentBox_(order, config) + t.closing) +
+    mailBox_("<table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" width=\"100%\" style=\"font-size:15px;\">" + people + "</table>") +
+    mailBox_(mailRows_(whenWhereRows_(event))) + (isFree ? t.closing : "");
+  return {
+    subject: t.subject,
+    html: emailShell_({ preheader: isFree ? "You're registered for " + event.name : "Send your e-transfer to confirm your spot for " + event.name, title: t.title, subtitle: t.subtitle, body: body }),
+    plain: isFree ? "You're registered for " + event.name + "." : "Send " + moneyText_(order.total) + " by Interac e-transfer to " + config.etransferEmail + " with the message " + order.code + "."
+  };
+}
 
 /** To the payer, right after registering: what to send, where, and the payment code. */
 function sendRegistrationEmail_(event, order, tickets) {
   if (!canSendMail_(order.payerEmail)) return false;
-  const config = getConfig_();
-  const isFree = order.status === "paid";
-  const people = tickets.map(function (t) {
-    return "<tr><td style=\"padding:3px 14px 3px 0;\">" + esc_(t.name) + "</td><td style=\"padding:3px 14px 3px 0;color:#6b6153;\">" + esc_(t.ticketType) +
-      "</td><td style=\"padding:3px 0;\" align=\"right\">" + moneyText_(t.price) + "</td></tr>";
-  }).join("");
-
-  const body = (isFree
-    ? mailPara_("You're registered for <b>" + esc_(event.name) + "</b>. It's free, so there's nothing to pay.")
-    : mailPara_("To confirm your spot, send an <b>Interac e-transfer</b>:") +
-      mailBox_(mailRows_([
-        ["Amount", "<span style=\"font-size:18px;\">" + moneyText_(order.total) + "</span> (exactly)"],
-        ["Send to", esc_(config.etransferEmail)],
-        ["Message", "<span style=\"font-size:22px;letter-spacing:2px;\">" + esc_(order.code) + "</span>"]
-      ])) +
-      mailPara_("<span style=\"color:#6b6153;\">If your bank doesn't allow a message, that's OK, we'll match it by name. Your spot is confirmed once payment is received, and each person then gets their own ticket by email.</span>")) +
-    mailBox_("<table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" width=\"100%\" style=\"font-size:15px;\">" + people + "</table>") +
-    mailBox_(mailRows_(whenWhereRows_(event)));
-
   try {
-    sendStyled_(order.payerEmail,
-      (isFree ? "You're registered: " : "Registration received: ") + event.name + (isFree ? "" : " (" + order.code + ")"),
-      emailShell_({
-        preheader: isFree ? "You're registered for " + event.name : "Send your e-transfer to confirm your spot for " + event.name,
-        title: isFree ? "You're registered!" : "Thanks for registering!",
-        subtitle: esc_(event.name),
-        body: body
-      }),
-      isFree ? "You're registered for " + event.name + "." : "Send " + moneyText_(order.total) + " by Interac e-transfer to " + config.etransferEmail + " with the message " + order.code + ".");
+    const mail = buildRegistrationEmail_(event, order, tickets);
+    sendStyled_(order.payerEmail, mail.subject, mail.html, mail.plain);
     return true;
   } catch (e) {
     console.error("Registration email failed: " + e.message);
@@ -167,24 +179,24 @@ function sendRegistrationEmail_(event, order, tickets) {
   }
 }
 
+function buildReminderEmail_(event, order, tickets) {
+  const config = getConfig_();
+  const t = mailText_("reminder", orderVars_(event, order, tickets));
+  const people = tickets.map(function (x) { return esc_(x.name) + " (" + esc_(x.ticketType) + ")"; }).join(", ");
+  const body = t.intro + paymentBox_(order, config) + mailBox_(mailRows_([["For", people]].concat(whenWhereRows_(event)))) + t.closing;
+  return {
+    subject: t.subject,
+    html: emailShell_({ preheader: "Your spot for " + event.name + " isn't confirmed yet", title: t.title, subtitle: t.subtitle, body: body }),
+    plain: "Your spot for " + event.name + " isn't confirmed yet. Send " + moneyText_(order.total) + " to " + config.etransferEmail + " with the message " + order.code + "."
+  };
+}
+
 /** To the payer of an order that hasn't been paid yet: a gentle nudge with the payment details again. */
 function sendReminderEmail_(event, order, tickets) {
   if (!canSendMail_(order.payerEmail)) return false;
-  const config = getConfig_();
-  const people = tickets.map(function (t) { return esc_(t.name) + " (" + esc_(t.ticketType) + ")"; }).join(", ");
-  const body =
-    mailPara_("Just a reminder: your spot for <b>" + esc_(event.name) + "</b> isn't confirmed yet, because we haven't received your e-transfer.") +
-    mailBox_(mailRows_([
-      ["Amount", "<span style=\"font-size:18px;\">" + moneyText_(order.total) + "</span> (exactly)"],
-      ["Send to", esc_(config.etransferEmail)],
-      ["Message", "<span style=\"font-size:22px;letter-spacing:2px;\">" + esc_(order.code) + "</span>"]
-    ])) +
-    mailBox_(mailRows_([["For", people]].concat(whenWhereRows_(event)))) +
-    mailPara_("<span style=\"color:#6b6153;\">Already sent it? Thank you! It can take us a day to match it, so no need to send it again. Can't make it anymore? Just reply and we'll free up your spot.</span>");
   try {
-    sendStyled_(order.payerEmail, "Reminder: payment needed for " + event.name + " (" + order.code + ")",
-      emailShell_({ preheader: "Your spot for " + event.name + " isn't confirmed yet", title: "Friendly reminder", subtitle: esc_(event.name), body: body }),
-      "Your spot for " + event.name + " isn't confirmed yet. Send " + moneyText_(order.total) + " to " + config.etransferEmail + " with the message " + order.code + ".");
+    const mail = buildReminderEmail_(event, order, tickets);
+    sendStyled_(order.payerEmail, mail.subject, mail.html, mail.plain);
     return true;
   } catch (e) {
     console.error("Reminder email failed for " + order.code + ": " + e.message);
@@ -192,22 +204,29 @@ function sendReminderEmail_(event, order, tickets) {
   }
 }
 
-/** To each person once their order is paid: their own ticket with a QR code and a link to the ticket page. */
-function sendTicketEmail_(event, ticket) {
-  if (!canSendMail_(ticket.email)) return false;
+function buildTicketEmail_(event, ticket) {
   const link = ticketLink_(ticket);
   const qr = "https://quickchart.io/qr?size=320&margin=2&text=" + encodeURIComponent(link);
-  const body =
+  const t = mailText_("ticket", { name: ticket.name, event: event.name, when: eventWhenText_(event), where: event.location || "TBA" });
+  const body = t.intro +
     "<div style=\"background:#ffffff;border:2px dashed #a8822e;border-radius:8px;padding:16px;text-align:center;margin:0 0 14px;\">" +
     "<img src=\"" + qr + "\" width=\"220\" height=\"220\" alt=\"Your ticket QR code\" style=\"display:block;margin:0 auto 10px;\">" +
     "<div style=\"font-size:20px;font-weight:700;color:#2a2520;\">" + esc_(ticket.name) + "</div>" +
     "<div style=\"font-family:" + MAIL_MONO + ";font-size:11px;letter-spacing:0.5px;color:#6b6153;margin-top:4px;\">" + esc_(ticket.ticketType) + " &middot; " + esc_(ticket.id) + "</div></div>" +
-    mailBox_(mailRows_(whenWhereRows_(event))) +
-    mailPara_("<span style=\"color:#6b6153;\">Show the QR code at the door. A screenshot works too. This ticket is just for you; each friend gets their own.</span>");
+    mailBox_(mailRows_(whenWhereRows_(event))) + t.closing;
+  return {
+    subject: t.subject,
+    html: emailShell_({ preheader: "Your ticket for " + event.name + " is ready", title: t.title, subtitle: t.subtitle, body: body, button: { label: "Open my ticket", url: link } }),
+    plain: "Your ticket for " + event.name + ": " + link
+  };
+}
+
+/** To each person once their order is paid: their own ticket with a QR code and a link to the ticket page. */
+function sendTicketEmail_(event, ticket) {
+  if (!canSendMail_(ticket.email)) return false;
   try {
-    sendStyled_(ticket.email, "Your ticket: " + event.name,
-      emailShell_({ preheader: "Your ticket for " + event.name + " is ready", title: "You're in!", subtitle: "Here's your ticket for <b>" + esc_(event.name) + "</b>.", body: body, button: { label: "Open my ticket", url: link } }),
-      "Your ticket for " + event.name + ": " + link);
+    const mail = buildTicketEmail_(event, ticket);
+    sendStyled_(ticket.email, mail.subject, mail.html, mail.plain);
     return true;
   } catch (e) {
     console.error("Ticket email failed for " + ticket.id + ": " + e.message);
@@ -215,27 +234,33 @@ function sendTicketEmail_(event, ticket) {
   }
 }
 
-/** To one address: a link to every upcoming ticket found for it (the "Find my tickets" page). */
-function sendMyTicketsEmail_(to, items, allLink) {
-  if (!canSendMail_(to)) return false;
+function buildMyTicketsEmail_(items, allLink) {
+  const t = mailText_("findTickets", { event: items.length === 1 ? items[0].event.name : "your events" });
   const blocks = items.map(function (x) {
     return mailBox_(
       "<div style=\"font-size:17px;font-weight:700;color:#2a2520;\">" + esc_(x.event.name) + "</div>" +
       mailRows_(whenWhereRows_(x.event).concat([["Ticket", esc_(x.ticket.name) + " &middot; " + esc_(x.ticket.ticketType)]])) +
       "<div style=\"margin-top:10px;\">" + mailButton_("Open ticket", ticketLink_(x.ticket)) + "</div>");
   }).join("");
-  const body = mailPara_("Open a ticket to see its QR code for the door, or see them all in one place.") + blocks;
   const plain = "Your CSS tickets:\n" + items.map(function (x) { return x.event.name + ": " + ticketLink_(x.ticket); }).join("\n");
+  return {
+    subject: t.subject,
+    html: emailShell_({
+      preheader: "Your ticket link" + (items.length === 1 ? "" : "s"), title: t.title, subtitle: t.subtitle,
+      body: t.intro + blocks + t.closing,
+      button: allLink ? { label: "See all my tickets", url: allLink } : null,
+      footerNote: "If that wasn't you, you can ignore this email."
+    }),
+    plain: plain + (allLink ? " All your tickets: " + allLink : "")
+  };
+}
+
+/** To one address: a link to every upcoming ticket found for it (the "Find my tickets" page). */
+function sendMyTicketsEmail_(to, items, allLink) {
+  if (!canSendMail_(to)) return false;
   try {
-    sendStyled_(to, items.length === 1 ? "Your ticket: " + items[0].event.name : "Your CSS tickets",
-      emailShell_({
-        preheader: "Your ticket link" + (items.length === 1 ? "" : "s"),
-        title: items.length === 1 ? "Here's your ticket" : "Here are your tickets",
-        subtitle: "You asked for these on our website.",
-        body: body,
-        button: allLink ? { label: "See all my tickets", url: allLink } : null,
-        footerNote: "If that wasn't you, you can ignore this email."
-      }), plain + (allLink ? " All your tickets: " + allLink : ""));
+    const mail = buildMyTicketsEmail_(items, allLink);
+    sendStyled_(to, mail.subject, mail.html, mail.plain);
     return true;
   } catch (e) {
     console.error("Find-my-tickets email failed: " + e.message);
@@ -243,21 +268,26 @@ function sendMyTicketsEmail_(to, items, allLink) {
   }
 }
 
+function buildMyPassEmail_(member, link) {
+  const t = mailText_("findPass", { name: member.name });
+  return {
+    subject: t.subject,
+    html: emailShell_({
+      preheader: "Your CSS member pass link", title: t.title, subtitle: t.subtitle,
+      body: t.intro + t.closing,
+      button: { label: "Open my member pass", url: link },
+      footerNote: "If that wasn't you, you can ignore this email."
+    }),
+    plain: "Your CSS member pass: " + link
+  };
+}
+
 /** To a member: a link to their digital pass (the member portal), from the "Find my pass" page. */
 function sendMyPassEmail_(to, member, link) {
   if (!canSendMail_(to)) return false;
-  const body =
-    mailPara_("Hi " + esc_(member.name) + ", here is the link to your CSS member pass. Save it to your home screen to use it at events and partner locations.");
   try {
-    sendStyled_(to, "Your CSS member pass",
-      emailShell_({
-        preheader: "Your CSS member pass link",
-        title: "Your member pass",
-        subtitle: "You asked for this on our website.",
-        body: body,
-        button: { label: "Open my member pass", url: link },
-        footerNote: "If that wasn't you, you can ignore this email."
-      }), "Your CSS member pass: " + link);
+    const mail = buildMyPassEmail_(member, link);
+    sendStyled_(to, mail.subject, mail.html, mail.plain);
     return true;
   } catch (e) {
     console.error("Find-my-pass email failed: " + e.message);

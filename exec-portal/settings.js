@@ -15,6 +15,7 @@ async function openSettingsTab() {
   $("set-pw-note").textContent = T.setPwNote(s.execPasswordSet, s.adminPasswordSet);
   ["set-exec-pw", "set-exec-pw2", "set-admin-pw", "set-admin-pw2"].forEach((id) => { $(id).value = ""; });
   $("set-site").textContent = s.publicSiteUrl ? T.setSiteUrl(s.publicSiteUrl) : "";
+  if (typeof openEmailsCard === "function") openEmailsCard();
 }
 
 /** Sends only what this form owns; shows the result under the form. */

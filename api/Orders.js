@@ -28,7 +28,7 @@ function register_(req) {
   const members = loadMembers_();
   everyone.forEach(function (p) { p.flag = membershipFlag_(p, members); });
 
-  return withLock_(function () {
+  const done = withLock_(function () {
     const tickets = readRows_("Tickets");
     if (event.capacity && event.capacityRule === "all") {
       const taken = spotsTaken_(event);
@@ -94,9 +94,12 @@ function register_(req) {
       etransferEmail: getConfig_().etransferEmail,
       tickets: created.map(function (t) { return { name: t.name, ticketType: t.ticketType, price: t.price, flag: t.flag }; })
     };
-    reply.emailSent = sendRegistrationEmail_(event, order, created);
-    return reply;
+    return { reply: reply, order: order, created: created };
   });
+
+  // Email after the lock is released, so a slow send never holds up scans or other registrations.
+  done.reply.emailSent = sendRegistrationEmail_(event, done.order, done.created);
+  return done.reply;
 }
 
 /**

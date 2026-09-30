@@ -151,6 +151,23 @@ function route_(req) {
       requireAdmin_(req.token);
       return healthCheck_();
 
+    case "getEmailTemplates":
+      requireAdmin_(req.token);
+      return getEmailTemplates_();
+
+    case "saveEmailTemplate":
+      return saveEmailTemplate_(requireAdmin_(req.token), req.key, req.fields);
+
+    case "saveEmailBrand":
+      return saveEmailBrand_(requireAdmin_(req.token), req.brand);
+
+    case "previewEmail":
+      requireAdmin_(req.token);
+      return previewEmail_(req.key, req.fields);
+
+    case "sendTestEmail":
+      return sendTestEmail_(requireAdmin_(req.token), req.key, req.to, req.fields);
+
     case "eventSummary":
       requireSession_(req.token);
       return eventSummary_(req.eventId);

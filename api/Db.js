@@ -16,6 +16,7 @@ const TABLES = {
            "createdAt", "paidAt", "paidBy", "notes", "remindedAt"],
   Tickets: ["id", "secret", "orderId", "eventId", "name", "email", "ucid", "memberId", "ticketType",
             "price", "answers", "flag", "status", "checkedInAt", "checkedInBy", "createdAt", "emailedAt"],
+  Emails: ["id", "subject", "title", "subtitle", "intro", "closing", "updatedBy", "updatedAt"],
   Log: ["time", "who", "action", "target", "details"]
 };
 

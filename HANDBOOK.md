@@ -7,7 +7,7 @@ For execs. No tech knowledge needed.
 2. Type the **exec password** (ask the President) and **your name**. Your name goes next to every change you make.
 3. You stay signed in for about 6 hours. **Sign out** on shared computers.
 
-Wrong password 10 times → sign-in pauses for 10 minutes.
+Wrong password 30 times → sign-in pauses for 10 minutes.
 
 ## Members tab: find a member
 - Type part of a **name**, a **UCID**, a **member ID** (CSS…), or an **email**.
@@ -70,6 +70,9 @@ If you see "ticket emails waiting (daily email limit)", press **Send now** later
 
 ## What the emails look like
 All system emails (registration, payment reminder, ticket, find-my-tickets, find-my-pass) share one look: the same paper-ticket design as the member pass email, with a sage header, the CSS banner, pandas and a signature. It lives in `emailShell_()` in `api/Mail.js`. The signature name is the Script Property `PRESIDENT_NAME` (default "Gordon Chen"); change it when the President changes.
+
+### Changing the words in emails
+Settings (admin) → **Email wording**. Pick an email, change the subject, heading, or the text at the top and bottom, then press **Preview** to see it, **Send test email** to get it in your own inbox, and **Save**. Leave a box empty to use the standard wording; type just a dash (-) to show nothing there. You can put `{name}` `{event}` `{code}` `{amount}` `{when}` `{where}` in the text (the box tells you which ones work) and they fill in for each person. The same change applies to every event. The same card sets the name and role in the signature and the button colour. The look of the email (banner, pandas, layout) isn't editable.
 
 ## Members finding their own tickets
 People who lost their ticket email don't need the help desk: the footer of every events page has **My tickets** (`events.ucalgarycss.ca/tickets.html`). They enter their email, or their UCID and last name, and the ticket links are emailed to the address on the ticket. Nothing is shown on screen. The Activity tab records each use (admin only). Walk-ins without an email can't use it; look them up in Payments or Door.

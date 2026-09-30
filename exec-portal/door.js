@@ -7,7 +7,7 @@ async function openDoorTab() {
   const events = activeEvents();
   if (!events.length) { $("scan-result").textContent = T.noEventsForPayments; return; }
   if (!doorState.eventId || !events.some((e) => e.id === doorState.eventId)) {
-    const today = new Date().toISOString().slice(0, 10);
+    const today = todayMountain();
     const next = events.filter((e) => e.date >= today).sort((a, b) => a.date.localeCompare(b.date))[0];
     doorState.eventId = (next || events[0]).id;
   }

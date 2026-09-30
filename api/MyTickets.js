@@ -55,9 +55,7 @@ function findMyTickets_(req) {
   if (sent > 0) lookupDone_(key);
   log_("public", "tickets.lookup", "", { by: byEmail ? "email" : "ucid", emails: sent });
 
-  const reply = { ok: true, sent: sent > 0, message: generic.message };
-  if (!byEmail && sent > 0) reply.maskedEmails = addresses.map(maskEmail_);
-  return reply;
+  return generic;   // identical whether or not anything was found, so this can't be used to check who is registered
 }
 
 /** "Chan-Wong" and "chan wong" both match; accents and case don't matter. */
@@ -107,9 +105,7 @@ function findMyPass_(req) {
   if (sent) { lookupSpend_(); lookupDone_(key); }
   log_("public", "pass.lookup", "", { by: byEmail ? "email" : "ucid", sent: sent ? 1 : 0 });
 
-  const reply = { ok: true, sent: sent, message: generic.message };
-  if (!byEmail && sent) reply.maskedEmails = [maskEmail_(to)];
-  return reply;
+  return generic;   // identical whether or not a membership was found
 }
 
 // ---- Shared limits for both lookups ---------------------------------------------------

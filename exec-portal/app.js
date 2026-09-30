@@ -243,6 +243,11 @@ function formatDate(value) {
   return date.toLocaleString("en-CA", { dateStyle: "medium", timeStyle: "short" });
 }
 
+/** Today's date in Calgary (yyyy-mm-dd), not UTC: after 6 pm UTC is already "tomorrow". */
+function todayMountain() {
+  return new Date().toLocaleDateString("en-CA", { timeZone: "America/Edmonton" });
+}
+
 function escapeHtml(value) {
   return String(value ?? "").replace(/[&<>"']/g, (c) =>
     ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));

@@ -335,6 +335,49 @@
         <button type="submit" id="set-password-save" class="primary" data-t="setPwSave"></button>
       </form>
 
+      <div class="card editor" id="set-emails-card">
+        <h3 class="sub-title" data-t="emTitle"></h3>
+        <p class="muted small" data-t="emHint"></p>
+        <label for="em-kind" data-t="emPick"></label>
+        <select id="em-kind"></select>
+        <p id="em-when" class="muted small"></p>
+        <p id="em-fills" class="muted small"></p>
+        <label for="em-subject" data-t="emSubject"></label>
+        <input id="em-subject" maxlength="150" autocomplete="off">
+        <label for="em-title" data-t="emHeading"></label>
+        <input id="em-title" maxlength="100" autocomplete="off">
+        <label for="em-subtitle" data-t="emSubheading"></label>
+        <input id="em-subtitle" maxlength="200" autocomplete="off">
+        <label for="em-intro" data-t="emIntro"></label>
+        <textarea id="em-intro" rows="3" maxlength="1500"></textarea>
+        <label for="em-closing" data-t="emClosing"></label>
+        <textarea id="em-closing" rows="3" maxlength="1500"></textarea>
+        <p class="muted small" data-t="emFormatHint"></p>
+        <p id="em-result" class="muted small"></p>
+        <div class="row-buttons">
+          <button id="em-save" class="primary" data-t="setSave"></button>
+          <button id="em-preview" class="secondary" data-t="emPreview"></button>
+          <button id="em-reset" class="secondary" data-t="emReset"></button>
+        </div>
+        <label for="em-test-to" data-t="emTestTo"></label>
+        <input id="em-test-to" type="email" maxlength="120" autocomplete="off">
+        <button id="em-test" class="secondary" data-t="emTest"></button>
+        <iframe id="em-frame" title="Email preview" hidden style="width:100%;height:640px;border:1px solid var(--line,#ccc);border-radius:8px;background:#fff;margin-top:8px;"></iframe>
+
+        <h3 class="sub-title" data-t="emBrandTitle"></h3>
+        <label for="em-signer" data-t="emSigner"></label>
+        <input id="em-signer" maxlength="80" autocomplete="off">
+        <label for="em-role" data-t="emRole"></label>
+        <input id="em-role" maxlength="120" autocomplete="off">
+        <label for="em-color" data-t="emColor"></label>
+        <input id="em-color" type="color" value="#824a24">
+        <p id="em-brand-result" class="muted small"></p>
+        <div class="row-buttons">
+          <button id="em-brand-save" class="primary" data-t="setSave"></button>
+          <button id="em-brand-reset" class="secondary" data-t="emBrandReset"></button>
+        </div>
+      </div>
+
       <div class="card editor">
         <h3 class="sub-title" data-t="setSessionsTitle"></h3>
         <p class="muted small" data-t="setSessionsHint"></p>
@@ -433,15 +476,16 @@
   <script src="config.js?v=0.4.1"></script>
   <script src="strings.js?v=0.4.2"></script>
   <script src="mock.js?v=0.2.4"></script>
-  <script src="app.js?v=0.4.0"></script>
-  <script src="events.js?v=0.4.0"></script>
+  <script src="app.js?v=0.4.1"></script>
+  <script src="events.js?v=0.4.1"></script>
   <script src="payments.js?v=0.4.1"></script>
-  <script src="edit.js?v=0.3.0"></script>
-  <script src="finance.js?v=0.3.1"></script>
-  <script src="activity.js?v=0.3.2"></script>
-  <script src="settings.js?v=0.3.2"></script>
+  <script src="edit.js?v=0.3.4"></script>
+  <script src="finance.js?v=0.3.4"></script>
+  <script src="activity.js?v=0.3.4"></script>
+  <script src="settings.js?v=0.3.4"></script>
+  <script src="emails.js?v=0.3.4"></script>
   <script src="attendees.js?v=0.4.0"></script>
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
-  <script src="door.js?v=0.4.1"></script>
+  <script src="door.js?v=0.4.2"></script>
 </body>
 </html>

@@ -43,7 +43,7 @@ function renderGlobalEvent() {
   select.hidden = !events.length;
   if (!events.length) return;
   if (!globalEventId || !events.some((e) => e.id === globalEventId)) {
-    const today = new Date().toISOString().slice(0, 10);
+    const today = todayMountain();
     const next = events.filter((e) => e.date >= today).sort((a, b) => a.date.localeCompare(b.date))[0];
     globalEventId = (next || events[0]).id;
     payState.eventId = globalEventId;

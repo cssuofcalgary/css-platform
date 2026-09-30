@@ -22,7 +22,7 @@ Open the **web app URL** (README section 2) in a browser.
 | "Can't reach the CSS system" | No internet, or the back end is down | Check the internet, then do the "alive?" test above |
 | "The system isn't set up yet" | A Script Property is missing | Editor → ⚙ Project Settings → Script Properties. `MEMBERSHIP_SHEET_ID` and `EXEC_PASSWORD` must exist |
 | "That password isn't right" for everyone | The password was changed | Check `EXEC_PASSWORD` in Script Properties |
-| "Too many wrong tries" | 10 wrong passwords in 10 min | Wait 10 minutes |
+| "Too many wrong tries" | 30 wrong passwords in 10 min | Wait 10 minutes |
 | "Connection is slow. Trying again…" (yellow bar) | Google was slow. The portal retries lookups by itself, up to 3 times | Wait a few seconds. Nothing to do. If a *change* (mark paid, edit) says "Google was slow", check the person's row before pressing again |
 | "The system is busy" | Many changes at the same moment | Try again in a few seconds |
 | Member info looks out of date | Search data refreshes every 5 min | Wait 5 min |
@@ -72,6 +72,8 @@ Easiest: sign in with the admin password → **Settings** → Passwords. Everyon
 **Lost the admin password?** Script Properties → edit `ADMIN_PASSWORD` → Save. Works immediately; no redeploy.
 
 ## Something feels off / errors
+An email says something odd after a wording change: Settings → Email wording → pick it → **Use standard wording**.
+
 Health check says "No backup yet" or "Last good backup was N hours ago": in Apps Script open `Jobs`, pick `installJobs`, press Run (sets the timers again and takes a backup). If it asks for permission, allow it.
 
 Need to undo a bad change to the data: Drive → "CSS Platform Backups" → open the newest copy, copy the tab back into "CSS Platform Data".
