@@ -9,8 +9,11 @@ function switchTab(name) {
   $("tab-members").hidden = name !== "members";
   $("tab-events").hidden = name !== "events";
   $("tab-payments").hidden = name !== "payments";
+  $("tab-door").hidden = name !== "door";
+  if (name !== "door" && doorState.scanner) stopCamera();
   if (name === "events") { showEventsList(); if (!eventsState.loaded) loadEvents(); }
   if (name === "payments") openPaymentsTab();
+  if (name === "door") openDoorTab();
   if (name === "members") $("search-input").focus();
 }
 

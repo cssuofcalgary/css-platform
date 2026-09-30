@@ -54,6 +54,23 @@ The Events list shows how many people have **paid** and how many are **awaiting 
 **Ticket ↗:** opens that person's ticket (handy at the help desk).
 If you see "ticket emails waiting (daily email limit)", press **Send now** later, or the next day. Gmail allows about 100 emails a day.
 
+## Door tab (event night)
+1. Pick the event (tonight's is picked automatically).
+2. Tap **Entry CLOSED** to **open entry** when doors open. Scanners only let people in while it's open.
+3. **📷 Start scanning** and allow the camera. Point it at the QR on the person's phone (a screenshot is fine).
+   - 🟢 **Green:** let them in. Their answers (e.g. drink) show underneath.
+   - 🟢 with a **yellow border:** let them in, but check the note (e.g. membership not found).
+   - 🟠 **Orange:** already checked in, **not paid yet**, or entry closed. Send them to the help desk.
+   - 🔴 **Red:** not a valid ticket for this event. Send them to the help desk.
+   Two people can scan at once on two phones. The same ticket can never get in twice.
+4. **QR won't scan?** Type their name or ticket ID (on their ticket, TKT…) in the box → **Find** → **Check in**.
+5. **+ Walk-in:** name, UCID if they have one, ticket type, cash or e-transfer → **Add & check in**. Walk-ins are always allowed, even when sold out.
+6. **Help desk lists** at the bottom:
+   - **Not paid yet:** check their e-transfer, then **Mark paid** → **Check in**.
+   - **Please check:** people flagged earlier (membership not found, duplicate email).
+
+No signal? Things get slow, not broken. Before the event, keep the Payments tab open or print the list.
+
 ## Good to know
 - Everything you do is saved in a change log with your name.
 - You never need to open Google Sheets or Google Drive. If you think you have to, ask the President first.

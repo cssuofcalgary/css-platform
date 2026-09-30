@@ -42,6 +42,7 @@
       <button class="tab active" data-tab="members" data-t="tabMembers"></button>
       <button class="tab" data-tab="events" data-t="tabEvents"></button>
       <button class="tab" data-tab="payments" data-t="tabPayments"></button>
+      <button class="tab" data-tab="door" data-t="tabDoor"></button>
     </nav>
 
     <main class="content">
@@ -153,6 +154,61 @@
       <p id="pay-status" class="muted small" aria-live="polite"></p>
       <ul id="orders" class="results"></ul>
      </div>
+     <div id="tab-door" hidden>
+      <div class="door-top">
+        <label for="door-event" class="visually-hidden" data-t="payEvent"></label>
+        <select id="door-event"></select>
+        <div class="row-between">
+          <button id="entry-toggle" class="entry-toggle"></button>
+          <span id="door-counts" class="muted small"></span>
+        </div>
+      </div>
+
+      <div id="scan-result" class="scan-result idle" aria-live="assertive"></div>
+      <div id="camera" class="camera" hidden></div>
+
+      <div class="door-buttons">
+        <button id="camera-toggle" class="primary" data-t="startCamera"></button>
+        <button id="walkin-button" class="secondary" data-t="walkIn"></button>
+      </div>
+
+      <form id="walkin-form" class="card editor" hidden>
+        <h2 data-t="walkInTitle"></h2>
+        <label for="wi-name" data-t="walkInName"></label>
+        <input id="wi-name" maxlength="80" autocomplete="off">
+        <label for="wi-ucid" data-t="walkInUcid"></label>
+        <input id="wi-ucid" inputmode="numeric" maxlength="12" autocomplete="off">
+        <fieldset><legend data-t="ticket"></legend><div id="wi-types"></div></fieldset>
+        <div id="wi-member" hidden>
+          <label for="wi-member-id" data-t="walkInMemberId"></label>
+          <input id="wi-member-id" maxlength="20" autocomplete="off" placeholder="CSS…">
+        </div>
+        <fieldset><legend data-t="walkInPaidBy"></legend>
+          <label class="check"><input type="radio" name="wi-method" value="cash" checked> <span data-t="cash"></span></label>
+          <label class="check"><input type="radio" name="wi-method" value="etransfer"> <span data-t="etransfer"></span></label>
+        </fieldset>
+        <p id="wi-error" class="error" hidden></p>
+        <div class="button-row">
+          <button type="button" id="wi-cancel" class="secondary" data-t="cancel"></button>
+          <button type="submit" id="wi-submit" class="primary" data-t="walkInSubmit"></button>
+        </div>
+      </form>
+
+      <form id="manual-form" class="manual">
+        <input id="manual-input" type="search" autocomplete="off" enterkeyhint="search">
+        <button type="submit" class="secondary" data-t="find"></button>
+      </form>
+      <ul id="manual-results" class="results"></ul>
+
+      <details id="unpaid-box" class="helpdesk" open>
+        <summary id="unpaid-title"></summary>
+        <ul id="helpdesk-unpaid" class="results"></ul>
+      </details>
+      <details id="flagged-box" class="helpdesk">
+        <summary id="flagged-title"></summary>
+        <ul id="helpdesk-flagged" class="results"></ul>
+      </details>
+     </div>
     </main>
   </div>
 
@@ -162,5 +218,7 @@
   <script src="app.js"></script>
   <script src="events.js"></script>
   <script src="payments.js"></script>
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <script src="door.js"></script>
 </body>
 </html>

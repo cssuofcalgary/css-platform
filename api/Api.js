@@ -101,6 +101,19 @@ function route_(req) {
       return { ok: true, emailsSent: result.sent, emailsWaiting: result.waiting };
     }
 
+    case "setEntryOpen":
+      return setEntryOpen_(requireSession_(req.token), req.eventId, !!req.open);
+
+    case "scan":
+      return scan_(requireSession_(req.token), req.eventId, req.code);
+
+    case "walkIn":
+      return walkIn_(requireSession_(req.token), req.eventId, req.walkIn);
+
+    case "doorList":
+      requireSession_(req.token);
+      return doorList_(req.eventId);
+
     default:
       throw new ApiError_("UNKNOWN_ACTION", "Unknown action: " + req.action);
   }

@@ -3,7 +3,7 @@
 The Chinese Students' Society's own event, ticket and membership platform: a mini Luma/Eventbrite built on free Google tools.
 **Execs:** you want `HANDBOOK.md`. **Something broke:** `RUNBOOK.md`.
 
-Status: **v0.2 in progress.** Member search ✅ · Events + public pages ✅ · Registration ✅ · Payments/tickets ✅ · Scanner ⏳
+Status: **v0.2 in progress.** Member search ✅ · Events + public pages ✅ · Registration ✅ · Payments/tickets ✅ · Door/scanner ✅
 The old system (`../CSS Ticketing System/`) keeps running until this one is proven. Nothing here touches it.
 
 ---
@@ -55,8 +55,9 @@ The old system (`../CSS Ticketing System/`) keeps running until this one is prov
 | `api/Events.js` | Events: validation, save, publish/close, image upload, public event views |
 | `api/Orders.js` | Registration: one Order (payment code) + one Ticket per person, membership check (flags, never blocks), duplicate check, anti-spam |
 | `api/Payments.js` | Finance: list orders, mark paid (capacity check, `force` to override), refund/cancel (never deletes), resend tickets, send waiting emails. Public ticket lookup by secret. Remembers the public site address for email links (`PUBLIC_SITE_URL` property) |
+| `api/Door.js` | Door: entry open/closed, `scan` (ticket link / secret / TKT id → green / green-flag / orange / red, checks in under the lock), walk-ins (paid + checked in, always allowed), help-desk list |
 | `api/Mail.js` | Emails from the CSS Gmail (checks the daily limit first). **Addresses @example.com/.org/.net are never emailed** (use them for testing) |
-| `exec-portal/` | Exec Portal: `index.html`, `app.js` (sign-in + Members tab), `events.js` (Events tab), `strings.js` (**all text**), `config.js` (API URL + public site URL), `mock.js` (demo mode when API URL is empty) |
+| `exec-portal/` | Exec Portal: `index.html`, `app.js` (sign-in + Members tab), `events.js` (Events tab), `payments.js` (Payments tab), `door.js` (Door tab; camera via html5-qrcode from unpkg), `strings.js` (**all text**), `config.js` (API URL + public site URL), `mock.js` (demo mode when API URL is empty) |
 | `public/` | Public site: `index.html`, `public.js` (event list, event page, registration form, payment screen), `ticket.html` + `ticket.js` (a person's ticket with QR; QR library from cdnjs), `public.css`, `strings.js` (**all text**), `config.js` (API URL, contact email, Instagram) |
 
 ## 4. Data tables ("CSS Platform Data")
@@ -92,6 +93,10 @@ Lists (`ticketTypes`, `questions`, `answers`) are stored as JSON text.
 | `refundOrder` `{orderId, reason}` | yes | Paid → refunded, awaiting → cancelled. Spot reopens. Refuses if anyone already checked in |
 | `resendTickets` `{orderId, siteUrl}` | yes | Emails the paid tickets again |
 | `sendPendingEmails` | yes | Sends ticket emails that were held back by the daily limit |
+| `setEntryOpen` `{eventId, open}` | yes | Scanners only check people in while entry is open |
+| `scan` `{eventId, code}` | yes | Returns `{result: {color, message, person}}`. Colors: `green`, `green-flag` (in, but check the flag), `orange` (already in / not paid / entry closed), `red` (not found / wrong event / refunded / member card) |
+| `walkIn` `{eventId, walkIn: {name, ucid?, memberId?, ticketTypeId, method: cash/etransfer}}` | yes | Creates a paid order + ticket, already checked in. Ignores capacity |
+| `doorList` `{eventId}` | yes | All active tickets + counts, for the help desk |
 | `uploadImage` `{dataUrl, filename}` | yes | JPG/PNG/WebP ≤ 5 MB → Drive, shared by link → `{fileId, url}` |
 
 ## 6. Settings (Apps Script → ⚙ Project Settings → Script Properties)

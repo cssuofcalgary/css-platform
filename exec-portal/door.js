@@ -1,0 +1,235 @@
+// CSS Exec Portal — Door tab: scan tickets, walk-ins, help-desk lists.
+
+const doorState = { eventId: "", data: null, scanner: null, lastCode: "", lastAt: 0, busy: false, refreshTimer: null };
+
+async function openDoorTab() {
+  if (!eventsState.loaded) await loadEvents();
+  const events = eventsState.events.filter((e) => e.status !== "draft");
+  if (!events.length) { $("scan-result").textContent = T.noEventsForPayments; return; }
+  if (!doorState.eventId || !events.some((e) => e.id === doorState.eventId)) {
+    const today = new Date().toISOString().slice(0, 10);
+    const next = events.filter((e) => e.date >= today).sort((a, b) => a.date.localeCompare(b.date))[0];
+    doorState.eventId = (next || events[0]).id;
+  }
+  $("door-event").innerHTML = events.map((e) =>
+    `<option value="${e.id}" ${e.id === doorState.eventId ? "selected" : ""}>${escapeHtml(e.name)} (${escapeHtml(e.date)})</option>`).join("");
+  $("manual-input").placeholder = T.manualPlaceholder;
+  showIdle();
+  await loadDoor();
+  clearInterval(doorState.refreshTimer);
+  doorState.refreshTimer = setInterval(() => { if (!$("tab-door").hidden) loadDoor(); }, 30000);
+}
+
+async function loadDoor() {
+  const reply = await api("doorList", { eventId: doorState.eventId });
+  if (!reply.ok) return handleEventError(reply, $("scan-result"));
+  doorState.data = reply;
+  renderDoor();
+}
+
+function renderDoor() {
+  const d = doorState.data;
+  $("entry-toggle").textContent = d.event.entryOpen ? T.entryOpen : T.entryClosed;
+  $("door-counts").textContent = T.doorCounts(d.counts.checkedIn, d.counts.paid, d.counts.awaiting);
+
+  const unpaid = d.tickets.filter((t) => t.status === "awaiting");
+  const flagged = d.tickets.filter((t) => t.status === "paid" && t.flag);
+  $("unpaid-title").textContent = T.unpaidTitle(unpaid.length);
+  $("flagged-title").textContent = T.flaggedTitle(flagged.length);
+  $("helpdesk-unpaid").innerHTML = unpaid.length ? unpaid.map((t) => personRow(t, true)).join("") : `<li class="muted small">${T.nobody}</li>`;
+  $("helpdesk-flagged").innerHTML = flagged.length ? flagged.map((t) => personRow(t, false)).join("") : `<li class="muted small">${T.nobody}</li>`;
+}
+
+function personRow(t, showPay) {
+  const answers = Object.entries(t.answers || {}).map(([k, v]) => `${escapeHtml(k)}: ${escapeHtml(v)}`).join(" · ");
+  const action = t.checkedInAt ? `<span class="pill good">✓ ${escapeHtml(T.insideMark(shortTime(t.checkedInAt)))}</span>`
+    : t.status === "awaiting"
+      ? (showPay ? `<button class="primary small-button" data-pay="${t.orderId}">${T.markPaidShort(money(t.orderTotal))}</button>` : "")
+      : `<button class="primary small-button" data-checkin="${t.id}">${T.checkIn}</button>`;
+  return `
+    <li class="card door-person">
+      <div>
+        <div class="name"><strong>${escapeHtml(t.name)}</strong> · ${escapeHtml(t.ticketType)}</div>
+        <div class="sub">${escapeHtml(t.orderCode || "")}${t.orderTotal ? " · " + money(t.orderTotal) : ""}${t.etransferName ? " · e-transfer: " + escapeHtml(t.etransferName) : ""}${answers ? " · " + answers : ""}</div>
+        ${t.flag ? `<span class="flag">⚠ ${escapeHtml(t.flag)}</span>` : ""}
+      </div>
+      ${action}
+    </li>`;
+}
+
+// ---- Scanning -------------------------------------------------------------------
+
+async function toggleCamera() {
+  if (doorState.scanner) return stopCamera();
+  $("camera").hidden = false;
+  try {
+    doorState.scanner = new Html5Qrcode("camera");
+    await doorState.scanner.start({ facingMode: "environment" }, { fps: 10, qrbox: { width: 240, height: 240 } }, onCode, () => {});
+    $("camera-toggle").textContent = T.stopCamera;
+    showIdle(T.readyToScan);
+  } catch (err) {
+    doorState.scanner = null;
+    $("camera").hidden = true;
+    showResult({ color: "red", message: T.cameraError });
+  }
+}
+
+async function stopCamera() {
+  try { await doorState.scanner.stop(); } catch (e) { /* already stopped */ }
+  doorState.scanner = null;
+  $("camera").hidden = true;
+  $("camera").innerHTML = "";
+  $("camera-toggle").textContent = T.startCamera;
+}
+
+function onCode(text) {
+  const now = Date.now();
+  if (doorState.busy) return;
+  if (text === doorState.lastCode && now - doorState.lastAt < 4000) return;   // same QR still in view
+  doorState.lastCode = text;
+  doorState.lastAt = now;
+  checkCode(text);
+}
+
+async function checkCode(code) {
+  doorState.busy = true;
+  showIdle(T.checking);
+  const reply = await api("scan", { eventId: doorState.eventId, code });
+  doorState.busy = false;
+  if (!reply.ok) {
+    if (reply.error === "NOT_LOGGED_IN") { stopCamera(); signOutLocally(); return showLogin(errorText(reply)); }
+    return showResult({ color: "red", message: errorText(reply) });
+  }
+  showResult(reply.result);
+  loadDoor();
+}
+
+function showIdle(text) {
+  const box = $("scan-result");
+  box.className = "scan-result idle";
+  box.textContent = text || T.readyToScan;
+}
+
+function showResult(result) {
+  const box = $("scan-result");
+  const p = result.person;
+  const answers = p ? Object.entries(p.answers || {}).map(([k, v]) => `${escapeHtml(k)}: <strong>${escapeHtml(v)}</strong>`).join(" · ") : "";
+  box.className = "scan-result " + result.color;
+  box.innerHTML = `
+    ${p ? `<div class="big-name">${escapeHtml(p.name)}</div><div class="detail">${escapeHtml(p.ticketType)} · ${escapeHtml(p.id)}</div>` : ""}
+    <div>${escapeHtml(result.message)}</div>
+    ${answers ? `<div class="detail">${answers}</div>` : ""}`;
+  feedback(result.color);
+}
+
+/** Beep + buzz so the door person doesn't have to stare at the screen. */
+function feedback(color) {
+  try {
+    const ctx = feedback.ctx = feedback.ctx || new (window.AudioContext || window.webkitAudioContext)();
+    const tones = color.startsWith("green") ? [880] : color === "orange" ? [520, 520] : [220];
+    tones.forEach((freq, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.frequency.value = freq;
+      gain.gain.value = 0.15;
+      osc.connect(gain).connect(ctx.destination);
+      osc.start(ctx.currentTime + i * 0.22);
+      osc.stop(ctx.currentTime + i * 0.22 + 0.16);
+    });
+  } catch (e) { /* no sound: fine */ }
+  if (navigator.vibrate) navigator.vibrate(color.startsWith("green") ? 80 : [120, 80, 120]);
+}
+
+// ---- Typed lookups (QR won't scan, no phone) --------------------------------------
+
+function onManualSubmit(ev) {
+  ev.preventDefault();
+  const q = $("manual-input").value.trim();
+  if (!q) return;
+  if (/^tkt/i.test(q) || /[?&]t=/.test(q)) { $("manual-results").innerHTML = ""; return checkCode(q); }
+  const needle = q.toLowerCase();
+  const matches = (doorState.data ? doorState.data.tickets : []).filter((t) =>
+    [t.name, t.orderCode, t.payerName, t.etransferName].some((v) => String(v || "").toLowerCase().includes(needle)));
+  $("manual-results").innerHTML = matches.length ? matches.slice(0, 20).map((t) => personRow(t, true)).join("") : `<li class="muted small">${T.noMatch}</li>`;
+}
+
+async function onDoorListClick(ev) {
+  const checkin = ev.target.closest("[data-checkin]");
+  const pay = ev.target.closest("[data-pay]");
+  if (checkin) {
+    checkin.disabled = true;
+    await checkCode(checkin.dataset.checkin);
+    $("manual-results").innerHTML = "";
+  }
+  if (pay) {
+    const t = doorState.data.tickets.find((x) => x.orderId === pay.dataset.pay);
+    if (!confirm(T.confirmPaid(money(t.orderTotal), t.orderCode, t.etransferName || t.payerName))) return;
+    pay.disabled = true;
+    const siteUrl = new URL(PUBLIC_SITE_URL, location.href).href;
+    let reply = await api("markOrderPaid", { orderId: pay.dataset.pay, siteUrl, force: true });   // door: always let paying people in
+    if (!reply.ok) { pay.disabled = false; return showResult({ color: "red", message: errorText(reply) }); }
+    await loadDoor();
+    onManualSubmit(new Event("submit"));
+  }
+}
+
+// ---- Walk-ins -----------------------------------------------------------------------
+
+function openWalkIn() {
+  const types = doorState.data ? doorState.data.event.ticketTypes : [];
+  $("wi-types").innerHTML = types.map((t, i) => `
+    <label class="check"><input type="radio" name="wi-type" value="${escapeHtml(t.id)}" data-member="${t.needsMembership ? 1 : 0}" ${i === types.length - 1 ? "checked" : ""}>
+      ${escapeHtml(t.name)} · ${money(t.price)}</label>`).join("");
+  ["wi-name", "wi-ucid", "wi-member-id"].forEach((id) => { $(id).value = ""; });
+  $("wi-error").hidden = true;
+  updateWalkInMember();
+  $("walkin-form").hidden = false;
+  $("wi-name").focus();
+}
+
+function updateWalkInMember() {
+  const picked = document.querySelector('input[name="wi-type"]:checked');
+  $("wi-member").hidden = !(picked && picked.dataset.member === "1");
+}
+
+async function onWalkInSubmit(ev) {
+  ev.preventDefault();
+  const picked = document.querySelector('input[name="wi-type"]:checked');
+  const walkIn = {
+    name: $("wi-name").value, ucid: $("wi-ucid").value, memberId: $("wi-member-id").value,
+    ticketTypeId: picked ? picked.value : "",
+    method: document.querySelector('input[name="wi-method"]:checked').value
+  };
+  $("wi-submit").disabled = true;
+  const reply = await api("walkIn", { eventId: doorState.eventId, walkIn });
+  $("wi-submit").disabled = false;
+  if (!reply.ok) { $("wi-error").textContent = errorText(reply); $("wi-error").hidden = false; return; }
+  $("walkin-form").hidden = true;
+  showResult(reply.result);
+  loadDoor();
+}
+
+// ---- Entry open / closed --------------------------------------------------------------
+
+async function toggleEntry() {
+  const open = !doorState.data.event.entryOpen;
+  if (!open && !confirm(T.confirmCloseEntry)) return;
+  $("entry-toggle").disabled = true;
+  const reply = await api("setEntryOpen", { eventId: doorState.eventId, open });
+  $("entry-toggle").disabled = false;
+  if (!reply.ok) return showResult({ color: "red", message: errorText(reply) });
+  doorState.data.event.entryOpen = open;
+  renderDoor();
+}
+
+// ---- Wire up ------------------------------------------------------------------------
+
+$("door-event").addEventListener("change", () => { doorState.eventId = $("door-event").value; showIdle(); loadDoor(); });
+$("entry-toggle").addEventListener("click", toggleEntry);
+$("camera-toggle").addEventListener("click", toggleCamera);
+$("walkin-button").addEventListener("click", openWalkIn);
+$("wi-cancel").addEventListener("click", () => { $("walkin-form").hidden = true; });
+$("wi-types").addEventListener("change", updateWalkInMember);
+$("walkin-form").addEventListener("submit", onWalkInSubmit);
+$("manual-form").addEventListener("submit", onManualSubmit);
+["manual-results", "helpdesk-unpaid", "helpdesk-flagged"].forEach((id) => $(id).addEventListener("click", onDoorListClick));

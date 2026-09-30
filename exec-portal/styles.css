@@ -177,6 +177,26 @@ button.link {
   .fields dd { margin-bottom: 8px; }
 }
 
+/* Door tab */
+.door-top { display: grid; gap: 8px; margin-bottom: 10px; }
+.entry-toggle { border: 1px solid var(--border); background: var(--surface); color: var(--text); border-radius: 999px; padding: 8px 14px; font-weight: 700; cursor: pointer; }
+.scan-result { border-radius: 16px; padding: 18px; margin: 8px 0; min-height: 96px; display: grid; gap: 4px; align-content: center; text-align: center; font-size: 18px; }
+.scan-result.idle { background: var(--surface); border: 1px dashed var(--border); color: var(--muted); font-size: 16px; }
+.scan-result.green { background: #15803d; color: #fff; }
+.scan-result.green-flag { background: #15803d; color: #fff; box-shadow: inset 0 0 0 6px #facc15; }
+.scan-result.orange { background: #ea580c; color: #fff; }
+.scan-result.red { background: #b91c1c; color: #fff; }
+.scan-result .big-name { font-size: 26px; font-weight: 800; }
+.scan-result .detail { font-size: 15px; opacity: 0.95; }
+.camera { width: 100%; max-width: 480px; margin: 0 auto 10px; border-radius: 16px; overflow: hidden; }
+.door-buttons { display: grid; grid-template-columns: 2fr 1fr; gap: 10px; margin-bottom: 12px; }
+.door-buttons button { margin-top: 0; }
+.manual { display: grid; grid-template-columns: 1fr auto; gap: 8px; margin: 8px 0; }
+.helpdesk { margin-top: 14px; }
+.helpdesk summary { font-weight: 700; cursor: pointer; padding: 6px 0; }
+.door-person { display: flex; justify-content: space-between; gap: 10px; align-items: center; flex-wrap: wrap; padding: 12px 14px; }
+.door-person .sub { font-size: 13px; color: var(--muted); }
+
 /* Payments tab */
 .payments-top { display: grid; gap: 10px; margin-bottom: 8px; }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; }
