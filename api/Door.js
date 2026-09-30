@@ -25,7 +25,8 @@ function scan_(session, eventId, code, atDesk) {
   if (!key) return scanResult_("red", "Couldn't read that code.");
   if (key.kind === "member") return scanResult_("red", "That's a membership card, not a ticket for this event.");
 
-  return withLock_(function () {
+  let logEntry = null;
+  const result = withLock_(function () {
     const event = findEvent_(function (e) { return e.id === eventId; });
     if (!event) throw new ApiError_("NOT_FOUND", "Event not found.");
 
@@ -69,9 +70,11 @@ function scan_(session, eventId, code, atDesk) {
 
     const now = new Date().toISOString();
     updateRow_("Tickets", ticket.id, { checkedInAt: now, checkedInBy: session.name }, ticket._row, true);   // row was just read fresh
-    log_(session.name, atDesk ? "checkin.desk" : "checkin", ticket.id, { name: ticket.name, flag: ticket.flag || "" });
+    logEntry = [session.name, atDesk ? "checkin.desk" : "checkin", ticket.id, { name: ticket.name, flag: ticket.flag || "" }];   // written after the lock is released
     return scanResult_("green", ticket.flag ? "Checked in at the help desk." : "Checked in. Welcome!", person);
   });
+  if (logEntry) log_.apply(null, logEntry);
+  return result;
 }
 
 /** Exec: take back a check-in (scanned the wrong person, or scanned twice by mistake). */

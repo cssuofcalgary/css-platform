@@ -12,6 +12,13 @@ const MAX_TICKETS_PER_ORDER = 10;
 function register_(req) {
   if (req.website) throw new ApiError_("BAD_REQUEST", "Please try again.");   // hidden field only bots fill in
 
+  // A page that retries (slow network, "busy") sends the same requestId each time, so a retry can never create a second registration.
+  const requestId = /^[A-Za-z0-9-]{8,64}$/.test(String(req.requestId || "")) ? "regreq_" + req.requestId : "";
+  if (requestId) {
+    const seen = CacheService.getScriptCache().get(requestId);
+    if (seen) return JSON.parse(seen);
+  }
+
   const event = findEvent_(function (e) { return e.slug === String(req.slug || "").toLowerCase(); });
   if (!event || !registrationOpen_(event)) throw new ApiError_("CLOSED", "Registration for this event is closed.");
 
@@ -28,7 +35,12 @@ function register_(req) {
   const members = loadMembers_();
   everyone.forEach(function (p) { p.flag = membershipFlag_(p, members); });
 
+  let logEntry = null;
   const done = withLock_(function () {
+    if (requestId) {   // the first attempt may have finished while this one waited for the lock
+      const seen = CacheService.getScriptCache().get(requestId);
+      if (seen) return { repeat: JSON.parse(seen) };
+    }
     const tickets = readRows_("Tickets");
     if (event.capacity && event.capacityRule === "all") {
       const taken = spotsTaken_(event);
@@ -83,10 +95,10 @@ function register_(req) {
         checkedInBy: "",
         createdAt: now
       };
-      insertRow_("Tickets", ticket);
       return ticket;
     });
-    log_("Public: " + payer.name, "order.create", order.code, { event: event.name, tickets: created.length, total: total });
+    insertRows_("Tickets", created);
+    logEntry = ["Public: " + payer.name, "order.create", order.code, { event: event.name, tickets: created.length, total: total }];   // written after the lock is released
 
     const reply = {
       ok: true,
@@ -94,8 +106,11 @@ function register_(req) {
       etransferEmail: getConfig_().etransferEmail,
       tickets: created.map(function (t) { return { name: t.name, ticketType: t.ticketType, price: t.price, flag: t.flag }; })
     };
+    if (requestId) { try { CacheService.getScriptCache().put(requestId, JSON.stringify(reply), 600); } catch (e) { /* fine */ } }
     return { reply: reply, order: order, created: created };
   });
+  if (done.repeat) return done.repeat;
+  if (logEntry) log_.apply(null, logEntry);
 
   // Email after the lock is released, so a slow send never holds up scans or other registrations.
   if (done.order.status === "paid") {

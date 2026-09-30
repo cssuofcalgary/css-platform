@@ -16,7 +16,7 @@
  * Set automatically by the system (don't edit): DATA_SHEET_ID, IMAGE_FOLDER_ID.
  */
 
-const API_VERSION = "0.4.0";
+const API_VERSION = "0.4.1";
 const MEMBER_CACHE_SECONDS = 300;   // search data is re-read from the sheet at most every 5 min
 const SESSION_SECONDS = 21600;      // stay logged in for 6 h (the Apps Script cache maximum)
 const REMINDER_AFTER_HOURS = 48;   // an unpaid order gets a "please pay" reminder after this long (and again after this long)

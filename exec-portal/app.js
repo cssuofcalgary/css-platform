@@ -25,11 +25,14 @@ const RETRY_PAUSE_MS = 1200;
 async function api(action, details = {}) {
   const body = { action, token: state.token, ...details };
   if (!API_URL) return MockApi.handle(body);   // demo mode
-  const tries = READ_ACTIONS.includes(action) ? 3 : 1;
+  // "Busy" means the server never started the action, so EVERY action can safely be tried again. Other hiccups are only
+  // retried for lookups; something that changes data is never repeated on a guess.
+  const isRead = READ_ACTIONS.includes(action);
+  const tries = isRead ? 3 : 4;
   let reply = { ok: false, error: "NETWORK" };
   for (let attempt = 1; attempt <= tries; attempt++) {
     reply = await sendOnce(body);
-    const hiccup = !reply.ok && ["NETWORK", "TEMPORARY", "BUSY"].includes(reply.error);
+    const hiccup = !reply.ok && (reply.error === "BUSY" || (isRead && ["NETWORK", "TEMPORARY"].includes(reply.error)));
     if (!hiccup || attempt === tries) break;
     setConnectionNotice(true);
     await new Promise((resolve) => setTimeout(resolve, RETRY_PAUSE_MS * attempt));

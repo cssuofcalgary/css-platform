@@ -45,6 +45,7 @@ const STRINGS = {
     removeGuest: "Remove",
     total: "Total",
     submit: "Register & get payment details",
+    submittingAgain: "Still working, one moment…",
     submitting: "Registering…",
     pleaseFill: (what) => `Please fill in: ${what}`,
     cancel: "← Back to event",

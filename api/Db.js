@@ -90,12 +90,20 @@ function table_(name) {
     return (DB_.sheets[name] = sheet);
   }
 
+  // The column names rarely change, so they are remembered between requests (per API version: a new deploy re-checks).
+  const cache = CacheService.getScriptCache();
+  const hdrKey = "dbhdr_" + API_VERSION + "_" + name;
+  let remembered = null;
+  try { remembered = JSON.parse(cache.get(hdrKey) || "null"); } catch (e) { /* read it fresh */ }
+  if (remembered) { DB_.headers[name] = remembered; return (DB_.sheets[name] = sheet); }
+
   const header = retry_(function () { return headerOf_(sheet); });
   const missing = columns.filter(function (c) { return header.indexOf(c) === -1; });
   if (missing.length) {
     sheet.getRange(1, header.length + 1, 1, missing.length).setValues([missing]).setFontWeight("bold");
   }
   DB_.headers[name] = header.concat(missing);
+  try { cache.put(hdrKey, JSON.stringify(DB_.headers[name]), 21600); } catch (e) { /* fine */ }
   return (DB_.sheets[name] = sheet);
 }
 
@@ -264,8 +272,8 @@ function insertRow_(name, obj) {
   delete DB_.rows[name];
   const values = header.map(function (column) { return toCell_(column, obj[column]); });
   try {
-    if (name === "Log") {
-      sheet.appendRow(values);   // one call; the Log's columns are plain text already
+    if (name !== "Events") {
+      sheet.appendRow(values);   // one call; these tabs' columns are plain text since they were created
     } else {
       const range = sheet.getRange(sheet.getLastRow() + 1, 1, 1, header.length);
       range.setNumberFormat("@");   // keep "2026-10-21" and "18:00" as text, not dates
@@ -273,6 +281,21 @@ function insertRow_(name, obj) {
     }
   } finally {
     bumpTableVersion_(name);   // AFTER the write: the cached copy is now out of date
+  }
+}
+
+/** Several rows in one go (e.g. every ticket of an order): two calls however many rows there are. */
+function insertRows_(name, objs) {
+  if (!objs.length) return;
+  if (objs.length === 1 || name === "Events") { objs.forEach(function (o) { insertRow_(name, o); }); return; }
+  const sheet = table_(name);
+  const header = headerFor_(name);
+  delete DB_.rows[name];
+  try {
+    const rows = objs.map(function (obj) { return header.map(function (column) { return toCell_(column, obj[column]); }); });
+    sheet.getRange(sheet.getLastRow() + 1, 1, rows.length, header.length).setValues(rows);
+  } finally {
+    bumpTableVersion_(name);
   }
 }
 

@@ -279,12 +279,21 @@ async function onSubmit(ev) {
   const button = $("submit");
   button.disabled = true;
   button.textContent = T.submitting;
-  const reply = await api("register", {
-    slug: currentEvent.slug,
-    people,
-    etransferName: $("etransfer-name") ? $("etransfer-name").value.trim() : "",
-    website: $("website").value
-  });
+  // Busy or slow? Try again by itself. The same requestId on every try means the server can never create two registrations.
+  const requestId = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : String(Date.now()) + "-" + Math.random().toString(16).slice(2);
+  let reply;
+  for (let attempt = 1; attempt <= 4; attempt++) {
+    reply = await api("register", {
+      slug: currentEvent.slug,
+      people,
+      etransferName: $("etransfer-name") ? $("etransfer-name").value.trim() : "",
+      website: $("website").value,
+      requestId
+    });
+    if (reply.ok || !["BUSY", "TEMPORARY", "NETWORK"].includes(reply.error) || attempt === 4) break;
+    button.textContent = T.submittingAgain;
+    await new Promise((resolve) => setTimeout(resolve, 1500 * attempt));
+  }
   button.disabled = false;
   button.textContent = T.submit;
 
