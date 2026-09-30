@@ -78,7 +78,7 @@ A door volunteer can't sign in ("Door scanning is closed"): an exec has to open 
 
 An email says something odd after a wording change: Settings → Email wording → pick it → **Use standard wording**.
 
-Health check says "No backup yet" or "Last good backup was N hours ago": in Apps Script open `Jobs`, pick `installJobs`, press Run (sets the timers again and takes a backup). If it asks for permission, allow it.
+Health check says "No backup yet" or "Last good backup was N hours ago": in Apps Script open `Jobs`, pick `installJobs`, press Run (takes a backup), then check Triggers (clock icon): there should be `nightlyJob` (Day timer, 3am-4am) and `hourlyJob` (Hour timer). Add them with **Add Trigger** if missing.
 
 Need to undo a bad change to the data: Drive → "CSS Platform Backups" → open the newest copy, copy the tab back into "CSS Platform Data".
 

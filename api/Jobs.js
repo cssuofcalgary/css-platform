@@ -1,7 +1,8 @@
 /**
  * CSS Platform API — background jobs.
  *
- * Two timers, set up once by running `installJobs` in the Apps Script editor:
+ * Two timers, added once by hand in Apps Script → Triggers (clock icon) → Add Trigger (a script can't
+ * add its own without an extra permission that broke the web app once):
  *   nightlyJob  every night around 3 am: copies the data sheet (backup), checks that everything
  *               is healthy, and emails the CSS Gmail only if something is wrong.
  *   hourlyJob   every hour: closes entry for events that ended a few hours ago, so a forgotten
@@ -14,16 +15,15 @@ const BACKUPS_KEPT = 14;
 const ENTRY_AUTOCLOSE_HOURS = 4;   // entry closes this long after an event's end time (after its start time if there is no end time)
 const BACKUP_STALE_HOURS = 36;     // the health check complains when the last good backup is older than this
 
-/** Run once from the editor (and again any time you want to reset the timers). */
+/**
+ * Run from the editor to take a backup and run the health check right now (also a good test).
+ * The timers are added by hand: Triggers → Add Trigger →
+ *   nightlyJob: Head deployment, Time-driven, Day timer, 3am to 4am
+ *   hourlyJob:  Head deployment, Time-driven, Hour timer, Every hour
+ */
 function installJobs() {
-  ScriptApp.getProjectTriggers().forEach(function (t) {
-    const fn = t.getHandlerFunction();
-    if (fn === "nightlyJob" || fn === "hourlyJob") ScriptApp.deleteTrigger(t);
-  });
-  ScriptApp.newTrigger("nightlyJob").timeBased().everyDays(1).atHour(3).inTimezone("America/Edmonton").create();
-  ScriptApp.newTrigger("hourlyJob").timeBased().everyHours(1).create();
-  console.log("Timers set: nightlyJob (3 am) and hourlyJob (every hour).");
-  nightlyJob();   // also take the first backup now, so you can see it worked
+  nightlyJob();
+  console.log("Backup and check done. Now add the two timers: Triggers (clock icon) → Add Trigger → nightlyJob (Day timer, 3am-4am) and hourlyJob (Hour timer, every hour).");
 }
 
 // ---- Nightly: backup + health alert --------------------------------------------
@@ -96,7 +96,7 @@ function rememberBackup_(ok, detail) {
 function backupStatus_() {
   const props = PropertiesService.getScriptProperties();
   const good = props.getProperty("LAST_GOOD_BACKUP");
-  if (!good) throw new Error("No backup yet. Run installJobs once in the Apps Script editor.");
+  if (!good) throw new Error("No backup yet. In Apps Script run installJobs once, then add the two timers under Triggers.");
   const hours = (Date.now() - new Date(good).getTime()) / 3600000;
   if (hours > BACKUP_STALE_HOURS) throw new Error("Last good backup was " + Math.round(hours) + " hours ago. Check the timers in Apps Script (Triggers).");
   let detail = "";
