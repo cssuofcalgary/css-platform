@@ -14,6 +14,9 @@ async function openSettingsTab() {
   $("set-tab").value = s.membershipTab;
   $("set-pw-note").textContent = T.setPwNote(s.execPasswordSet, s.adminPasswordSet);
   ["set-exec-pw", "set-exec-pw2", "set-admin-pw", "set-admin-pw2"].forEach((id) => { $(id).value = ""; });
+  $("set-door-note").textContent = s.doorPasswordSet ? T.setDoorNoteSet : T.setDoorNoteNone;
+  $("set-door-clear").hidden = !s.doorPasswordSet;
+  $("set-door-pw").value = "";
   $("set-site").textContent = s.publicSiteUrl ? T.setSiteUrl(s.publicSiteUrl) : "";
   if (typeof openEmailsCard === "function") openEmailsCard();
 }
@@ -65,10 +68,16 @@ $("set-password-form").addEventListener("submit", async (e) => {
     return true;
   };
   if (!pair("set-exec-pw", "set-exec-pw2", "execPassword") || !pair("set-admin-pw", "set-admin-pw2", "adminPassword")) return;
+  if ($("set-door-pw").value) fields.doorPassword = $("set-door-pw").value;
   if (!Object.keys(fields).length) { result.className = "muted small"; result.textContent = T.setNothing; return; }
-  if (!confirm(T.setPwConfirm)) return;
+  if ((fields.execPassword || fields.adminPassword) && !confirm(T.setPwConfirm)) return;
   const ok = await saveSettings(fields, "set-password-result", $("set-password-save"));
-  if (ok) ["set-exec-pw", "set-exec-pw2", "set-admin-pw", "set-admin-pw2"].forEach((id) => { $(id).value = ""; });
+  if (ok) { ["set-exec-pw", "set-exec-pw2", "set-admin-pw", "set-admin-pw2", "set-door-pw"].forEach((id) => { $(id).value = ""; }); openSettingsTab(); }
+});
+
+$("set-door-clear").addEventListener("click", async () => {
+  if (!confirm(T.setDoorClearConfirm)) return;
+  if (await saveSettings({ clearDoorPassword: true }, "set-password-result", $("set-door-clear"))) openSettingsTab();
 });
 
 $("set-signout-all").addEventListener("click", async () => {

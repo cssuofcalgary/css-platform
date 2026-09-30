@@ -29,6 +29,7 @@ function getSettings_() {
       membershipTab: config.membershipTab,
       execPasswordSet: !!config.password,
       adminPasswordSet: !!config.adminPassword,
+      doorPasswordSet: !!props.getProperty("SCANNER_PASSWORD"),
       publicSiteUrl: props.getProperty("PUBLIC_SITE_URL") || ""
     }
   };
@@ -92,10 +93,21 @@ function saveSettings_(session, token, input) {
   if (exec) { updates.EXEC_PASSWORD = exec; changed.push("exec password"); newPasswords++; }
   if (admin) { updates.ADMIN_PASSWORD = admin; changed.push("admin password"); newPasswords++; }
 
+  // Door password: optional extra password for door volunteers who sign in with just a name
+  const door = input.doorPassword !== undefined && input.doorPassword !== "" ? String(input.doorPassword) : "";
+  if (door) {
+    if (door.length < 4) throw new ApiError_("BAD_REQUEST", "The door password needs at least 4 characters.");
+    if (door === (exec || config.password) || door === (admin || config.adminPassword)) throw new ApiError_("BAD_REQUEST", "The door password must be different from the exec and admin passwords.");
+    updates.SCANNER_PASSWORD = door; changed.push("door password");
+  }
+  const clearDoor = input.clearDoorPassword === true && !door;
+  if (clearDoor) changed.push("door password removed");
+
   if (!changed.length) return { ok: true, changed: [], message: "Nothing to change." };
 
   withLock_(function () {
     props.setProperties(updates);
+    if (clearDoor) props.deleteProperty("SCANNER_PASSWORD");
     if (updates.MEMBERSHIP_SHEET_ID || updates.MEMBERSHIP_TAB) {
       const cache = CacheService.getScriptCache();
       ["members_count", "members_old_count"].forEach(function (k) { cache.remove(k); });   // force a fresh read

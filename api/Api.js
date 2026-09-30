@@ -35,7 +35,11 @@ function doPost(e) {
   }
 }
 
+/** The action being handled right now; requireSession_ uses it to keep door-only sessions to door actions. */
+let ROUTE_ACTION_ = "";
+
 function route_(req) {
+  ROUTE_ACTION_ = String(req.action || "");
   switch (req.action) {
     // ---- Public (no login) ----
     case "publicEvents":
@@ -63,6 +67,9 @@ function route_(req) {
     case "login":
       return login_(req.password, req.name);
 
+    case "loginDoor":
+      return loginDoor_(req.password, req.name);
+
     case "logout":
       endSession_(req.token);
       return { ok: true };
@@ -80,9 +87,11 @@ function route_(req) {
       return { ok: true, member: member };
     }
 
-    case "listEvents":
-      requireSession_(req.token);
+    case "listEvents": {
+      const session = requireSession_(req.token);
+      if (session.role === "door") return doorEvents_();
       return { ok: true, events: allEvents_(), counts: registrationCounts_() };
+    }
 
     case "saveEvent":
       return saveEvent_(requireSession_(req.token), req.event);
@@ -124,8 +133,10 @@ function route_(req) {
     case "setEntryOpen":
       return setEntryOpen_(requireSession_(req.token), req.eventId, !!req.open);
 
-    case "scan":
-      return scan_(requireSession_(req.token), req.eventId, req.code, !!req.atDesk);
+    case "scan": {
+      const session = requireSession_(req.token);
+      return scan_(session, req.eventId, req.code, !!req.atDesk && session.role !== "door");   // door volunteers can't use the help-desk override
+    }
 
     case "undoCheckIn":
       return undoCheckIn_(requireSession_(req.token), req.ticketId);
@@ -176,8 +187,7 @@ function route_(req) {
       return walkIn_(requireSession_(req.token), req.eventId, req.walkIn);
 
     case "doorList":
-      requireSession_(req.token);
-      return doorList_(req.eventId);
+      return doorList_(req.eventId, requireSession_(req.token));
 
     default:
       throw new ApiError_("UNKNOWN_ACTION", "Unknown action: " + req.action);
@@ -224,6 +234,7 @@ function requireSession_(token) {
   if (!raw) throw new ApiError_("NOT_LOGGED_IN", "Please log in again.");
   const session = JSON.parse(raw);
   if ((session.epoch || "0") !== currentEpoch_()) throw new ApiError_("NOT_LOGGED_IN", "Please log in again.");   // everyone was signed out
+  if (session.role === "door") checkDoorSession_(ROUTE_ACTION_);
   return session;
 }
 

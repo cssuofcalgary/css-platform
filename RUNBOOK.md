@@ -72,6 +72,8 @@ Easiest: sign in with the admin password → **Settings** → Passwords. Everyon
 **Lost the admin password?** Script Properties → edit `ADMIN_PASSWORD` → Save. Works immediately; no redeploy.
 
 ## Something feels off / errors
+A door volunteer can't sign in ("Door scanning is closed"): an exec has to open entry for the event (Door tab → entry toggle). Forgot the door password: Settings → Passwords → set a new one, or remove it.
+
 An email says something odd after a wording change: Settings → Email wording → pick it → **Use standard wording**.
 
 Health check says "No backup yet" or "Last good backup was N hours ago": in Apps Script open `Jobs`, pick `installJobs`, press Run (sets the timers again and takes a backup). If it asks for permission, allow it.

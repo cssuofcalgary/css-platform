@@ -118,15 +118,20 @@ function walkIn_(session, eventId, input) {
 }
 
 /** Exec: everything the door needs for one event. */
-function doorList_(eventId) {
+function doorList_(eventId, session) {
   const event = findEvent_(function (e) { return e.id === eventId; });
   if (!event) throw new ApiError_("NOT_FOUND", "Event not found.");
+  const doorOnly = !!session && session.role === "door";
+  if (doorOnly && !event.entryOpen) throw new ApiError_("DOOR_CLOSED", DOOR_CLOSED_TEXT);
   const orders = {};
   readRows_("Orders").forEach(function (o) { if (o.eventId === eventId) orders[o.id] = o; });
   const tickets = readRows_("Tickets")
     .filter(function (t) { return t.eventId === eventId && t.status !== "cancelled" && t.status !== "refunded"; })
     .map(function (t) {
       const order = orders[t.orderId] || {};
+      if (doorOnly) {   // a door volunteer sees who is coming and who is inside, not payment details or answers
+        return { id: t.id, name: t.name, ticketType: t.ticketType, status: t.status, flag: t.flag ? "see help desk" : "", checkedInAt: t.checkedInAt, checkedInBy: t.checkedInBy };
+      }
       return {
         id: t.id, secret: t.secret, name: t.name, ticketType: t.ticketType, status: t.status, flag: t.flag,
         checkedInAt: t.checkedInAt, checkedInBy: t.checkedInBy, answers: t.answers,
@@ -146,6 +151,52 @@ function doorList_(eventId) {
       awaiting: tickets.filter(function (t) { return t.status === "awaiting"; }).length
     }
   };
+}
+
+// ---- Door-only sign-in --------------------------------------------------------------------
+// A door volunteer signs in on the scanner page with just their name (plus the door password,
+// if the admin set one in Settings). It only works while at least one event has entry open, and it
+// can only scan, undo a check-in, and see the open events. Closing entry locks it out again.
+
+const DOOR_CLOSED_TEXT = "Door scanning is closed right now. An exec has to open entry first.";
+const DOOR_ACTIONS = ["listEvents", "doorList", "scan", "undoCheckIn", "logout"];
+
+function entryOpenEvents_() {
+  return allEvents_().filter(function (e) { return e.entryOpen && e.status !== "archived" && e.status !== "draft"; });
+}
+
+function loginDoor_(password, name) {
+  const who = String(name || "").trim().slice(0, 60);
+  if (!who) throw new ApiError_("NAME_NEEDED", "Type your name.");
+  const cache = CacheService.getScriptCache();
+  const failed = parseInt(cache.get("failed_logins") || "0", 10);
+  if (failed >= MAX_FAILED_LOGINS) throw new ApiError_("TOO_MANY_TRIES", "Too many wrong passwords. Try again in 10 minutes.");
+
+  const required = String(PropertiesService.getScriptProperties().getProperty("SCANNER_PASSWORD") || "");
+  if (required) {
+    const typed = String(password || "");
+    if (!typed) throw new ApiError_("DOOR_PASSWORD_NEEDED", "Ask an exec for the door password.");
+    if (typed !== required) {
+      cache.put("failed_logins", String(failed + 1), 600);
+      throw new ApiError_("WRONG_PASSWORD", "Wrong password.");
+    }
+  }
+  if (!entryOpenEvents_().length) throw new ApiError_("DOOR_CLOSED", DOOR_CLOSED_TEXT);
+  return { ok: true, token: startSession_(who, "door"), name: who, role: "door" };
+}
+
+/** Called for every door-only request: only door actions, and only while some entry is open. */
+function checkDoorSession_(action) {
+  if (DOOR_ACTIONS.indexOf(action) === -1) throw new ApiError_("DOOR_ONLY", "Door sign-in can only scan tickets.");
+  if (action !== "logout" && !entryOpenEvents_().length) throw new ApiError_("DOOR_CLOSED", DOOR_CLOSED_TEXT);
+}
+
+/** The events list for a door volunteer: only events with entry open, nothing else. */
+function doorEvents_() {
+  const events = entryOpenEvents_().map(function (e) {
+    return { id: e.id, name: e.name, date: e.date, startTime: e.startTime, endTime: e.endTime, location: e.location, status: e.status, entryOpen: true, ticketTypes: [], questions: [] };
+  });
+  return { ok: true, events: events, counts: {} };
 }
 
 // ---- Helpers ------------------------------------------------------------------

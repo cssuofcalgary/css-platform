@@ -10,6 +10,13 @@ const STRINGS = {
     namePlaceholder: "Your name",
     signIn: "Sign in",
     signingIn: "Signing in…",
+    doorSignIn: "Door sign-in (name only)",
+    doorHint: "Volunteers at the door: type your name above, then press this button. It only works while an exec has entry open. Execs use the password.",
+    setDoorPw: "Door password (optional)",
+    setDoorNoteSet: "A door password is set. Door volunteers must type it with their name.",
+    setDoorNoteNone: "No door password. Door volunteers sign in with just their name, and only while entry is open.",
+    setDoorClear: "Remove the door password",
+    setDoorClearConfirm: "Remove the door password? Door volunteers will sign in with just their name.",
     signOut: "Sign out",
     signedInAs: "Signed in as",
     roleAdmin: "Admin",
@@ -367,6 +374,9 @@ Reason (optional):`,
       TEMPORARY: "Google was slow for a moment. Try again.",
       BUSY: "The system is busy. Try again in a moment.",
       ADMIN_ONLY: "Only the admin password can do that.",
+      DOOR_CLOSED: "Door scanning is closed right now. An exec has to open entry first.",
+      DOOR_PASSWORD_NEEDED: "Ask an exec for the door password, type it in the password box, then press the door button again.",
+      DOOR_ONLY: "Door sign-in can only scan tickets. Sign out and use the exec password for this.",
       DEFAULT: "Something went wrong. Try again."
     }
   }

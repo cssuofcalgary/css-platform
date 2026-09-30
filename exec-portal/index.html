@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex">
   <title>CSS Exec Portal</title>
-  <link rel="stylesheet" href="styles.css?v=0.4.0">
+  <link rel="stylesheet" href="styles.css?v=0.3.5">
 </head>
 <body>
   <div id="demo-banner" class="demo-banner" hidden></div>
@@ -26,6 +26,8 @@
 
       <p id="login-error" class="error" role="alert" hidden></p>
       <button id="login-button" type="submit" class="primary" data-t="signIn"></button>
+      <button id="door-login-button" type="button" class="secondary" data-t="doorSignIn" hidden></button>
+      <p id="door-login-hint" class="muted small" data-t="doorHint" hidden></p>
     </form>
   </main>
 
@@ -330,6 +332,10 @@
         <label for="set-admin-pw" data-t="setAdminPw"></label>
         <input id="set-admin-pw" type="password" autocomplete="new-password">
         <input id="set-admin-pw2" type="password" autocomplete="new-password" aria-label="Repeat">
+        <label for="set-door-pw" data-t="setDoorPw"></label>
+        <input id="set-door-pw" type="password" autocomplete="new-password">
+        <p id="set-door-note" class="muted small"></p>
+        <button type="button" id="set-door-clear" class="link danger" data-t="setDoorClear" hidden></button>
         <p class="muted small" data-t="setPwHint"></p>
         <p id="set-password-result" class="muted small"></p>
         <button type="submit" id="set-password-save" class="primary" data-t="setPwSave"></button>
@@ -473,19 +479,19 @@
     </form>
   </dialog>
 
-  <script src="config.js?v=0.4.1"></script>
-  <script src="strings.js?v=0.4.2"></script>
-  <script src="mock.js?v=0.2.4"></script>
-  <script src="app.js?v=0.4.1"></script>
-  <script src="events.js?v=0.4.1"></script>
-  <script src="payments.js?v=0.4.1"></script>
-  <script src="edit.js?v=0.3.4"></script>
-  <script src="finance.js?v=0.3.4"></script>
-  <script src="activity.js?v=0.3.4"></script>
-  <script src="settings.js?v=0.3.4"></script>
-  <script src="emails.js?v=0.3.4"></script>
-  <script src="attendees.js?v=0.4.0"></script>
+  <script src="config.js?v=0.3.5"></script>
+  <script src="strings.js?v=0.3.5"></script>
+  <script src="mock.js?v=0.3.5"></script>
+  <script src="app.js?v=0.3.5"></script>
+  <script src="events.js?v=0.3.5"></script>
+  <script src="payments.js?v=0.3.5"></script>
+  <script src="edit.js?v=0.3.5"></script>
+  <script src="finance.js?v=0.3.5"></script>
+  <script src="activity.js?v=0.3.5"></script>
+  <script src="settings.js?v=0.3.5"></script>
+  <script src="emails.js?v=0.3.5"></script>
+  <script src="attendees.js?v=0.3.5"></script>
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
-  <script src="door.js?v=0.4.2"></script>
+  <script src="door.js?v=0.3.5"></script>
 </body>
 </html>

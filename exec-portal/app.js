@@ -91,15 +91,24 @@ function setLoginError(text) {
 
 async function onLogin(event) {
   event.preventDefault();
+  await signInWith("login", $("login-button"), T.signIn);
+}
+
+/** Door volunteers: name only (plus the door password if the admin set one). Scanner page only. */
+async function onDoorLogin() {
+  if (!$("name-input").value.trim()) { $("name-input").focus(); return setLoginError(T.errors.NAME_NEEDED); }
+  await signInWith("loginDoor", $("door-login-button"), T.doorSignIn);
+}
+
+async function signInWith(action, button, label) {
   const name = $("name-input").value;
-  const button = $("login-button");
   button.disabled = true;
   button.textContent = T.signingIn;
 
-  const reply = await api("login", { password: $("password").value, name });
+  const reply = await api(action, { password: $("password").value, name });
 
   button.disabled = false;
-  button.textContent = T.signIn;
+  button.textContent = label;
   if (!reply.ok) return setLoginError(errorText(reply));
 
   state.token = reply.token;
@@ -133,6 +142,7 @@ function showApp() {
   $("app-view").hidden = false;
   $("who-name").textContent = state.name;
   $("admin-badge").hidden = state.role !== "admin";
+  if (state.role === "door") $("full-portal-link").hidden = true;   // door volunteers only scan
   $("settings-tab-button").hidden = state.role !== "admin";
   $("activity-tab-button").hidden = state.role !== "admin";
   showSearch();
@@ -278,6 +288,9 @@ function start() {
   if (SCANNER_MODE) {
     $("brand").textContent = T.scannerTitle;
     $("full-portal-link").hidden = false;
+    $("door-login-button").hidden = false;
+    $("door-login-hint").hidden = false;
+    $("door-login-button").addEventListener("click", onDoorLogin);
     document.title = T.scannerTitle;
   }
   document.body.classList.toggle("phone", isPhone());
