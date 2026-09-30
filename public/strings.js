@@ -80,7 +80,23 @@ const STRINGS = {
     stampCheckedIn: "CHECKED IN",
     stampPending: "UNPAID",
     stampVoid: "VOID",
-    showAtDoor: "Show this QR code at the door. A screenshot works too."
+    showAtDoor: "Show this QR code at the door. A screenshot works too.",
+
+    // Find my tickets
+    findTitle: "Find my tickets",
+    findIntro: "Enter the email you registered with. We'll email your ticket links to it. We never show tickets on this page.",
+    findEmail: "Email",
+    findSend: "Email me my tickets",
+    findSending: "Sending…",
+    findForgot: "I forgot which email I used",
+    findBack: "Use my email instead",
+    findUcid: "UCID",
+    findLast: "Last name",
+    findSendUcid: "Find by UCID and last name",
+    findNeed: "Enter your email, or your UCID and last name.",
+    findMasked: (list) => `We sent your tickets to ${list}.`,
+    findHelp: "Still nothing? Check spam, or email us and we'll sort it out.",
+    findLink: "My tickets"
   }
 };
 const T = STRINGS.en;

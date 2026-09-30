@@ -6,7 +6,7 @@
   <meta name="color-scheme" content="light">
   <meta name="theme-color" content="#3b4237">
   <meta name="robots" content="noindex">
-  <title>Your ticket &middot; CSS</title>
+  <title>Find my tickets &middot; CSS</title>
   <link rel="icon" type="image/png" href="assets/top_panda.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -23,20 +23,44 @@
     <div class="card-wrapper">
       <img src="assets/top_panda.png" class="panda top-panda" alt="">
       <main id="page" class="card">
-        <p class="muted center pulse" data-t="loading"></p>
+        <a class="back" href="./" data-t="allEvents"></a>
+        <h1 class="page-title" data-t="findTitle"></h1>
+        <p class="muted center" data-t="findIntro"></p>
+
+        <form id="find-email" class="register-form" novalidate>
+          <div>
+            <label for="f-email" data-t="findEmail"></label>
+            <input id="f-email" type="email" autocomplete="email" inputmode="email" maxlength="120">
+          </div>
+          <button class="register" type="submit" data-t="findSend"></button>
+        </form>
+
+        <p class="center"><button type="button" id="forgot" class="link-button" data-t="findForgot"></button></p>
+
+        <form id="find-ucid" class="register-form" novalidate hidden>
+          <div>
+            <label for="f-ucid" data-t="findUcid"></label>
+            <input id="f-ucid" type="text" inputmode="numeric" autocomplete="off" maxlength="12">
+            <label for="f-last" data-t="findLast"></label>
+            <input id="f-last" type="text" autocomplete="family-name" maxlength="60">
+          </div>
+          <button class="register" type="submit" data-t="findSendUcid"></button>
+        </form>
+
+        <p id="find-result" class="notice" role="status" aria-live="polite" hidden></p>
+        <p class="hint center" data-t="findHelp"></p>
       </main>
       <img src="assets/bottom_panda.png" class="panda bottom-panda" alt="">
     </div>
 
     <footer class="website-footer">
       <p><span data-t="contact"></span> <a id="contact-link"></a> &middot; <a id="instagram-link" target="_blank" rel="noopener" data-t="instagram"></a></p>
-      <p>Go to our <a href="https://ucalgarycss.ca/" target="_blank" rel="noopener">website</a> &middot; <a href="https://member.ucalgarycss.ca/" target="_blank" rel="noopener">Member pass</a> &middot; <a href="tickets.html">My tickets</a></p>
+      <p>Go to our <a href="https://ucalgarycss.ca/" target="_blank" rel="noopener">website</a> &middot; <a href="https://member.ucalgarycss.ca/" target="_blank" rel="noopener">Member pass</a></p>
     </footer>
   </div>
 
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
   <script src="config.js?v=0.3.0"></script>
   <script src="strings.js?v=0.3.3"></script>
-  <script src="ticket.js?v=0.3.1"></script>
+  <script src="tickets.js?v=0.3.3"></script>
 </body>
 </html>

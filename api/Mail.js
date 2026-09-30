@@ -128,6 +128,56 @@ function sendTicketEmail_(event, ticket) {
   }
 }
 
+/** To one address: a link to every upcoming ticket found for it (the "Find my tickets" page). */
+function sendMyTicketsEmail_(to, items) {
+  if (!canSendMail_(to)) return false;
+  const rows = items.map(function (x) {
+    return "<div style=\"border:2px solid #b91c1c;border-radius:12px;padding:14px;margin:0 0 12px\">" +
+      "<div style=\"font-size:17px;font-weight:bold\">" + esc_(x.event.name) + "</div>" +
+      "<div style=\"color:#666;margin:2px 0 8px\">" + esc_(eventWhenText_(x.event)) + " · " + esc_(x.event.location || "TBA") + "</div>" +
+      "<div>" + esc_(x.ticket.name) + " · " + esc_(x.ticket.ticketType) + "</div>" +
+      "<p style=\"margin:10px 0 0\"><a href=\"" + esc_(ticketLink_(x.ticket)) + "\" style=\"background:#b91c1c;color:#fff;padding:10px 16px;border-radius:10px;text-decoration:none;font-weight:bold;display:inline-block\">Open ticket</a></p></div>";
+  }).join("");
+  const html =
+    "<div style=\"font-family:Arial,Helvetica,sans-serif;max-width:520px;color:#1c1917\">" +
+    "<p style=\"color:#b91c1c;font-weight:bold;margin:0 0 12px\">Chinese Students' Society · University of Calgary</p>" +
+    "<p>Here " + (items.length === 1 ? "is your ticket" : "are your tickets") + ". Show the QR code on the ticket page at the door. A screenshot works too.</p>" +
+    rows +
+    "<p style=\"color:#666;font-size:13px;margin-top:20px\">You got this because someone asked for tickets on our website. If that wasn't you, you can ignore this email. Questions? Just reply.</p></div>";
+  try {
+    MailApp.sendEmail({
+      to: to,
+      subject: items.length === 1 ? "Your ticket: " + items[0].event.name : "Your CSS tickets",
+      htmlBody: html,
+      name: MAIL_FROM_NAME,
+      replyTo: getConfig_().etransferEmail
+    });
+    return true;
+  } catch (e) {
+    console.error("Find-my-tickets email failed: " + e.message);
+    return false;
+  }
+}
+
+/** To a member: a link to their digital pass (the member portal), from the "Find my pass" page. */
+function sendMyPassEmail_(to, member, link) {
+  if (!canSendMail_(to)) return false;
+  const html =
+    "<div style=\"font-family:Arial,Helvetica,sans-serif;max-width:520px;color:#1c1917\">" +
+    "<p style=\"color:#b91c1c;font-weight:bold;margin:0 0 12px\">Chinese Students' Society · University of Calgary</p>" +
+    "<p>Hi " + esc_(member.name) + ", here is the link to your CSS member pass.</p>" +
+    "<p><a href=\"" + esc_(link) + "\" style=\"background:#b91c1c;color:#fff;padding:12px 18px;border-radius:10px;text-decoration:none;font-weight:bold;display:inline-block\">Open my member pass</a></p>" +
+    "<p style=\"color:#666;font-size:14px\">Save it to your home screen to use it at events and partner locations.</p>" +
+    "<p style=\"color:#666;font-size:13px;margin-top:20px\">You got this because someone asked for it on our website. If that wasn't you, you can ignore this email. Questions? Just reply.</p></div>";
+  try {
+    MailApp.sendEmail({ to: to, subject: "Your CSS member pass", htmlBody: html, name: MAIL_FROM_NAME, replyTo: getConfig_().etransferEmail });
+    return true;
+  } catch (e) {
+    console.error("Find-my-pass email failed: " + e.message);
+    return false;
+  }
+}
+
 function eventWhenText_(event) {
   const date = Utilities.formatDate(new Date(event.date + "T12:00:00"), "America/Edmonton", "EEEE, MMMM d, yyyy");
   const times = [event.startTime, event.endTime].filter(Boolean).map(timeText_).join(" – ");

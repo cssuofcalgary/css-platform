@@ -42,7 +42,7 @@ a { color: var(--gold-deep); }
 .muted { color: var(--ink-soft); }
 .small { font-size: 14px; }
 .center { text-align: center; }
-.hidden { display: none !important; }
+.hidden, [hidden] { display: none !important; }
 
 /* ---- Frame: banner, ticket card, pandas, footer ---- */
 .app-container { width: 100%; max-width: 480px; padding: 32px 18px 56px; display: flex; flex-direction: column; align-items: center; }

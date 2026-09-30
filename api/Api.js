@@ -50,6 +50,12 @@ function route_(req) {
     case "getTicket":
       return getTicket_(req.secret);
 
+    case "findMyTickets":
+      return findMyTickets_(req);
+
+    case "findMyPass":
+      return findMyPass_(req);
+
     // ---- Exec ----
     case "login":
       return login_(req.password, req.name);

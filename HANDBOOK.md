@@ -68,6 +68,10 @@ If you see "ticket emails waiting (daily email limit)", press **Send now** later
 - **Laptop or tablet (help desk, Finance):** the full portal with a menu on the left. Pick the event once at the top and Payments and Door both follow it.
 - **Phone (door volunteers):** opens the **door scanner** by itself: just the camera, how many are inside, a name search and Undo. It has no payments, walk-ins or other tabs. Anyone unpaid or flagged shows **Send to help desk**. The help desk person on a laptop deals with everything else. Address for volunteers: `…/css-platform/scanner/` (later `exec.ucalgary.ca/scanner`). A help-desk person on a phone can tap **Full portal** at the top.
 
+## Members finding their own tickets
+People who lost their ticket email don't need the help desk: the footer of every events page has **My tickets** (`events.ucalgarycss.ca/tickets.html`). They enter their email, or their UCID and last name, and the ticket links are emailed to the address on the ticket. Nothing is shown on screen. The Activity tab records each use (admin only). Walk-ins without an email can't use it; look them up in Payments or Door.
+The **member portal** works the same way now: members enter their email (or tap "I forgot which email I used" and enter UCID + last name) and get their pass link by email. Their pass page links back to Upcoming events and My tickets.
+
 ## Door tab (event night)
 1. Pick the event (tonight's is picked automatically). The big number at the top is **how many are inside / how many have paid**.
 2. Tap **Entry CLOSED** to **open entry** when doors open. Scanners only let people in while it's open.

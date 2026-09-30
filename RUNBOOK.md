@@ -16,6 +16,7 @@ Open the **web app URL** (README section 2) in a browser.
 
 | You see | Why | Fix |
 |---|---|---|
+| Someone says they never got the "Find my tickets" email | Wrong email/UCID/last name (the page never says), spam folder, it only covers paid tickets for upcoming events, or the daily cap (40) was hit | Check the order in Payments, use **Resend tickets**, or fix their email with Edit |
 | "Can't reach the CSS system" | No internet, or the back end is down | Check the internet, then do the "alive?" test above |
 | "The system isn't set up yet" | A Script Property is missing | Editor → ⚙ Project Settings → Script Properties. `MEMBERSHIP_SHEET_ID` and `EXEC_PASSWORD` must exist |
 | "That password isn't right" for everyone | The password was changed | Check `EXEC_PASSWORD` in Script Properties |

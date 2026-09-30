@@ -102,6 +102,8 @@ Lists (`ticketTypes`, `questions`, `answers`) are stored as JSON text.
 | `login` `{password, name}` | — | Exec password → role `exec`, admin password → role `admin`. Returns a token (valid 6 h). 10 wrong tries → 10-min pause |
 | `register` `{slug, people[], etransferName, website}` | no | `people[0]` = payer, others = friends. Each: name, email, ucid?, memberId?, ticketTypeId, answers `{questionId: value}`. Max 10. `website` must be empty (bot trap). Same email max 5 registrations / 10 min. Returns payment code, total, e-transfer email, tickets + flags; emails the payer |
 | `getTicket` `{secret}` | no | One ticket + its event, for the ticket page |
+| `findMyTickets` `{email}` or `{ucid, lastName}` | no | "Find my tickets" (`public/tickets.html`, code in `api/MyTickets.js`). Never returns tickets: emails links for the person's paid tickets on upcoming events to the address on each ticket. Same reply whether or not anything was found; masked address shown only when UCID + last name both match. Limits: 4 tries and 1 sent email per search per 10 min, 40 emails a day (`FIND_TICKETS_*` constants), test addresses never emailed. Logged as `tickets.lookup` |
+| `findMyPass` `{email}` or `{ucid, lastName}` | no | Same idea for the **member portal** (`member.ucalgarycss.ca`, whose lookup page calls this API): finds the person on the Membership sheet and emails a link `member.ucalgarycss.ca/?member=<ID>` to the email on file. Shares the same limits and the 40-a-day cap. Logged as `pass.lookup` |
 | `logout` | yes | Ends the session |
 | `searchMembers` `{query}` | yes | Up to 25 members + `total` |
 | `getMember` `{memberId}` | yes | One member |
