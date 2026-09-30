@@ -40,7 +40,7 @@ The old system (`../CSS Ticketing System/`) keeps running until this one is prov
 | GitHub repo | https://github.com/cssuofcalgary/css-platform (public for now; can go private once it moves to Vercel) |
 | **Public site (live)** | https://cssuofcalgary.github.io/css-platform/public/ (event page: `…/public/?e=<slug>`, ticket: `…/public/ticket.html?t=<secret>`) |
 | **Exec Portal (live)** | https://cssuofcalgary.github.io/css-platform/exec-portal/ |
-| Hosting | GitHub Pages: branch `main`, folder `/ (root)`. Every push to `main` updates the site in about a minute |
+| Hosting | GitHub Pages (branch `main`, folder `/ (root)`, about a minute per push) until the Vercel move; then Vercel, see "Hosting on Vercel" below |
 
 ## 3. Files
 
@@ -62,6 +62,18 @@ The old system (`../CSS Ticketing System/`) keeps running until this one is prov
 | `api/Mail.js` | Emails from the CSS Gmail (checks the daily limit first). **Addresses @example.com/.org/.net are never emailed** (use them for testing) |
 | `exec-portal/` | Exec Portal: `index.html`, `app.js` (sign-in + Members tab), `events.js` (Events tab), `payments.js` (Payments tab), `finance.js` (reminders, mark several paid, add a paid registration), `activity.js` (Activity tab, admin only), `settings.js` (Settings tab, admin only), `edit.js` (the Edit person panel), `attendees.js` (event numbers + attendee list), `door.js` (Door tab; camera via html5-qrcode from unpkg), `strings.js` (**all text**), `config.js` (API URL + public site URL), `mock.js` (demo mode when API URL is empty) |
 | `public/` | Public site: `index.html`, `public.js` (event list, event page, registration form, payment screen), `ticket.html` + `ticket.js` (a person's ticket with QR; QR library from cdnjs), `public.css` (look copied from the member portal, member.ucalgarycss.ca: sage/clay/cream colours, Silkscreen + Source Serif 4 fonts from Google Fonts, zig-zag card, pandas; colours are variables at the top), `assets/` (pandas + CSS logo fallback; the banner and background pictures load from the CSS Google Drive), `strings.js` (**all text**), `config.js` (API URL, contact email, Instagram) |
+
+### Hosting on Vercel (events.ucalgarycss.ca + exec.ucalgarycss.ca)
+One GitHub repo, **two Vercel projects**, each serving one folder as a static site (no build step):
+
+| Vercel project | Root Directory | Domain |
+|---|---|---|
+| `css-events` | `public` | `events.ucalgarycss.ca` |
+| `css-exec` | `exec-portal` | `exec.ucalgarycss.ca` (and `/scanner/`) |
+
+Framework preset **Other**, no build command, no output directory. Each folder has a `vercel.json` (always re-check for fresh files; the exec site is kept out of search engines). DNS (Akhil, who owns the domain): a CNAME for `events` and one for `exec`, pointing at the value Vercel shows for each project. Every push to `main` redeploys both automatically.
+`exec-portal/config.js` picks the public site address by host name: on `exec.ucalgarycss.ca` it uses `https://events.ucalgarycss.ca/`, elsewhere (GitHub Pages, local) the sibling folder. Ticket links in emails follow it (the `PUBLIC_SITE_URL` Script Property is refreshed the next time Finance marks an order paid; press **Resend tickets** to send fresh links for existing orders). Old GitHub Pages links keep working while Pages stays on, and old QR codes keep scanning (the scanner reads only the secret after `t=`).
+The API address (Apps Script) is the same from every site; nothing to change there.
 
 ### Layout modes (exec-portal)
 - **Wide screens (960 px+):** sidebar navigation, a shared event picker in the top bar (Payments and Door follow it), a stat strip and a table-style order list on Payments. Pure CSS under `@media (min-width: 960px)` at the bottom of `styles.css`, plus `renderGlobalEvent()` in `events.js`.
