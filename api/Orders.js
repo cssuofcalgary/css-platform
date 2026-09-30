@@ -35,14 +35,22 @@ function register_(req) {
   const members = loadMembers_();
   everyone.forEach(function (p) { p.flag = membershipFlag_(p, members); });
 
+  // Everything slow happens BEFORE the lock, where many requests can run side by side: open the tabs, and read
+  // who is already registered (a duplicate email is only a warning, so a snapshot a moment old is fine).
+  table_("Orders"); table_("Tickets");
+  const etransferEmailNow = getConfig_().etransferEmail;
+  const snapshotTickets = readRows_("Tickets");
+  const snapshotOrders = readRows_("Orders");
+
   let logEntry = null;
-  const done = withLock_(function () {
+  const done = withIntakeLock_(function () {
     if (requestId) {   // the first attempt may have finished while this one waited for the lock
       const seen = CacheService.getScriptCache().get(requestId);
       if (seen) return { repeat: JSON.parse(seen) };
     }
-    const tickets = readRows_("Tickets");
+    const tickets = snapshotTickets;
     if (event.capacity && event.capacityRule === "all") {
+      delete DB_.rows["Tickets"];   // a hard limit must be counted on fresh data, inside the lock
       const taken = spotsTaken_(event);
       if (taken + everyone.length > event.capacity) {
         throw new ApiError_("SOLD_OUT", event.capacity - taken > 0
@@ -62,7 +70,7 @@ function register_(req) {
     const isFree = total === 0;
     const order = {
       id: newId_("OR"),
-      code: uniqueCode_(event, readRows_("Orders")),
+      code: issueOrderCode_(event, snapshotOrders),
       eventId: event.id,
       payerName: payer.name,
       payerEmail: payer.email,
@@ -103,7 +111,7 @@ function register_(req) {
     const reply = {
       ok: true,
       order: { code: order.code, total: total, status: order.status },
-      etransferEmail: getConfig_().etransferEmail,
+      etransferEmail: etransferEmailNow,
       tickets: created.map(function (t) { return { name: t.name, ticketType: t.ticketType, price: t.price, flag: t.flag }; })
     };
     if (requestId) { try { CacheService.getScriptCache().put(requestId, JSON.stringify(reply), 600); } catch (e) { /* fine */ } }
@@ -137,7 +145,7 @@ function addOrder_(session, eventId, input, force, siteUrl) {
   const etransferName = String(input.etransferName || "").trim().slice(0, 80);
   const note = String(input.notes || "").trim().slice(0, 200);
 
-  const order = withLock_(function () {
+  const order = withIntakeLock_(function () {
     if (event.capacity && !force) {
       const taken = spotsTaken_(event);
       if (taken + 1 > event.capacity) {
@@ -238,6 +246,29 @@ function uniqueCode_(event, orders) {
     if (!used[code]) return code;
   }
   return event.codePrefix + "-" + Date.now().toString().slice(-6);
+}
+
+/**
+ * A payment code that nobody has used: checked against the orders read before the lock, PLUS the codes handed out
+ * in the last 10 minutes (kept in the cache), so two sign-ups at the same moment can never get the same code.
+ */
+function issueOrderCode_(event, orders) {
+  const cache = CacheService.getScriptCache();
+  const key = "recentcodes_" + event.codePrefix;
+  let recent = [];
+  try { recent = JSON.parse(cache.get(key) || "[]"); } catch (e) { recent = []; }
+  const used = {};
+  orders.forEach(function (o) { used[o.code] = true; });
+  recent.forEach(function (c) { used[c] = true; });
+  let code = "";
+  for (let i = 0; i < 50 && !code; i++) {
+    const c = event.codePrefix + "-" + (1000 + Math.floor(Math.random() * 9000));
+    if (!used[c]) code = c;
+  }
+  if (!code) code = event.codePrefix + "-" + Date.now().toString().slice(-6);
+  recent.push(code);
+  try { cache.put(key, JSON.stringify(recent.slice(-300)), 600); } catch (e) { /* fine */ }
+  return code;
 }
 
 function newTicketId_() {

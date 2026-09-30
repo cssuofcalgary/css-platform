@@ -174,7 +174,7 @@ function sendRegistrationEmail_(event, order, tickets) {
     sendStyled_(order.payerEmail, mail.subject, mail.html, mail.plain);
     return true;
   } catch (e) {
-    console.error("Registration email failed: " + e.message);
+    console.error("Registration email failed: " + e.message); rememberError_("email", e);
     return false;
   }
 }
@@ -199,7 +199,7 @@ function sendReminderEmail_(event, order, tickets) {
     sendStyled_(order.payerEmail, mail.subject, mail.html, mail.plain);
     return true;
   } catch (e) {
-    console.error("Reminder email failed for " + order.code + ": " + e.message);
+    console.error("Reminder email failed for " + order.code + ": " + e.message); rememberError_("email", e);
     return false;
   }
 }
@@ -229,7 +229,7 @@ function sendTicketEmail_(event, ticket) {
     sendStyled_(ticket.email, mail.subject, mail.html, mail.plain);
     return true;
   } catch (e) {
-    console.error("Ticket email failed for " + ticket.id + ": " + e.message);
+    console.error("Ticket email failed for " + ticket.id + ": " + e.message); rememberError_("email", e);
     return false;
   }
 }
@@ -263,7 +263,7 @@ function sendMyTicketsEmail_(to, items, allLink) {
     sendStyled_(to, mail.subject, mail.html, mail.plain);
     return true;
   } catch (e) {
-    console.error("Find-my-tickets email failed: " + e.message);
+    console.error("Find-my-tickets email failed: " + e.message); rememberError_("email", e);
     return false;
   }
 }
@@ -290,7 +290,7 @@ function sendMyPassEmail_(to, member, link) {
     sendStyled_(to, mail.subject, mail.html, mail.plain);
     return true;
   } catch (e) {
-    console.error("Find-my-pass email failed: " + e.message);
+    console.error("Find-my-pass email failed: " + e.message); rememberError_("email", e);
     return false;
   }
 }

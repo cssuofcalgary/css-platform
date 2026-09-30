@@ -354,6 +354,17 @@ function log_(who, action, target, details) {
 }
 
 /** Runs fn while holding the script-wide lock, so two people can't change the same data at once. */
+/**
+ * A second, separate lock for everything that ADDS orders and tickets (online registration, "add a paid
+ * registration", walk-ins). Door scans, payments and edits use the main lock above, so a rush of sign-ups
+ * can never make a scanner wait. (Both locks belong to the one account that owns the script.)
+ */
+function withIntakeLock_(fn) {
+  const lock = LockService.getUserLock();
+  if (!lock.tryLock(25000)) throw new ApiError_("BUSY", "The system is busy. Try again in a moment.");
+  try { return fn(); } finally { lock.releaseLock(); }
+}
+
 function withLock_(fn) {
   const lock = LockService.getScriptLock();
   if (!lock.tryLock(20000)) throw new ApiError_("BUSY", "The system is busy. Try again in a moment.");

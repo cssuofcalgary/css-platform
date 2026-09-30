@@ -134,7 +134,7 @@ const okRegs = regs.filter((r) => r.ok).length;
 need("at least one registration succeeded", okRegs);
 check("every 'ok' registration exists exactly once in the sheet", all.ok && all.total === okRegs, `${okRegs} ok replies, ${all.total} orders`);
 check("no registration was lost or doubled by the blast", all.ok && new Set(all.orders.map((o) => o.code)).size === all.orders.length, "payment codes are unique");
-check("all 50 registrations got through", okRegs === REGS, `${okRegs}/${REGS}; failures mean people would have seen an error`);
+check(`all ${REGS} registrations got through`, okRegs === REGS, `${okRegs}/${REGS}; failures mean people would have seen an error`);
 const free = all.ok ? all.orders.filter((o) => o.status === "paid").length : 0;
 check("free (RSVP) orders were marked paid automatically", free >= Math.min(5, okRegs), `${free} paid already`);
 const ticketsEmailed = all.ok ? all.orders.flatMap((o) => o.tickets).filter((t) => t.status === "paid" && t.emailedAt && !String(t.emailedAt).startsWith("test")).length : 0;

@@ -96,7 +96,7 @@ function walkIn_(session, eventId, input) {
   if (!name) throw new ApiError_("BAD_REQUEST", "Walk-in needs a name.");
   const method = input.method === "etransfer" ? "e-transfer" : "cash";
 
-  return withLock_(function () {
+  return withIntakeLock_(function () {
     const event = findEvent_(function (e) { return e.id === eventId; });
     if (!event) throw new ApiError_("NOT_FOUND", "Event not found.");
     const type = event.ticketTypes.filter(function (t) { return t.id === input.ticketTypeId; })[0];
