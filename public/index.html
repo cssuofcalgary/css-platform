@@ -1,34 +1,41 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <meta name="theme-color" content="#3b4237">
   <title>CSS Events</title>
   <meta name="description" content="Events by the Chinese Students' Society at the University of Calgary.">
-  <link rel="stylesheet" href="public.css?v=0.2.4">
+  <link rel="icon" type="image/png" href="assets/top_panda.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Silkscreen:wght@400;700&family=Source+Serif+4:ital,wght@0,400;0,600;0,700;1,600;1,700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="public.css?v=0.3.0">
 </head>
 <body>
-  <header class="site-header">
-    <a href="./" class="site-brand">
-      <span class="logo" aria-hidden="true">CSS</span>
-      <span>
-        <strong data-t="siteName"></strong><br>
-        <small data-t="siteShort"></small>
-      </span>
+  <div class="app-container">
+    <a href="./" class="top-banner-link" aria-label="CSS events home">
+      <img class="top-banner" src="https://lh3.googleusercontent.com/d/1L7oECAmAo6UewHXIeJAH6TrUG0lSXTlq" alt="Chinese Students' Society"
+           onerror="this.onerror=null;this.src='assets/css-logo.png';this.classList.add('fallback')">
     </a>
-  </header>
 
-  <main id="page" class="page">
-    <p class="muted center" data-t="loading"></p>
-  </main>
+    <div class="card-wrapper">
+      <img src="assets/top_panda.png" class="panda top-panda" alt="">
+      <main id="page" class="card">
+        <p class="muted center pulse" data-t="loading"></p>
+      </main>
+      <img src="assets/bottom_panda.png" class="panda bottom-panda" alt="">
+    </div>
 
-  <footer class="site-footer">
-    <p><span data-t="contact"></span> <a id="contact-link"></a> Â· <a id="instagram-link" target="_blank" rel="noopener" data-t="instagram"></a></p>
-    <p class="muted" data-t="privacy"></p>
-  </footer>
+    <footer class="website-footer">
+      <p><span data-t="contact"></span> <a id="contact-link"></a> &middot; <a id="instagram-link" target="_blank" rel="noopener" data-t="instagram"></a></p>
+      <p class="privacy" data-t="privacy"></p>
+    </footer>
+  </div>
 
-  <script src="config.js?v=0.2.4"></script>
-  <script src="strings.js?v=0.2.4"></script>
-  <script src="public.js?v=0.2.4"></script>
+  <script src="config.js?v=0.3.0"></script>
+  <script src="strings.js?v=0.3.0"></script>
+  <script src="public.js?v=0.3.0"></script>
 </body>
 </html>

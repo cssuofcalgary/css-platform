@@ -19,7 +19,7 @@ const STRINGS = {
     closed: "Registration is closed",
     spotsLeft: (n) => n === 1 ? "1 spot left" : `${n} spots left`,
     payNote: "Pay by Interac e-transfer. Your spot is confirmed once payment is received.",
-    closesAt: (when) => `Registration closes ${when}.`,
+    closesAt: (when) => `Registration closes ${when.replace(/\.$/, "")}.`,
     contact: "Questions? Email",
     instagram: "Instagram",
     privacy: "We only use your details to run this event.",
@@ -47,7 +47,6 @@ const STRINGS = {
     submit: "Register & get payment details",
     submitting: "Registering…",
     pleaseFill: (what) => `Please fill in: ${what}`,
-    privacyNote: "We only use your details to run this event.",
     cancel: "← Back to event",
 
     // After registering
@@ -77,6 +76,10 @@ const STRINGS = {
     ticketRefunded: "This ticket was refunded.",
     ticketCancelled: "This ticket was cancelled.",
     qrLabel: "Ticket QR code",
+    stampConfirmed: "CONFIRMED",
+    stampCheckedIn: "CHECKED IN",
+    stampPending: "UNPAID",
+    stampVoid: "VOID",
     showAtDoor: "Show this QR code at the door. A screenshot works too."
   }
 };

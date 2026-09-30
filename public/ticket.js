@@ -6,6 +6,7 @@ const $ = (id) => document.getElementById(id);
 async function api(action, details = {}) {
   try {
     const res = await fetch(API_URL, {
+      signal: AbortSignal.timeout(30000),   // never stay on "Loading…" forever
       method: "POST",
       headers: { "Content-Type": "text/plain;charset=utf-8" },
       body: JSON.stringify({ action, ...details })
@@ -34,31 +35,32 @@ async function start() {
 function render({ ticket, event, etransferEmail, orderTotal }) {
   document.title = `${T.yourTicket} · ${event.name}`;
   const status = ticket.checkedIn ? "checkedin" : ticket.status;
-  const banner = {
-    paid: `<div class="ticket-state good">${T.ticketConfirmed}</div>`,
-    checkedin: `<div class="ticket-state good">${T.ticketCheckedIn}</div>`,
-    awaiting: `<div class="ticket-state warn">${T.ticketAwaiting(money(orderTotal), etransferEmail, ticket.orderCode)}</div>`,
-    refunded: `<div class="ticket-state bad">${T.ticketRefunded}</div>`,
-    cancelled: `<div class="ticket-state bad">${T.ticketCancelled}</div>`
-  }[status] || "";
+  // A rubber-stamp look, like the member portal's "VERIFIED" stamp.
+  const look = {
+    paid: { stamp: T.stampConfirmed, cls: "", note: T.ticketConfirmed },
+    checkedin: { stamp: T.stampCheckedIn, cls: "", note: T.ticketCheckedIn },
+    awaiting: { stamp: T.stampPending, cls: "pending", note: T.ticketAwaiting(money(orderTotal), etransferEmail, ticket.orderCode) },
+    refunded: { stamp: T.stampVoid, cls: "void", note: T.ticketRefunded },
+    cancelled: { stamp: T.stampVoid, cls: "void", note: T.ticketCancelled }
+  }[status] || { stamp: "", cls: "", note: "" };
   const showQr = ticket.status === "paid";
+  $("page").className = "card " + look.cls;   // coloured top edge matches the status
 
   $("page").innerHTML = `
     <article class="ticket">
-      ${banner}
-      <div class="ticket-card ${showQr ? "" : "dimmed"}">
-        <div class="ticket-event">${escapeHtml(event.name)}</div>
-        <div class="muted">${escapeHtml(formatDate(event.date))}${timeRange(event) ? " · " + escapeHtml(timeRange(event)) : ""}</div>
-        ${event.location ? `<div class="muted">${escapeHtml(event.location)}</div>` : ""}
-        <div id="qr" class="qr" aria-label="${T.qrLabel}"></div>
-        <div class="ticket-name">${escapeHtml(ticket.name)}</div>
-        <div class="muted">${escapeHtml(ticket.ticketType)} · <span class="mono">${escapeHtml(ticket.id)}</span></div>
-      </div>
-      ${showQr ? `<p class="muted small center">${T.showAtDoor}</p>` : ""}
+      <div class="ticket-event">${escapeHtml(event.name)}</div>
+      <p class="ticket-when">${escapeHtml(formatDate(event.date))}${timeRange(event) ? "<br>" + escapeHtml(timeRange(event)) : ""}${event.location ? `<br>${escapeHtml(event.location)}` : ""}</p>
+      <div id="qr" class="qr" aria-label="${T.qrLabel}"></div>
+      <div class="ticket-name">${escapeHtml(ticket.name)}</div>
+      <div class="ticket-pills"><span class="pill">${escapeHtml(ticket.ticketType)}</span><span class="pill">${escapeHtml(ticket.id)}</span></div>
+      <hr class="perforation">
+      ${look.stamp ? `<div class="stamp ${look.cls}">${look.stamp}</div>` : ""}
+      <p class="ticket-state">${escapeHtml(look.note)}</p>
+      ${showQr ? `<p class="muted small">${T.showAtDoor}</p>` : ""}
     </article>`;
 
   if (showQr) {
-    new QRCode($("qr"), { text: location.href, width: 240, height: 240, colorDark: "#1c1917", colorLight: "#ffffff", correctLevel: QRCode.CorrectLevel.M });
+    new QRCode($("qr"), { text: location.href, width: 344, height: 344, colorDark: "#2a2520", colorLight: "#ffffff", correctLevel: QRCode.CorrectLevel.M });
   }
 }
 

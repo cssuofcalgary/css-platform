@@ -6,6 +6,7 @@ const $ = (id) => document.getElementById(id);
 async function api(action, details = {}) {
   try {
     const res = await fetch(API_URL, {
+      signal: AbortSignal.timeout(30000),   // never stay on "Loading…" forever
       method: "POST",
       headers: { "Content-Type": "text/plain;charset=utf-8" },
       body: JSON.stringify({ action, ...details })
@@ -31,7 +32,7 @@ async function showEventList() {
 function eventCard(e) {
   return `
     <a class="event-card" href="?e=${encodeURIComponent(e.slug)}">
-      ${e.imageUrl ? `<img src="${escapeAttr(e.imageUrl)}" alt="" loading="lazy">` : `<div class="image-fallback">${escapeHtml(e.name)}</div>`}
+      ${e.imageUrl ? `<img src="${escapeAttr(e.imageUrl)}" alt="" loading="lazy" data-name="${escapeAttr(e.name)}" onerror="this.replaceWith(Object.assign(document.createElement('div'), { className: 'image-fallback', textContent: this.dataset.name }))">` : `<div class="image-fallback">${escapeHtml(e.name)}</div>`}
       <div class="event-card-body">
         <div class="event-card-date">${escapeHtml(formatDate(e.date))}</div>
         <div class="event-card-name">${escapeHtml(e.name)}</div>
@@ -49,13 +50,14 @@ async function showEvent(slug) {
   $("page").innerHTML = `
     <a class="back" href="./">${T.allEvents}</a>
     <article class="event">
-      ${e.imageUrl ? `<img class="hero" src="${escapeAttr(e.imageUrl)}" alt="">` : ""}
+      ${e.imageUrl ? `<img class="hero" src="${escapeAttr(e.imageUrl)}" alt="" onerror="this.remove()">` : ""}
       <h1 class="event-name">${escapeHtml(e.name)}</h1>
 
       <dl class="facts">
         <div><dt>${T.when}</dt><dd>${escapeHtml(formatDate(e.date))}${timeRange(e) ? `<br>${escapeHtml(timeRange(e))}` : ""}</dd></div>
         ${e.location ? `<div><dt>${T.where}</dt><dd>${escapeHtml(e.location)}</dd></div>` : ""}
       </dl>
+      <hr class="perforation">
 
       <section class="tickets">
         <h2>${T.tickets}</h2>
@@ -66,7 +68,7 @@ async function showEvent(slug) {
         ${registerBlock(e)}
       </section>
 
-      ${e.description ? `<section class="description">${paragraphs(e.description)}</section>` : ""}
+      ${e.description ? `<hr class="perforation"><section class="description">${paragraphs(e.description)}</section>` : ""}
     </article>`;
   currentEvent = e;
   const open = $("open-register");
@@ -127,7 +129,6 @@ function showRegisterForm(e) {
       <div class="total-row"><span>${T.total}</span><strong id="total">$0</strong></div>
       <p id="form-error" class="form-error" role="alert" hidden></p>
       <button type="submit" class="register" id="submit">${T.submit}</button>
-      <p class="muted small center">${T.privacyNote}</p>
     </form>`;
 
   $("back-to-event").addEventListener("click", () => showEvent(e.slug));
