@@ -46,7 +46,9 @@ function nightlyJob() {
   const recent = recentError_(24);
   if (recent) problems.push("An error in the last day (" + recent.action + "): " + recent.message);
 
-  if (problems.length) sendAlert_(problems);
+  if (problems.length) {
+    try { sendAlert_(problems); } catch (err) { console.error("Alert email failed: " + err.message); }   // never let the alert break the job
+  }
 }
 
 /** Copies the data sheet into the backup folder and deletes the oldest copies beyond BACKUPS_KEPT. */
@@ -115,7 +117,7 @@ function sendAlert_(problems) {
   const props = PropertiesService.getScriptProperties();
   const today = Utilities.formatDate(new Date(), "America/Edmonton", "yyyy-MM-dd");
   if (props.getProperty("ALERT_SENT_DAY") === today) return;
-  const to = Session.getEffectiveUser().getEmail();
+  const to = getConfig_().contactEmail;   // the CSS Gmail (Settings → contact email)
   if (!to || !canSendMail_(to)) return;
   MailApp.sendEmail({
     to: to,
