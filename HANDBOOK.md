@@ -71,6 +71,9 @@ If you see "ticket emails waiting (daily email limit)", press **Send now** later
 ## What the emails look like
 All system emails (registration, payment reminder, ticket, find-my-tickets, find-my-pass) share one look: the same paper-ticket design as the member pass email, with a sage header, the CSS banner, pandas and a signature. It lives in `emailShell_()` in `api/Mail.js`. The signature name is the Script Property `PRESIDENT_NAME` (default "Gordon Chen"); change it when the President changes.
 
+### What members see under My tickets
+Pressing **My tickets** on the member portal swaps the screen: the pass and its QR code go away and a list of the person's tickets takes over (one card per ticket: event, date, place, name, QR code, and Paid / Payment pending / Checked in). **Back to my pass** swaps it back. Someone with several tickets (for friends, or for different events) sees them all. Tickets leave the list by themselves once the event date has passed, and refunded or cancelled tickets never show. To take a ticket off someone's list early: Payments tab → refund or cancel the order. Archiving an event also hides its tickets.
+
 ### UCID and last name go straight in
 On the member portal and on the events site's "Find my tickets", "I forgot which email I used" takes a UCID and last name and opens the member pass (with the tickets under it) right away, with no email. Someone who only has tickets (not a member) gets a tickets-only page. Entering just an email still emails a private link instead, because an email address alone proves nothing. This is less strict than the email route: anyone who knows a classmate's UCID and last name could open their page. The limits (4 tries per UCID, 120 in total per 10 minutes) stop guessing. If that ever worries the team, say so and it can go back to email-only.
 
