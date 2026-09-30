@@ -54,7 +54,7 @@ function scan_(session, eventId, code) {
     }
 
     const now = new Date().toISOString();
-    updateRow_("Tickets", ticket.id, { checkedInAt: now, checkedInBy: session.name });
+    updateRow_("Tickets", ticket.id, { checkedInAt: now, checkedInBy: session.name }, ticket._row);
     log_(session.name, "checkin", ticket.id, { name: ticket.name });
     return scanResult_(ticket.flag ? "green-flag" : "green", ticket.flag ? "Checked in. Please check: " + ticket.flag : "Checked in. Welcome!", person);
   });
@@ -112,7 +112,7 @@ function doorList_(eventId) {
     .map(function (t) {
       const order = orders[t.orderId] || {};
       return {
-        id: t.id, name: t.name, ticketType: t.ticketType, status: t.status, flag: t.flag,
+        id: t.id, secret: t.secret, name: t.name, ticketType: t.ticketType, status: t.status, flag: t.flag,
         checkedInAt: t.checkedInAt, checkedInBy: t.checkedInBy, answers: t.answers,
         orderId: t.orderId, orderCode: order.code, orderTotal: Number(order.total) || 0,
         payerName: order.payerName, etransferName: order.etransferName

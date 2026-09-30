@@ -21,19 +21,26 @@ const TABLES = {
 /** Columns holding lists/objects; stored as JSON text. */
 const JSON_COLUMNS = { ticketTypes: true, questions: true, answers: true };
 
+/**
+ * Remembered for the rest of this one request only (each request starts fresh),
+ * so a scan opens the spreadsheet once instead of on every read and write.
+ */
+const DB_ = { spreadsheet: null, sheets: {}, headers: {}, rows: {} };
+
 function dataSpreadsheet_() {
+  if (DB_.spreadsheet) return DB_.spreadsheet;
   const props = PropertiesService.getScriptProperties();
   const existing = props.getProperty("DATA_SHEET_ID");
-  if (existing) return SpreadsheetApp.openById(existing);
+  if (existing) return (DB_.spreadsheet = SpreadsheetApp.openById(existing));
 
   const lock = LockService.getScriptLock();
   lock.waitLock(20000);
   try {
     const again = props.getProperty("DATA_SHEET_ID");
-    if (again) return SpreadsheetApp.openById(again);
+    if (again) return (DB_.spreadsheet = SpreadsheetApp.openById(again));
     const spreadsheet = SpreadsheetApp.create("CSS Platform Data (managed by the system, don't edit by hand)");
     props.setProperty("DATA_SHEET_ID", spreadsheet.getId());
-    return spreadsheet;
+    return (DB_.spreadsheet = spreadsheet);
   } finally {
     lock.releaseLock();
   }
@@ -41,6 +48,7 @@ function dataSpreadsheet_() {
 
 /** Returns the tab for a table, creating it (or adding new columns) if needed. */
 function table_(name) {
+  if (DB_.sheets[name]) return DB_.sheets[name];
   const spreadsheet = dataSpreadsheet_();
   const columns = TABLES[name];
   let sheet = spreadsheet.getSheetByName(name);
@@ -52,7 +60,8 @@ function table_(name) {
     sheet.setFrozenRows(1);
     const starter = spreadsheet.getSheetByName("Sheet1");
     if (starter && spreadsheet.getSheets().length > 1) spreadsheet.deleteSheet(starter);
-    return sheet;
+    DB_.headers[name] = columns.slice();
+    return (DB_.sheets[name] = sheet);
   }
 
   const header = headerOf_(sheet);
@@ -60,7 +69,13 @@ function table_(name) {
   if (missing.length) {
     sheet.getRange(1, header.length + 1, 1, missing.length).setValues([missing]).setFontWeight("bold");
   }
-  return sheet;
+  DB_.headers[name] = header.concat(missing);
+  return (DB_.sheets[name] = sheet);
+}
+
+function headerFor_(name) {
+  table_(name);
+  return DB_.headers[name];
 }
 
 function headerOf_(sheet) {
@@ -97,46 +112,68 @@ function fromCell_(column, value) {
   return text;
 }
 
-/** All rows of a table as objects. */
+/**
+ * All rows of a table as objects (read once per request; any write resets it).
+ * Each row also carries its sheet row number as a hidden `_row`, so an update
+ * right after a read doesn't have to search again.
+ */
 function readRows_(name) {
+  if (DB_.rows[name]) return DB_.rows[name];
   const sheet = table_(name);
   const values = sheet.getDataRange().getValues();
-  if (values.length < 2) return [];
-  const header = values[0].map(String);
   const rows = [];
-  for (let r = 1; r < values.length; r++) {
-    if (values[r].every(function (v) { return v === ""; })) continue;
-    const row = {};
-    header.forEach(function (column, c) { if (column) row[column] = fromCell_(column, values[r][c]); });
-    rows.push(row);
+  if (values.length >= 2) {
+    const header = values[0].map(String);
+    for (let r = 1; r < values.length; r++) {
+      if (values[r].every(function (v) { return v === ""; })) continue;
+      const row = {};
+      header.forEach(function (column, c) { if (column) row[column] = fromCell_(column, values[r][c]); });
+      Object.defineProperty(row, "_row", { value: r + 1, enumerable: false });
+      rows.push(row);
+    }
   }
-  return rows;
+  return (DB_.rows[name] = rows);
 }
 
 function insertRow_(name, obj) {
   const sheet = table_(name);
-  const header = headerOf_(sheet);
+  const header = headerFor_(name);
+  delete DB_.rows[name];
   const range = sheet.getRange(sheet.getLastRow() + 1, 1, 1, header.length);
   range.setNumberFormat("@");   // keep "2026-10-21" and "18:00" as text, not dates
   range.setValues([header.map(function (column) { return toCell_(column, obj[column]); })]);
 }
 
-/** Updates the row whose id matches. Only the columns in `changes` are touched. */
-function updateRow_(name, id, changes) {
+/**
+ * Updates the row whose id matches. Only the columns in `changes` are touched.
+ * `rowHint` (a row's `_row` from readRows_) skips the search, after checking the id is still there.
+ */
+function updateRow_(name, id, changes, rowHint) {
   const sheet = table_(name);
-  const header = headerOf_(sheet);
+  const header = headerFor_(name);
   const idCol = header.indexOf("id");
-  const ids = sheet.getRange(1, idCol + 1, sheet.getLastRow(), 1).getValues();
-  for (let r = 1; r < ids.length; r++) {
-    if (String(ids[r][0]) === String(id)) {
-      Object.keys(changes).forEach(function (column) {
-        const c = header.indexOf(column);
-        if (c !== -1) sheet.getRange(r + 1, c + 1).setNumberFormat("@").setValue(toCell_(column, changes[column]));
-      });
-      return true;
-    }
+  let row = -1;
+  if (rowHint && String(sheet.getRange(rowHint, idCol + 1).getValue()) === String(id)) {
+    row = rowHint;
+  } else {
+    const ids = sheet.getRange(1, idCol + 1, sheet.getLastRow(), 1).getValues();
+    for (let r = 1; r < ids.length; r++) if (String(ids[r][0]) === String(id)) { row = r + 1; break; }
   }
-  throw new ApiError_("NOT_FOUND", name + " " + id + " not found.");
+  if (row === -1) throw new ApiError_("NOT_FOUND", name + " " + id + " not found.");
+  delete DB_.rows[name];
+
+  // Write side-by-side columns in one go (e.g. checkedInAt + checkedInBy).
+  const cols = Object.keys(changes)
+    .map(function (column) { return { c: header.indexOf(column), v: toCell_(column, changes[column]) }; })
+    .filter(function (x) { return x.c !== -1; })
+    .sort(function (a, b) { return a.c - b.c; });
+  const contiguous = cols.every(function (x, i) { return i === 0 || x.c === cols[i - 1].c + 1; });
+  if (cols.length > 1 && contiguous) {
+    sheet.getRange(row, cols[0].c + 1, 1, cols.length).setValues([cols.map(function (x) { return x.v; })]);
+  } else {
+    cols.forEach(function (x) { sheet.getRange(row, x.c + 1).setValue(x.v); });
+  }
+  return true;
 }
 
 /** The change log: every change made through the portal. */

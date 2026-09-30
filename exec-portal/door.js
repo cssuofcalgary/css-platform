@@ -93,7 +93,8 @@ function onCode(text) {
 
 async function checkCode(code) {
   doorState.busy = true;
-  showIdle(T.checking);
+  const known = findLocally(code);
+  showIdle(known ? `${known.name} · ${T.checking}` : T.checking);   // name shows instantly; colour follows
   const reply = await api("scan", { eventId: doorState.eventId, code });
   doorState.busy = false;
   if (!reply.ok) {
@@ -101,7 +102,25 @@ async function checkCode(code) {
     return showResult({ color: "red", message: errorText(reply) });
   }
   showResult(reply.result);
-  loadDoor();
+  if (reply.result.color.startsWith("green") && reply.result.person) markInsideLocally(reply.result.person.id);
+}
+
+/** Finds a ticket in the list the phone already has (by link, secret or ticket ID). */
+function findLocally(code) {
+  if (!doorState.data) return null;
+  const text = String(code || "").trim();
+  const secret = (/[?&]t=([A-Za-z0-9]+)/.exec(text) || [])[1] || (/^[a-f0-9]{32}$/i.test(text) ? text.toLowerCase() : "");
+  const id = text.toUpperCase().replace(/[^A-Z0-9]/g, "");
+  return doorState.data.tickets.find((t) => (secret && t.secret === secret) || t.id === id) || null;
+}
+
+/** Updates the counts on screen without reloading everything (the 30-second refresh catches up the rest). */
+function markInsideLocally(ticketId) {
+  const t = doorState.data && doorState.data.tickets.find((x) => x.id === ticketId);
+  if (!t || t.checkedInAt) return;
+  t.checkedInAt = new Date().toISOString();
+  doorState.data.counts.checkedIn++;
+  renderDoor();
 }
 
 function showIdle(text) {
