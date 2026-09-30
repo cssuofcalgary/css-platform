@@ -3,6 +3,9 @@
 Written so a non-developer can follow it. Everything is in the CSS Google account (`css.uofcalgary@gmail.com`).
 Links and IDs are in `README.md` section 2.
 
+## The pages don't load at all
+The pages are hosted by GitHub Pages from https://github.com/cssuofcalgary/css-platform. Check repo **Settings → Pages** still says "Deploy from a branch: main / (root)". A bad push can break a page: on GitHub, open the repo's **commits**, find the last good one, and revert the newer one (or ask anyone who knows git).
+
 ## First: is the back end alive?
 Open the **web app URL** (README section 2) in a browser.
 - Shows `{"ok":true,"service":"CSS Platform API",...}` → the back end is fine. The problem is the page or the internet.

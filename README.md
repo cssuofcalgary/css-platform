@@ -36,7 +36,11 @@ The old system (`../CSS Ticketing System/`) keeps running until this one is prov
 | Web app URL (API) | `https://script.google.com/macros/s/<deployment ID>/exec`. Opening it in a browser shows `{"ok":true,...}` |
 | Platform data sheet | "CSS Platform Data" (may be renamed/moved; the system finds it by ID, stored in Script Property `DATA_SHEET_ID`) |
 | Event images | Drive folder "CSS Platform/Event images" (ID in Script Property `IMAGE_FOLDER_ID`) |
-| Local code | `Chinese Student Society/CSS Ticketing System V2/` (OneDrive) |
+| Local code | `Chinese Student Society/CSS Ticketing System V2/` (OneDrive), a git repo |
+| GitHub repo | https://github.com/cssuofcalgary/css-platform (public for now; can go private once it moves to Vercel) |
+| **Public site (live)** | https://cssuofcalgary.github.io/css-platform/public/ (event page: `…/public/?e=<slug>`, ticket: `…/public/ticket.html?t=<secret>`) |
+| **Exec Portal (live)** | https://cssuofcalgary.github.io/css-platform/exec-portal/ |
+| Hosting | GitHub Pages: branch `main`, folder `/ (root)`. Every push to `main` updates the site in about a minute |
 
 ## 3. Files
 
@@ -120,7 +124,14 @@ clasp update-deployment AKfycbxJ_a_cHyRXadK17ocIebhE2XDFcpEADCzSqOVXwdCgIQe1T-UP
 ```
 `api/.clasp.json` already points at the project.
 
-**Web pages:** edit the files and re-upload them wherever they're hosted. Text changes only need `strings.js`.
+**Web pages:** edit the files, then publish (PowerShell, inside the V2 folder):
+```
+git add -A
+git commit -m "what changed"
+git push
+```
+GitHub Pages updates the live site in about a minute. No git? Edit the file directly on github.com (✏ icon) and commit. Text changes only need `strings.js`.
+**Moving to Vercel later:** import the GitHub repo in Vercel (no build step, output = root), add `events.` / `exec.` domains, then use "Resend tickets" if old links must change.
 
 **Local testing:** serve the folder (e.g. `python -m http.server 8765` inside `CSS Ticketing System V2/`) and open `http://localhost:8765/exec-portal/` or `/public/`. Empty `API_URL` in `exec-portal/config.js` = demo mode with made-up members (password `demo` / `demo-admin`).
 

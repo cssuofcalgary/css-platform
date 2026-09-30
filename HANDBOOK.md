@@ -3,7 +3,7 @@
 For execs. No tech knowledge needed.
 
 ## Signing in
-1. Open the **Exec Portal**.
+1. Open the **Exec Portal**: https://cssuofcalgary.github.io/css-platform/exec-portal/ (bookmark it).
 2. Type the **exec password** (ask the President) and **your name**. Your name goes next to every change you make.
 3. You stay signed in for about 6 hours. **Sign out** on shared computers.
 
@@ -29,7 +29,7 @@ Wrong password 10 times → sign-in pauses for 10 minutes.
 In the Events list, each event has:
 - **Edit:** change anything. The public link never changes.
 - **Close registration:** the page stays up but says registration is closed. **Reopen** undoes it.
-- **Public page ↗:** the link to share (Instagram, group chats).
+- **Public page ↗:** the link to share (Instagram, group chats). All upcoming events: https://cssuofcalgary.github.io/css-platform/public/
 
 ## What people see when they register
 1. They open the event's **public page** and tap **Register**.
