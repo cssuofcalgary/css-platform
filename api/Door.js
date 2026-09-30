@@ -25,25 +25,15 @@ function scan_(session, eventId, code, atDesk) {
   if (!key) return scanResult_("red", "Couldn't read that code.");
   if (key.kind === "member") return scanResult_("red", "That's a membership card, not a ticket for this event.");
 
+  table_("Tickets");   // open the spreadsheet BEFORE taking the lock, where other requests can do the same in parallel
   let logEntry = null;
   const result = withLock_(function () {
     const event = findEvent_(function (e) { return e.id === eventId; });
     if (!event) throw new ApiError_("NOT_FOUND", "Event not found.");
 
-    let ticket = readRows_("Tickets").filter(function (t) {
-      return key.kind === "secret" ? t.secret === key.value : t.id === key.value;
-    })[0];
+    // Straight to this one ticket's row, read fresh from the sheet (never the shared cache) for the decision.
+    const ticket = findTicketFresh_(key.kind, key.value);
     if (!ticket) return scanResult_("red", "Ticket not found.");
-
-    // Never trust the shared cache for the check-in decision: re-read this one ticket straight from the sheet.
-    const fresh = readRowFresh_("Tickets", ticket._row, ticket.id);
-    if (fresh) {
-      ticket = fresh;
-    } else {   // rows moved (sheet sorted by hand): drop the cache and look again
-      dropTableCache_("Tickets");
-      ticket = readRows_("Tickets").filter(function (t) { return t.id === ticket.id; })[0];
-      if (!ticket) return scanResult_("red", "Ticket not found.");
-    }
 
     const person = personView_(ticket);
     if (ticket.eventId !== event.id) {

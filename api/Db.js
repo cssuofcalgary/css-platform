@@ -240,9 +240,44 @@ function readRowFresh_(name, rowNumber, id) {
   const values = retry_(function () { return sheet.getRange(rowNumber, 1, 1, header.length).getValues(); })[0];
   const row = {};
   header.forEach(function (column, c) { if (column) row[column] = fromCell_(column, values[c]); });
-  if (String(row.id) !== String(id)) return null;
+  if (id !== undefined && String(row.id) !== String(id)) return null;
   Object.defineProperty(row, "_row", { value: rowNumber, enumerable: false });
   return row;
+}
+
+/**
+ * Where each ticket sits in the Tickets tab: { ticket id or secret: row number }. A ticket's id and secret never
+ * change, so unlike the table itself this survives every check-in and payment; only NEW tickets are missing from it.
+ * A door scan uses it to go straight to one row instead of reading the whole tab. (Rebuilt when it can't be found or
+ * a row has moved; a miss rebuilds at most once every 5 seconds, so garbage codes can't make every scan slow.)
+ */
+function ticketRowIndex_(rebuild) {
+  const cache = CacheService.getScriptCache();
+  const key = "tixidx_" + API_VERSION;
+  if (!rebuild) {
+    try { const found = cacheGetJson_(cache, key); if (found) return found; } catch (e) { /* rebuild below */ }
+  }
+  const index = {};
+  readRows_("Tickets").forEach(function (t) { index[t.id] = t._row; if (t.secret) index[t.secret] = t._row; });
+  try { cachePutJson_(cache, key, index, 21600); cache.put("tixidx_built", "1", 5); } catch (e) { /* fine */ }
+  return index;
+}
+
+function forgetTicketRowIndex_() {
+  try { const c = CacheService.getScriptCache(); c.remove("tixidx_" + API_VERSION + "_count"); c.remove("tixidx_built"); } catch (e) { /* fine */ }
+}
+
+/** One ticket by secret or id: its row is found in the index, then READ FRESH from the sheet. Null when there is none. */
+function findTicketFresh_(kind, value) {
+  const matches = function (t) { return t && (kind === "secret" ? t.secret === value : t.id === value); };
+  let index = ticketRowIndex_(false);
+  if (!index[value] && !CacheService.getScriptCache().get("tixidx_built")) index = ticketRowIndex_(true);   // maybe a brand-new ticket
+  if (!index[value]) return null;
+  let t = readRowFresh_("Tickets", index[value]);
+  if (matches(t)) return t;
+  dropTableCache_("Tickets");      // the row moved (sheet sorted by hand): forget the cached copy too, then rebuild from the sheet
+  index = ticketRowIndex_(true);
+  return index[value] ? (matches(t = readRowFresh_("Tickets", index[value])) ? t : null) : null;
 }
 
 /** Forget every copy of a table (this request's and the shared one). */
@@ -281,6 +316,7 @@ function insertRow_(name, obj) {
     }
   } finally {
     bumpTableVersion_(name);   // AFTER the write: the cached copy is now out of date
+    if (name === "Tickets") forgetTicketRowIndex_();   // a new ticket: the row index must learn about it
   }
 }
 
@@ -296,6 +332,7 @@ function insertRows_(name, objs) {
     sheet.getRange(sheet.getLastRow() + 1, 1, rows.length, header.length).setValues(rows);
   } finally {
     bumpTableVersion_(name);
+    if (name === "Tickets") forgetTicketRowIndex_();
   }
 }
 

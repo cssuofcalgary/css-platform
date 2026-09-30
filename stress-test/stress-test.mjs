@@ -57,7 +57,7 @@ async function send(action, body = {}) {
   for (let attempt = 1; attempt <= 4; attempt++) {
     tries = attempt;
     r = await call(action, body);
-    const again = !r.ok && (r.error === "BUSY" || (action === "register" && ["TEMPORARY", "NETWORK"].includes(r.error)));
+    const again = !r.ok && (r.error === "BUSY" || (action === "register" && ["TEMPORARY", "NETWORK", "NOT_JSON"].includes(r.error)));
     if (!again || attempt === 4) break;
     await new Promise((res) => setTimeout(res, 1200 * attempt));
   }
