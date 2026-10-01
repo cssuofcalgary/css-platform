@@ -188,6 +188,7 @@ const STRINGS = {
     adminWrong: "That isn't the admin password.", adminOn: "Admin mode is on",
     memberSince: "Signed up", memberUcid: "UCID", memberCardId: "Member ID", memberActive: "Paid", memberNotPaid: "Not paid",
     ovManage: "Manage →",
+    doorsSwitched: (names) => `Doors closed for ${names}.`,
     scanningInto: (name) => `Scanning into: ${name}`,
     doorsOpen: "DOORS OPEN",
     confirmSwitchDoors: (other, current) => `${other} currently has doors open. Close it and switch doors to ${current}?`,

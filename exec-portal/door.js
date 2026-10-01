@@ -6,10 +6,10 @@ async function openDoorTab() {
   if (!eventsState.loaded) await loadEvents();
   const events = activeEvents();
   if (!events.length) { $("scan-result").textContent = T.noEventsForPayments; return; }
-  if (!doorState.eventId || !events.some((e) => e.id === doorState.eventId)) {
-    const today = todayMountain();
-    const next = events.filter((e) => e.date >= today).sort((a, b) => a.date.localeCompare(b.date))[0];
-    doorState.eventId = (next || events[0]).id;
+  // The event with its doors open comes first. Volunteer phones have no event picker, so this is how they find it.
+  if (!doorState.picked || !events.some((e) => e.id === doorState.eventId)) {
+    const liveEvent = events.find((e) => e.entryOpen);
+    doorState.eventId = liveEvent ? liveEvent.id : (events[0] ? events[0].id : "");
   }
   $("door-event").innerHTML = events.map((e) =>
     `<option value="${e.id}" ${e.id === doorState.eventId ? "selected" : ""}>${escapeHtml(e.name)} (${escapeHtml(e.date)})</option>`).join("");
@@ -18,7 +18,20 @@ async function openDoorTab() {
   await loadDoor();
   clearInterval(doorState.refreshTimer);
   // Help desk: refresh every few seconds so recent scans show up live. Scanner phones don't need to refresh as often.
-  doorState.refreshTimer = setInterval(() => { if (!$("tab-door").hidden && !doorState.busy && !document.hidden) loadDoor(true); }, SCANNER_MODE ? 20000 : 6000);
+  doorState.refreshTimer = setInterval(async () => {
+    if ($("tab-door").hidden || doorState.busy || document.hidden) return;
+    if (SCANNER_MODE) await followLiveEvent();
+    loadDoor(true);
+  }, SCANNER_MODE ? 20000 : 6000);
+}
+
+/** Scanner phones have no picker: if the help desk switched doors to another event, move over to it. */
+async function followLiveEvent() {
+  const fresh = await api("listEvents");
+  if (!fresh.ok) return;
+  eventsState.events = fresh.events;
+  const live = activeEvents().find((e) => e.entryOpen);
+  if (live && live.id !== doorState.eventId) { doorState.eventId = live.id; showIdle(); }
 }
 
 /** `quiet` = the background refresh: if it fails, keep showing what we have instead of covering the scan result. */
@@ -306,12 +319,12 @@ async function toggleEntry() {
     const others = eventsState.events.filter((e) => e.entryOpen && e.id !== doorState.eventId && e.status !== "archived");
     if (others.length) {
       const names = others.map((e) => e.name).join(" and ");
-      if (!confirm(T.confirmSwitchDoors(names, doorState.data.event.name))) { $("entry-toggle").disabled = false; return; }
       for (const other of others) {
         const closed = await api("setEntryOpen", { eventId: other.id, open: false });
         if (!closed.ok) { $("entry-toggle").disabled = false; return showResult({ color: "red", message: errorText(closed) }); }
         other.entryOpen = false;
       }
+      showToast(T.doorsSwitched(names));
     }
   }
 
@@ -327,7 +340,7 @@ async function toggleEntry() {
 
 // ---- Wire up ------------------------------------------------------------------------
 
-$("door-event").addEventListener("change", () => { doorState.eventId = $("door-event").value; showIdle(); loadDoor(); });
+$("door-event").addEventListener("change", () => { doorState.eventId = $("door-event").value; doorState.picked = true; showIdle(); loadDoor(); });
 $("entry-toggle").addEventListener("click", toggleEntry);
 $("scan-result").addEventListener("click", onResultTap);
 $("camera-toggle").addEventListener("click", toggleCamera);

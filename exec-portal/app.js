@@ -299,7 +299,6 @@ function start() {
     $("brand").textContent = T.scannerTitle;
     $("full-portal-link").hidden = false;
     $("door-login-button").hidden = false;
-    $("door-login-hint").hidden = false;
     $("door-login-button").addEventListener("click", onDoorLogin);
     document.title = T.scannerTitle;
   }

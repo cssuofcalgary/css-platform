@@ -62,6 +62,7 @@ document.addEventListener("click", (ev) => { if (ev.target.closest(".logo, .logi
   globalEventId = $(id).value;
   payState.eventId = globalEventId;
   doorState.eventId = globalEventId;
+  doorState.picked = true;
 }));
 
 // ---- Event editor: section list that scrolls to each section and follows you down the page ----
