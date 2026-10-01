@@ -169,7 +169,7 @@ Lists (`ticketTypes`, `questions`, `answers`, `summary`) are stored as JSON text
 | `PRESIDENT_NAME` | Optional. Name in the signature of every email. Default "Gordon Chen". Change it when the President changes |
 | `ARCHIVE_SHEETS`, `ARCHIVE_FOLDER_ID` | Set **by the system** the first time an event is archived: the archive spreadsheet of each school year (JSON, `{"2026-27": "sheetId"}`) and the Drive folder holding them. Don't edit; losing `ARCHIVE_SHEETS` just means the system can't find old rows until it's put back (the files are still in the folder `CSS Platform Archive`) |
 | `BACKUP_FOLDER_ID`, `LAST_BACKUP`, `LAST_GOOD_BACKUP`, `ALERT_SENT_DAY` | Set **by the system** by the nightly job (backup folder, when the last backup ran, the once-a-day alert limit) |
-| `SESSION_EPOCH`, `LAST_ERROR` | Set **by the system**. Changing `SESSION_EPOCH` signs everyone out. `LAST_ERROR` = the last unexpected error, shown in the health check |
+| `SESSION_EPOCH`, `LAST_ERROR` | Set **by the system**. Changing `SESSION_EPOCH` signs everyone out. `LAST_ERROR` = the last unexpected error; the health check only shows it if it happened in the last 24 hours |
 
 Everything above except the automatic ones can be changed in the portal's **Settings** tab (admin). Script Properties is only needed if the admin password is lost.
 | `PUBLIC_SITE_URL` | Set **by the system** from the Exec Portal (its `PUBLIC_SITE_URL` config) whenever Finance marks paid. Used for ticket links in emails. After moving the public site to a new address, use "Resend tickets" to send fresh links |

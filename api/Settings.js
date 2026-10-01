@@ -191,8 +191,7 @@ function healthCheck_(session) {
     return left + " emails left today";
   });
 
-  let lastError = null;
-  try { lastError = JSON.parse(PropertiesService.getScriptProperties().getProperty("LAST_ERROR") || "null"); } catch (e) { /* none */ }
+  const lastError = recentError_(24);   // only an error from the last 24 hours; older ones are old news and drop off by themselves
   const config = getConfig_();
   // A manual run (from the portal) is written to the Log, so Activity shows who checked and what they found. The nightly job passes no session and logs nothing.
   if (session) log_(session.name, "health.check", "", { problems: checks.filter(function (c) { return !c.ok; }).length + (lastError ? 1 : 0) });
