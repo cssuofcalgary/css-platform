@@ -127,7 +127,8 @@ function renderDoor() {
 
 /** A person from the small lists or from the last typed search. */
 function doorFind(id) {
-  return (doorState.data ? doorState.data.tickets : []).find((x) => x.id === id) || doorState.matches.find((x) => x.id === id) || null;
+  return (doorState.data ? doorState.data.tickets : []).find((x) => x.id === id) || doorState.matches.find((x) => x.id === id)
+    || (doorState.allCheckedIn || []).find((x) => x.id === id) || null;
 }
 
 function personRow(t, showPay) {
@@ -300,6 +301,7 @@ async function onDoorListClick(ev) {
     showIdle(T.undone(t ? t.name : ""));
     doorState.lastCode = "";
     await loadDoor();
+    if ($("all-checkins-dialog").open) loadAllCheckIns();
   }
   if (pay) {
     const t = (doorState.data.tickets.concat(doorState.matches)).find((x) => x.orderId === pay.dataset.pay);
@@ -383,8 +385,47 @@ async function toggleEntry() {
   renderDoor();
 }
 
+// ---- View all check-ins (help desk on a computer; phones keep the short list) ----
+
+const ALL_CHECKINS_PAGE = 10;
+
+/** 10 at a time. `append` = "Show more". A plain reload (after an undo) asks for as many as are already showing. */
+async function loadAllCheckIns(append) {
+  const have = (doorState.allCheckedIn || []).length;
+  $("all-checkins-status").textContent = T.allLoading;
+  const reply = await api("doorList", {
+    eventId: doorState.eventId, allCheckIns: true,
+    offset: append ? have : 0, limit: append ? ALL_CHECKINS_PAGE : Math.max(ALL_CHECKINS_PAGE, have)
+  });
+  if (!reply.ok) return handleEventError(reply, $("all-checkins-status"));
+  doorState.allCheckedIn = append ? (doorState.allCheckedIn || []).concat(reply.allCheckedIn || []) : (reply.allCheckedIn || []);
+  $("all-checkins-title").textContent = T.allCheckInsTitle(reply.allTotal !== undefined ? reply.allTotal : doorState.allCheckedIn.length);
+  $("all-checkins-more").hidden = !reply.allHasMore;
+  $("all-checkins-status").textContent = doorState.allCheckedIn.length ? T.allShowing(doorState.allCheckedIn.length, reply.allTotal) : T.allNone;
+  $("all-checkins-list").innerHTML = doorState.allCheckedIn.map((t) => `
+    <li class="card door-person">
+      <div>
+        <div class="name"><strong>${escapeHtml(t.name)}</strong> · ${escapeHtml(t.ticketType)}</div>
+        <div class="sub">${escapeHtml(shortTime(t.checkedInAt))}${t.checkedInBy ? " · " + escapeHtml(t.checkedInBy) : ""}</div>
+      </div>
+      <button class="link danger" data-undo="${t.id}">${T.undo}</button>
+    </li>`).join("");
+}
+
+function openAllCheckIns() {
+  doorState.allCheckedIn = [];
+  $("all-checkins-more").hidden = true;
+  $("all-checkins-list").innerHTML = "";
+  $("all-checkins-dialog").showModal();
+  loadAllCheckIns();
+}
+
 // ---- Wire up ------------------------------------------------------------------------
 
+$("door-view-all").hidden = SCANNER_MODE || isPhone();   // phones and scanner pages keep the short list
+$("door-view-all").addEventListener("click", openAllCheckIns);
+$("all-checkins-more").addEventListener("click", () => loadAllCheckIns(true));
+$("all-checkins-close").addEventListener("click", () => $("all-checkins-dialog").close());
 $("door-event").addEventListener("change", () => { doorState.eventId = $("door-event").value; doorState.picked = true; showIdle(); loadDoor(); });
 $("entry-toggle").addEventListener("click", toggleEntry);
 $("scan-result").addEventListener("click", onResultTap);
@@ -394,4 +435,4 @@ $("wi-cancel").addEventListener("click", () => { $("walkin-form").hidden = true;
 $("wi-types").addEventListener("change", updateWalkInMember);
 $("walkin-form").addEventListener("submit", onWalkInSubmit);
 $("manual-form").addEventListener("submit", onManualSubmit);
-["manual-results", "helpdesk-unpaid", "helpdesk-flagged", "recent-list"].forEach((id) => $(id).addEventListener("click", onDoorListClick));
+["manual-results", "helpdesk-unpaid", "helpdesk-flagged", "recent-list", "all-checkins-list"].forEach((id) => $(id).addEventListener("click", onDoorListClick));

@@ -181,6 +181,16 @@ function doorList_(eventId, session, opts) {
     activeScanners: countActiveScanners_()   // scanner phones seen in the last 45 s
   };
 
+  if (opts.allCheckIns) {   // the help desk's "View all check-ins": everyone who is inside, newest first
+    // a page at a time (offset + limit, 10 by default), with the real total so the portal can say "Show more"
+    const sorted = inside.slice().sort(function (a, b) { return String(b.checkedInAt).localeCompare(String(a.checkedInAt)); });
+    const offset = Math.max(0, parseInt(opts.offset, 10) || 0);
+    const limit = Math.min(200, Math.max(1, parseInt(opts.limit, 10) || 10));
+    reply.allCheckedIn = sorted.slice(offset, offset + limit).map(view);
+    reply.allTotal = sorted.length;
+    reply.allHasMore = offset + limit < sorted.length;
+  }
+
   const q = String(opts.q || "").trim().toLowerCase();
   if (q.length >= 2) {
     reply.matches = active.filter(function (t) {

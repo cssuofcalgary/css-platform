@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Fraunces:opsz,wght@9..144,500;9..144,600&family=JetBrains+Mono:wght@400;500&display=swap">
   <link rel="stylesheet" href="styles.css?v=0.5.1">
-  <link rel="stylesheet" href="theme.css?v=0.9.0">
+  <link rel="stylesheet" href="theme.css?v=0.9.2">
 </head>
 <body>
   <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
@@ -366,6 +366,7 @@
             <summary><span id="recent-title"></span><span class="live-badge"><i></i>LIVE</span></summary>
             <ul id="recent-list" class="results"></ul>
           </details>
+          <button id="door-view-all" class="link small" type="button" data-t="viewAllCheckIns" hidden></button>
           <div class="door-buttons">
             <div id="camera" class="camera" hidden></div>
             <button id="camera-toggle" class="primary" type="button" data-t="startCamera"></button>
@@ -436,21 +437,57 @@
       </form>
 
       <form id="set-password-form" data-pane="security" class="card editor" novalidate autocomplete="off">
-        <h3 class="sub-title" data-t="setPasswordsTitle"></h3>
+        <h3 class="sub-title" data-t="setNavSecurity"></h3>
         <p id="set-pw-note" class="muted small"></p>
-        <label for="set-exec-pw" data-t="setExecPw"></label>
-        <input id="set-exec-pw" type="password" autocomplete="new-password">
-        <input id="set-exec-pw2" type="password" autocomplete="new-password" aria-label="Repeat">
-        <label for="set-admin-pw" data-t="setAdminPw"></label>
-        <input id="set-admin-pw" type="password" autocomplete="new-password">
-        <input id="set-admin-pw2" type="password" autocomplete="new-password" aria-label="Repeat">
-        <label for="set-door-pw" data-t="setDoorPw"></label>
-        <input id="set-door-pw" type="password" autocomplete="new-password">
-        <p id="set-door-note" class="muted small"></p>
-        <button type="button" id="set-door-clear" class="link danger" data-t="setDoorClear" hidden></button>
+
+        <div class="cred" data-cred="exec">
+          <div class="cred-row">
+            <div><b data-t="secExecTitle"></b><small data-t="secExecSub"></small></div>
+            <button type="button" class="secondary small-button" data-change="exec" data-t="secChange"></button>
+          </div>
+          <div class="cred-edit" hidden>
+            <input id="set-exec-pw" type="password" autocomplete="new-password" data-ph="secNewPw">
+            <input id="set-exec-pw2" type="password" autocomplete="new-password" data-ph="secRepeat">
+            <div class="cred-actions"><button type="button" class="link" data-cancel="exec" data-t="cancel"></button><button type="button" class="primary small-button" data-save="exec" data-t="secSave"></button></div>
+          </div>
+        </div>
+
+        <div class="cred" data-cred="admin">
+          <div class="cred-row">
+            <div><b data-t="secAdminTitle"></b><small data-t="secAdminSub"></small></div>
+            <button type="button" class="secondary small-button" data-change="admin" data-t="secChange"></button>
+          </div>
+          <div class="cred-edit" hidden>
+            <input id="set-admin-pw" type="password" autocomplete="new-password" data-ph="secNewPw">
+            <input id="set-admin-pw2" type="password" autocomplete="new-password" data-ph="secRepeat">
+            <div class="cred-actions"><button type="button" class="link" data-cancel="admin" data-t="cancel"></button><button type="button" class="primary small-button" data-save="admin" data-t="secSave"></button></div>
+          </div>
+        </div>
+
+        <div class="cred" data-cred="door">
+          <div class="cred-row">
+            <div><b><span data-t="secDoorTitle"></span> <span class="badge b-mute" data-t="secOptional"></span></b><small data-t="secDoorSub"></small><small id="set-door-note"></small></div>
+            <span class="cred-buttons">
+              <button type="button" id="set-door-clear" class="link danger" data-t="secClear" hidden></button>
+              <button type="button" class="secondary small-button" data-change="door" data-t="secChange"></button>
+            </span>
+          </div>
+          <div class="cred-edit" hidden>
+            <input id="set-door-pw" type="password" autocomplete="new-password" data-ph="secNewPw">
+            <div class="cred-actions"><button type="button" class="link" data-cancel="door" data-t="cancel"></button><button type="button" class="primary small-button" data-save="door" data-t="secSave"></button></div>
+          </div>
+        </div>
+
+        <div class="cred">
+          <div class="cred-row">
+            <div><b data-t="secLockTitle"></b><small data-t="secLockSub"></small></div>
+            <input type="checkbox" class="toggle" checked disabled aria-label="Lock out after 30 failed sign-ins (always on)">
+          </div>
+        </div>
+
         <p class="muted small" data-t="setPwHint"></p>
         <p id="set-password-result" class="muted small"></p>
-        <button type="submit" id="set-password-save" class="primary" data-t="setPwSave"></button>
+        <button type="submit" id="set-password-save" class="visually-hidden" tabindex="-1" aria-hidden="true"></button>
       </form>
 
       <div class="card editor" id="set-emails-card" data-pane="emails">
@@ -524,6 +561,17 @@
     </main>
     </div>
   </div>
+
+  <!-- Everyone checked in (help desk) -->
+  <dialog id="all-checkins-dialog" class="edit-dialog wide">
+    <div class="editor">
+      <h2 id="all-checkins-title"></h2>
+      <p id="all-checkins-status" class="muted small" aria-live="polite"></p>
+      <ul id="all-checkins-list" class="results"></ul>
+      <button id="all-checkins-more" class="secondary" type="button" data-t="loadMore" hidden></button>
+      <div class="button-row single"><button type="button" id="all-checkins-close" class="secondary" data-t="close"></button></div>
+    </div>
+  </dialog>
 
   <!-- Admin mode -->
   <dialog id="admin-dialog" class="edit-dialog">
@@ -649,7 +697,7 @@
   </dialog>
 
   <script src="config.js?v=0.3.7"></script>
-  <script src="strings.js?v=0.9.0"></script>
+  <script src="strings.js?v=0.9.3"></script>
   <script src="mock.js?v=0.3.7"></script>
   <script src="app.js?v=0.9.0"></script>
   <script src="events.js?v=0.8.2"></script>
@@ -657,12 +705,12 @@
   <script src="edit.js?v=0.3.7"></script>
   <script src="finance.js?v=0.5.0"></script>
   <script src="activity.js?v=0.5.0"></script>
-  <script src="settings.js?v=0.9.0"></script>
+  <script src="settings.js?v=0.9.1"></script>
   <script src="emails.js?v=0.3.7"></script>
   <script src="mailall.js?v=0.3.7"></script>
   <script src="attendees.js?v=0.6.0"></script>
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
-  <script src="door.js?v=0.9.0"></script>
+  <script src="door.js?v=0.9.3"></script>
   <script src="overview.js?v=0.8.1"></script>
   <script src="shell.js?v=0.9.0"></script>
 </body>

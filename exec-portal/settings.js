@@ -58,22 +58,50 @@ $("set-membership-form").addEventListener("submit", (e) => {
   saveSettings({ membershipSheet: $("set-sheet").value, membershipTab: $("set-tab").value }, "set-membership-result", $("set-membership-save"));
 });
 
-$("set-password-form").addEventListener("submit", async (e) => {
-  e.preventDefault();
+// ---- Security: each password is a row; Change opens its boxes right there ----
+
+const CRED_INPUTS = { exec: ["set-exec-pw", "set-exec-pw2"], admin: ["set-admin-pw", "set-admin-pw2"], door: ["set-door-pw"] };
+
+function closeCredEditors() {
+  document.querySelectorAll("#set-password-form .cred-edit").forEach((e) => { e.hidden = true; });
+  Object.values(CRED_INPUTS).flat().forEach((id) => { $(id).value = ""; });
+  $("set-password-result").textContent = "";
+}
+
+function openCredEditor(kind) {
+  closeCredEditors();
+  const box = document.querySelector(`#set-password-form [data-cred="${kind}"] .cred-edit`);
+  box.hidden = false;
+  box.querySelectorAll("input").forEach((el) => { el.placeholder = T[el.dataset.ph] || ""; });
+  $(CRED_INPUTS[kind][0]).focus();
+}
+
+async function saveCredential(kind) {
   const result = $("set-password-result");
-  const fields = {};
-  const pair = (a, b, key) => {
-    if (!$(a).value && !$(b).value) return true;
-    if ($(a).value !== $(b).value) { result.className = "error small"; result.textContent = T.setPwMismatch; return false; }
-    fields[key] = $(a).value;
-    return true;
-  };
-  if (!pair("set-exec-pw", "set-exec-pw2", "execPassword") || !pair("set-admin-pw", "set-admin-pw2", "adminPassword")) return;
-  if ($("set-door-pw").value) fields.doorPassword = $("set-door-pw").value;
-  if (!Object.keys(fields).length) { result.className = "muted small"; result.textContent = T.setNothing; return; }
-  if ((fields.execPassword || fields.adminPassword) && !confirm(T.setPwConfirm)) return;
-  const ok = await saveSettings(fields, "set-password-result", $("set-password-save"));
-  if (ok) { ["set-exec-pw", "set-exec-pw2", "set-admin-pw", "set-admin-pw2", "set-door-pw"].forEach((id) => { $(id).value = ""; }); openSettingsTab(); }
+  const [first, again] = CRED_INPUTS[kind];
+  const fail = (text) => { result.className = "error small"; result.textContent = text; };
+  if (!$(first).value) return fail(T.secNeedPw);
+  if (again && $(first).value !== $(again).value) return fail(T.setPwMismatch);
+  const fields = { [kind === "exec" ? "execPassword" : kind === "admin" ? "adminPassword" : "doorPassword"]: $(first).value };
+  if (kind !== "door" && !confirm(T.setPwConfirm)) return;
+  const button = document.querySelector(`#set-password-form [data-save="${kind}"]`);
+  const ok = await saveSettings(fields, "set-password-result", button);
+  if (ok) { const msg = $("set-password-result").textContent; await openSettingsTab(); closeCredEditors(); $("set-password-result").className = "good-text small"; $("set-password-result").textContent = msg; }
+}
+
+$("set-password-form").addEventListener("click", (e) => {
+  const change = e.target.closest("[data-change]");
+  if (change) return openCredEditor(change.dataset.change);
+  const cancel = e.target.closest("[data-cancel]");
+  if (cancel) return closeCredEditors();
+  const save = e.target.closest("[data-save]");
+  if (save) saveCredential(save.dataset.save);
+});
+// Enter inside a box saves that row
+$("set-password-form").addEventListener("submit", (e) => {
+  e.preventDefault();
+  const open = document.querySelector("#set-password-form .cred-edit:not([hidden])");
+  if (open) saveCredential(open.closest(".cred").dataset.cred);
 });
 
 $("set-door-clear").addEventListener("click", async () => {
