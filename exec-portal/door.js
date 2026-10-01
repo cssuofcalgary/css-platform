@@ -45,39 +45,79 @@ async function loadDoor(quiet) {
   renderDoor();
 }
 
+/** Writes text only when it changed, so a background refresh doesn't touch the page for nothing. */
+function setText(el, text) { if (el.textContent !== text) el.textContent = text; }
+
+/**
+ * Keeps a list in step with `rows` ({ key, html }) without wiping it: nothing changed = no DOM writes,
+ * a new key = a new row slides in at its place, a gone key = its row is removed, changed content = just that row is swapped.
+ */
+function syncList(ul, rows, emptyHtml) {
+  if (!rows.length) {
+    if (ul.dataset.empty !== "1") { ul.innerHTML = emptyHtml; ul.dataset.empty = "1"; ul.dataset.ready = "1"; }
+    return;
+  }
+  if (ul.dataset.empty === "1") { ul.innerHTML = ""; ul.dataset.empty = ""; }
+  const animate = ul.dataset.ready === "1";   // the very first fill appears at once; later arrivals slide in
+  const existing = new Map();
+  Array.from(ul.children).forEach((li) => existing.set(li.dataset.key, li));
+  const wanted = new Set(rows.map((r) => r.key));
+  existing.forEach((li, key) => { if (!wanted.has(key)) li.remove(); });
+  rows.forEach((row, i) => {
+    let li = existing.get(row.key);
+    if (!li || li._html !== row.html) {
+      const t = document.createElement("template");
+      t.innerHTML = row.html.trim();
+      const made = t.content.firstElementChild;
+      made.dataset.key = row.key;
+      made._html = row.html;
+      if (!li && animate) {
+        made.classList.add("new-scan");
+        made.addEventListener("animationend", () => made.classList.remove("new-scan"), { once: true });
+      }
+      if (li) li.replaceWith(made);
+      li = made;
+    }
+    if (ul.children[i] !== li) ul.insertBefore(li, ul.children[i] || null);
+  });
+  if (ul.dataset.ready !== "1") ul.dataset.ready = "1";
+}
+
 function renderDoor() {
   const d = doorState.data;
-  $("live-inside").textContent = d.counts.checkedIn;
-  $("live-total").textContent = d.counts.paid;
-  $("live-sub").textContent = d.counts.awaiting ? T.liveNotPaid(d.counts.awaiting) : "";
-  $("entry-toggle").textContent = SCANNER_MODE ? (d.event.entryOpen ? T.entryOpenPlain : T.entryClosedPlain)
-    : d.event.entryOpen ? T.entryOpen : T.entryClosed;
-  $("door-event-name").textContent = T.scanningInto(d.event.name);
+  setText($("live-inside"), String(d.counts.checkedIn));
+  setText($("live-total"), String(d.counts.paid));
+  setText($("live-sub"), d.counts.awaiting ? T.liveNotPaid(d.counts.awaiting) : "");
+  setText($("entry-toggle"), SCANNER_MODE ? (d.event.entryOpen ? T.entryOpenPlain : T.entryClosedPlain)
+    : d.event.entryOpen ? T.entryOpen : T.entryClosed);
+  setText($("door-event-name"), T.scanningInto(d.event.name));
   $("entry-toggle").classList.toggle("on", !!d.event.entryOpen);
-  $("entry-toggle").setAttribute("aria-pressed", d.event.entryOpen ? "true" : "false");
+  const pressed = d.event.entryOpen ? "true" : "false";
+  if ($("entry-toggle").getAttribute("aria-pressed") !== pressed) $("entry-toggle").setAttribute("aria-pressed", pressed);
   $("entry-card").classList.toggle("closed", !d.event.entryOpen);
   document.body.classList.toggle("entry-closed", !d.event.entryOpen);
   $("door-nav-live").hidden = !d.event.entryOpen;
-  $("door-counts").textContent = T.doorCounts(d.counts.checkedIn, d.counts.paid, d.counts.awaiting);
+  setText($("door-counts"), T.doorCounts(d.counts.checkedIn, d.counts.paid, d.counts.awaiting));
 
   // The server sends only the small lists (not paid / needs checking / latest check-ins), plus the real totals.
+  const nobody = `<li class="muted small">${T.nobody}</li>`;
   const unpaid = d.tickets.filter((t) => t.status === "awaiting");
   const flagged = d.tickets.filter((t) => t.status === "paid" && t.flag && !t.checkedInAt);
-  $("unpaid-title").textContent = T.unpaidTitle(d.counts.awaiting);
-  $("flagged-title").textContent = T.flaggedTitle(d.counts.flagged !== undefined ? d.counts.flagged : flagged.length);
-  $("helpdesk-unpaid").innerHTML = unpaid.length ? unpaid.map((t) => personRow(t, true)).join("") : `<li class="muted small">${T.nobody}</li>`;
-  $("helpdesk-flagged").innerHTML = flagged.length ? flagged.map((t) => personRow(t, false)).join("") : `<li class="muted small">${T.nobody}</li>`;
+  setText($("unpaid-title"), T.unpaidTitle(d.counts.awaiting));
+  setText($("flagged-title"), T.flaggedTitle(d.counts.flagged !== undefined ? d.counts.flagged : flagged.length));
+  syncList($("helpdesk-unpaid"), unpaid.map((t) => ({ key: t.id, html: personRow(t, true) })), nobody);
+  syncList($("helpdesk-flagged"), flagged.map((t) => ({ key: t.id, html: personRow(t, false) })), nobody);
 
   const recent = d.tickets.filter((t) => t.checkedInAt).sort((a, b) => b.checkedInAt.localeCompare(a.checkedInAt)).slice(0, 10);
-  $("recent-title").textContent = T.recentTitle(d.counts.checkedIn);
-  $("recent-list").innerHTML = recent.length ? recent.map((t) => `
+  setText($("recent-title"), T.recentTitle(d.counts.checkedIn));
+  syncList($("recent-list"), recent.map((t) => ({ key: t.id, html: `
     <li class="card door-person">
       <div>
         <div class="name"><strong>${escapeHtml(t.name)}</strong> · ${escapeHtml(t.ticketType)}</div>
         <div class="sub">${escapeHtml(shortTime(t.checkedInAt))}${t.checkedInBy ? " · " + escapeHtml(t.checkedInBy) : ""}</div>
       </div>
       <button class="link danger" data-undo="${t.id}">${T.undo}</button>
-    </li>`).join("") : `<li class="muted small">${T.nobody}</li>`;
+    </li>` })), nobody);
 }
 
 /** A person from the small lists or from the last typed search. */

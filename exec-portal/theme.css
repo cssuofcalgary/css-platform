@@ -473,3 +473,9 @@ body.scanner-mode .brand-text, body.scanner-mode #admin-gear { display: none; }
 body.scanner-mode .entry-card { padding: 8px 12px; margin-bottom: 8px; }
 body.scanner-mode .door-live-num { font-size: 26px; }
 body.scanner-mode .entry-toggle { height: auto; width: auto; padding: 4px 12px; }
+
+/* ---------- v0.8.6: new check-ins slide in; refreshes don't move anything ---------- */
+@keyframes scanSlideIn { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }
+.door-person { animation: none; }
+.door-person.new-scan { animation: scanSlideIn 0.3s ease-out; }
+.live-feed, #recent-list, #helpdesk-unpaid, #helpdesk-flagged { overflow-anchor: none; }
