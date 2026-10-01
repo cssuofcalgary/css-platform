@@ -25,7 +25,7 @@ function switchTab(name) {
   if (name === "door") openDoorTab();
   if (name === "activity") openActivityTab();
   if (name === "settings") openSettingsTab();
-  if (name === "members") $("search-input").focus();
+  if (name === "members") openMembersTab();
 }
 
 // ---- List -------------------------------------------------------------------

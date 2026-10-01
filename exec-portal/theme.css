@@ -525,3 +525,20 @@ body:not(.scanner-mode):not(.phone) .door-buttons { display: none; }
 .check-row { display: flex; align-items: center; gap: 10px; margin: 14px 0 2px; font-weight: 600; cursor: pointer; }
 .check-row input { width: 20px; height: 20px; accent-color: var(--accent, #c8202f); }
 #ma-cash[hidden] { display: none; }
+
+/* Members: Pending list */
+.mem-views { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 4px 0 14px; }
+.chip-count:not(:empty) { margin-left: 4px; background: var(--accent); color: #fff; border-radius: 99px; padding: 0 7px; font-size: 11px; line-height: 17px; display: inline-block; }
+.pending-item { list-style: none; transition: opacity .2s, transform .2s; }
+.pending-item.leaving { opacity: 0; transform: translateX(24px); }
+.pending-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 18px; }
+.pending-card .m-top { display: flex; align-items: center; gap: 12px; }
+.pending-card .m-id { display: grid; min-width: 0; margin-right: auto; text-align: left; }
+.pending-card .name { font-size: 15px; font-weight: 600; line-height: 1.2; }
+.pending-card .sub { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+.pending-card .kv { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-top: 14px; padding-top: 12px; border-top: 1px dashed var(--border-2); text-align: left; }
+.pending-card .kv i { display: block; font-style: normal; font-size: 10.5px; letter-spacing: .5px; text-transform: uppercase; color: var(--muted); }
+.pending-card .kv b { display: block; font-weight: 500; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pending-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
+#pending-list { display: grid; gap: 10px; padding: 0; margin: 0 0 12px; }
+@media (max-width: 560px) { .pending-card .kv { grid-template-columns: 1fr 1fr; } }

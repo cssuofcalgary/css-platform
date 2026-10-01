@@ -51,7 +51,8 @@ async function openOverview() {
   const doorEvents = live.filter((e) => e.entryOpen).slice(0, 2);
   const [pays, doors] = await Promise.all([
     Promise.all(payEvents.map((e) => api("listOrders", { eventId: e.id, filter: "awaiting", limit: 1 }))),
-    Promise.all(doorEvents.map((e) => api("doorList", { eventId: e.id })))
+    Promise.all(doorEvents.map((e) => api("doorList", { eventId: e.id }))),
+    loadPending(false)   // memberships waiting on a payment (also sets the sidebar count); its result is read from memState
   ]);
   if (mine !== ovState.counter) return;
   ovState.loadedAt = Date.now();
@@ -108,6 +109,7 @@ function renderOverviewAttention(payData, doorData) {
     else if (data.counts.awaiting > 0) items.push(attentionItem("warn", "clock", `${event.name}: ${T.ovAwaiting(data.counts.awaiting)}`, T.ovAwaitingNote(dollars(data.money.awaiting)), { tab: "payments", eventId: event.id }));
     if (data.unsentEmails > 0) items.push(attentionItem("info", "alert", `${event.name}: ${T.ovUnsent(data.unsentEmails)}`, T.ovUnsentNote, { tab: "payments", eventId: event.id }));
   });
+  if (memState.total > 0) items.push(attentionItem("warn", "clock", T.ovMembersWaiting(memState.total), T.ovMembersWaitingNote, { tab: "members" }));
   doorData.forEach(({ event, data }) => {
     items.push(attentionItem("ok", "scan", T.ovDoorOpen(event.name), data ? T.ovDoorNote(data.counts.checkedIn, data.counts.paid) : "", { tab: "door", eventId: event.id }));
   });

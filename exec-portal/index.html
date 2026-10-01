@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Fraunces:opsz,wght@9..144,500;9..144,600&family=JetBrains+Mono:wght@400;500&display=swap">
   <link rel="stylesheet" href="styles.css?v=0.5.1">
-  <link rel="stylesheet" href="theme.css?v=0.9.8">
+  <link rel="stylesheet" href="theme.css?v=0.9.9">
 </head>
 <body>
   <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
@@ -61,7 +61,7 @@
       </div>
       <nav class="tabs" aria-label="Main">
         <button class="tab active" data-tab="overview"><svg><use href="#i-home"/></svg><span data-t="tabOverview"></span></button>
-        <button class="tab" data-tab="members"><svg><use href="#i-users"/></svg><span data-t="tabMembers"></span></button>
+        <button class="tab" data-tab="members"><svg><use href="#i-users"/></svg><span data-t="tabMembers"></span><span id="mem-nav-count" class="nav-pill" hidden></span></button>
         <button class="tab" data-tab="events"><svg><use href="#i-cal"/></svg><span data-t="tabEvents"></span></button>
         <button class="tab" data-tab="payments"><svg><use href="#i-card"/></svg><span data-t="tabPayments"></span><span id="pay-nav-count" class="nav-pill" hidden></span></button>
         <button class="tab" data-tab="door"><svg><use href="#i-scan"/></svg><span data-t="tabDoor"></span><span id="door-nav-live" class="nav-live" hidden></span></button>
@@ -104,12 +104,27 @@
      <div id="tab-members" hidden>
       <div class="head"><div class="grow"><h1 data-t="tabMembers"></h1><p class="sub" data-t="membersSub"></p></div>
         <button id="add-member-button" class="primary small-button" type="button" data-t="addMember"></button></div>
+      <div id="mem-list-area">
+      <div class="mem-views">
+        <div class="chips" id="mem-filters">
+          <button class="chip" type="button" data-mem-view="pending"><span data-t="pendingTab"></span> <span id="mem-pending-count" class="chip-count"></span></button>
+          <button class="chip active" type="button" data-mem-view="search" data-t="searchTab"></button>
+        </div>
+        <button id="pending-refresh" class="link small" type="button" data-t="pendingRefresh"></button>
+      </div>
+      <section id="pending-view" hidden>
+        <p id="pending-status" class="muted small" aria-live="polite"></p>
+        <ul id="pending-list" class="results"></ul>
+        <button id="pending-more" class="secondary" type="button" hidden></button>
+        <p class="muted small" data-t="pendingNote"></p>
+      </section>
       <section id="search-view">
         <label for="search-input" class="visually-hidden" data-t="searchLabel"></label>
         <input id="search-input" class="search" type="search" autocomplete="off" enterkeyhint="search">
         <p id="search-status" class="muted small" aria-live="polite"></p>
         <ul id="results" class="results"></ul>
       </section>
+      </div>
 
       <section id="member-view" hidden>
         <button id="back-button" class="link" data-t="back"></button>
@@ -736,10 +751,10 @@
   </dialog>
 
   <script src="config.js?v=0.3.7"></script>
-  <script src="strings.js?v=0.9.8"></script>
+  <script src="strings.js?v=0.9.9"></script>
   <script src="mock.js?v=0.3.7"></script>
-  <script src="app.js?v=0.9.2"></script>
-  <script src="events.js?v=0.8.2"></script>
+  <script src="app.js?v=0.9.3"></script>
+  <script src="events.js?v=0.9.9"></script>
   <script src="payments.js?v=0.5.0"></script>
   <script src="edit.js?v=0.9.6"></script>
   <script src="finance.js?v=0.5.0"></script>
@@ -750,7 +765,8 @@
   <script src="attendees.js?v=0.6.0"></script>
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
   <script src="door.js?v=0.9.3"></script>
-  <script src="overview.js?v=0.9.5"></script>
+  <script src="members.js?v=0.9.9"></script>
+  <script src="overview.js?v=0.9.9"></script>
   <script src="shell.js?v=0.9.0"></script>
 </body>
 </html>

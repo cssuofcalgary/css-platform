@@ -185,3 +185,18 @@ function sendMemberWelcomeEmail_(member) {
     return false;
   }
 }
+
+// ---- Exec: who is waiting on a payment --------------------------------------------------
+
+const PENDING_PAGE_DEFAULT = 20;
+
+/** Sign-ups waiting on a payment (online sign-ups and unpaid "Add member"), newest first, a page at a time. */
+function listPendingMembers_(offset, limit) {
+  let all = loadMembers_();
+  if (all.length && all[0].row === undefined) { forgetMembers_(); all = loadMembers_(); }   // a copy cached before this feature existed has no row numbers
+  const waiting = all.filter(function (m) { return m.memberId && !m.paid && /^awaiting/i.test(m.status || ""); })
+    .sort(function (a, b) { return b.row - a.row; });   // new rows go at the bottom of the sheet, so a higher row is newer
+  const from = Math.max(0, parseInt(offset, 10) || 0);
+  const size = Math.min(100, Math.max(1, parseInt(limit, 10) || PENDING_PAGE_DEFAULT));
+  return { ok: true, members: waiting.slice(from, from + size), total: waiting.length, hasMore: from + size < waiting.length };
+}

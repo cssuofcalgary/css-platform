@@ -222,7 +222,7 @@ function onResultClick(event) {
 // ---- Member page ------------------------------------------------------------
 
 function showMember(m) {
-  $("search-view").hidden = true;
+  $("mem-list-area").hidden = true;
   $("member-view").hidden = false;
   $("member-name").textContent = m.name;
   $("member-badges").innerHTML = paidPill(m) +
@@ -234,7 +234,7 @@ function showMember(m) {
     [T.fieldEmail, m.email],
     [T.fieldSignedUp, formatDate(m.signedUp)],
     [T.fieldPayMethod, m.payment.method],
-    [T.fieldPayWhen, formatDate(m.payment.when)],
+    [T.fieldPayWhen, formatDay(m.payment.when)],
     [T.fieldPayWhere, m.payment.where],
     [T.fieldPayWho, m.payment.who]
   ].filter(([, value]) => value);
@@ -293,6 +293,7 @@ async function onAddMemberSubmit(event) {
   }
   $("member-add-dialog").close();
   showToast(T.maAdded(member.name.trim(), reply.emailed, reply.paid));
+  if (!reply.paid) loadPending(false);   // an unpaid add shows up under Pending
   const fresh = await api("getMember", { memberId: reply.memberId });   // open the new member's page
   if (fresh.ok) showMember(fresh.member);
 }
@@ -314,13 +315,13 @@ async function markMemberPaid() {
     return;
   }
   Object.assign(m, reply.member || {}, { paid: true });   // the open page and the search results show the new state
+  memberPaidHook(m);   // and Pending drops them
   showMember(m);
   showToast(reply.already ? T.markedAlready : reply.emailed ? T.markedPaid(m.name) : T.markedPaidNoEmail(m.name));
 }
 
 function showSearch() {
-  $("member-view").hidden = true;
-  $("search-view").hidden = false;
+  showMemberList();   // back to the list the exec came from: Pending or Search
 }
 
 // ---- Helpers ----------------------------------------------------------------
@@ -328,6 +329,15 @@ function showSearch() {
 function paidPill(m) {
   const waiting = !m.paid && /^awaiting/i.test(m.status || "");   // "Awaiting Cash" / "Awaiting E-transfer" from the website sign-up
   return `<span class="pill ${m.paid ? "good" : "warn"}">${escapeHtml(m.paid ? T.paid : waiting ? m.status : T.unpaid)}</span>`;
+}
+
+/** A date without a clock time (the day someone paid). Sheets hands dates back as midnight timestamps. */
+function formatDay(value) {
+  if (!value) return "";
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return new Date(value + "T12:00:00").toLocaleDateString("en-CA", { month: "short", day: "numeric", year: "numeric" });
+  const date = new Date(value);
+  if (isNaN(date) || !/^\d{4}-\d{2}-\d{2}T/.test(value)) return value;
+  return date.toLocaleDateString("en-CA", { month: "short", day: "numeric", year: "numeric", timeZone: "America/Edmonton" });
 }
 
 function formatDate(value) {

@@ -93,6 +93,10 @@ function route_(req) {
       return { ok: true, name: session.name, results: matches.slice(0, 25), total: matches.length };
     }
 
+    case "listPendingMembers":
+      requireSession_(req.token);
+      return listPendingMembers_(req.offset, req.limit);
+
     case "addMember":
       return addMember_(requireSession_(req.token), req.member, !!req.paidNow);
 
