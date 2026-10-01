@@ -54,6 +54,13 @@ $("admin-gear").addEventListener("click", openAdminDialog);
 $("admin-cancel").addEventListener("click", () => $("admin-dialog").close());
 $("admin-form").addEventListener("submit", onAdminSubmit);
 
+// ---- Event pickers: only Door and Payments have one. Picking an event in either follows into the other. ----
+["pay-event", "door-event"].forEach((id) => $(id).addEventListener("change", () => {
+  globalEventId = $(id).value;
+  payState.eventId = globalEventId;
+  doorState.eventId = globalEventId;
+}));
+
 // ---- Event editor: section list that scrolls to each section and follows you down the page ----
 $("ed-steps").addEventListener("click", (ev) => {
   const step = ev.target.closest("[data-step]");

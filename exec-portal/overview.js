@@ -26,6 +26,7 @@ async function openOverview() {
   const mine = ++ovState.counter;
   setGreeting();
   $("ov-activity-wrap").hidden = state.role !== "admin";
+  document.querySelector(".ov-grid").classList.toggle("single", state.role !== "admin");   // no Recent activity for execs: Upcoming events takes the full width
   const first = !ovState.loadedAt;
   if (first) {
     $("ov-events").innerHTML = `<div class="state"><span class="spin"></span>${escapeHtml(T.ovLoading)}</div>`;
@@ -156,19 +157,6 @@ document.addEventListener("click", (e) => {
 document.addEventListener("keydown", (e) => {
   if ((e.key === "Enter" || e.key === " ") && e.target.matches && e.target.matches("[data-open-event]")) { e.preventDefault(); e.target.click(); }
 });
-// "Add paid registration" on the Overview: open Payments, then the dialog once that tab has its order list.
-$("ov-add").addEventListener("click", () => {
-  goToTab("payments");
-  let waited = 0;
-  const timer = setInterval(() => {
-    waited += 150;
-    if ((payState.data && payState.data.event) || waited > 8000) {
-      clearInterval(timer);
-      if (payState.data && payState.data.event) $("add-order-button").click();
-    }
-  }, 150);
-});
-
 // Light / dark switch: remembers the choice on this device; without a choice it follows the device setting.
 $("theme-toggle").addEventListener("click", () => {
   const root = document.documentElement;
