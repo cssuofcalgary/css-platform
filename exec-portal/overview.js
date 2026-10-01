@@ -1,6 +1,7 @@
 // CSS Exec Portal — Overview tab: what needs attention, upcoming events, recent activity.
 // Read-only. It only uses calls the other tabs already make (listEvents, listOrders, doorList, activityLog).
 
+const OV_ACTIVITY_MAX = 10;
 const ovState = { counter: 0, loadedAt: 0 };
 
 /** Dollars for the totals (money() says "Free" for zero, which reads wrong here). */
@@ -125,10 +126,12 @@ function renderNavBadges(payData, doorData) {
 async function loadOverviewActivity(mine) {
   const box = $("ov-activity");
   if (!box.innerHTML) box.innerHTML = `<div class="state"><span class="spin"></span>${escapeHtml(T.ovLoading)}</div>`;
-  const reply = await api("activityLog", { filters: { eventId: "", who: "", group: "all", query: "", limit: 6 } });
+  const reply = await api("activityLog", { filters: { eventId: "", who: "", group: "all", query: "", limit: 50 } });
   if (mine !== ovState.counter) return;
   if (!reply.ok) { box.innerHTML = ovMessage("error", T.ovError, "", false); return; }
-  box.innerHTML = reply.entries.length ? reply.entries.map((e) => {
+  // The server only offers 50 / 100 / 200, so ask for 50 and show the newest 10 here.
+  const recent = reply.entries.slice(0, OV_ACTIVITY_MAX);
+  box.innerHTML = recent.length ? recent.map((e) => {
     const when = new Date(e.time);
     const clock = isNaN(when) ? escapeHtml(e.time) : when.toLocaleString("en-CA", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
     return `<div class="feed-i"><span class="dot-i"></span><div><p><strong>${escapeHtml(e.who)}</strong> ${escapeHtml(e.summary)}</p></div><time>${clock}</time></div>`;
