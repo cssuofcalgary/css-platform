@@ -244,6 +244,65 @@ function restoreEvent_(session, eventId) {
   });
 }
 
+// ---- Deleting an event for good (admin) ---------------------------------------------------------------
+
+/**
+ * Removes an event and ALL its tickets and orders, from the live sheet and from the archive. Cannot be undone
+ * (the backups made earlier still have a copy). The admin must type the event's exact name. If the event has
+ * paid orders (real money was collected), `force` must also be true. The Log keeps one line saying it happened.
+ */
+function deleteEvent_(session, eventId, confirmName, force) {
+  const event = findEvent_(function (e) { return e.id === eventId; });
+  if (!event) throw new ApiError_("NOT_FOUND", "Event not found.");
+  if (String(confirmName || "").trim() !== String(event.name).trim()) throw new ApiError_("BAD_REQUEST", "The name you typed doesn't match the event's name. Nothing was deleted.");
+
+  return withIntakeLock_(function () {
+    return withLock_(function () {
+      const orders = eventRows_("Orders", event);
+      const tickets = eventRows_("Tickets", event);
+      const paid = orders.filter(function (o) { return o.status === "paid" && Number(o.total) > 0; }).length;
+      if (paid && !force) throw new ApiError_("NEEDS_FORCE", "This event has " + paid + " paid order" + (paid === 1 ? "" : "s") + ". Deleting it removes the record of that money. Confirm again to go ahead.");
+
+      // stop the public page and the door first, then remove the rows
+      updateRow_("Events", eventId, { status: "archived", entryOpen: false, updatedBy: session.name, updatedAt: new Date().toISOString() });
+      if (event.archivedAt) {
+        const book = archiveBook_(event.archiveYear, false);
+        if (book) {
+          ARCHIVE_TABLES.forEach(function (name) {
+            const sheet = book.getSheetByName(name);
+            if (!sheet) return;
+            const tab = { sheet: sheet, header: headerOf_(sheet) };
+            deleteTabRows_(tab, idSet_(tabRows_(tab).filter(function (r) { return r.eventId === eventId; })));
+          });
+        }
+      } else {
+        ARCHIVE_TABLES.forEach(function (name) { delete DB_.sheets[name]; dropTableCache_(name); });
+        ARCHIVE_TABLES.forEach(function (name) {
+          const live = readRows_(name).filter(function (r) { return r.eventId === eventId; });
+          deleteTabRows_({ sheet: table_(name), header: headerFor_(name) }, idSet_(live));
+        });
+      }
+      // a half-archived leftover in the archive (crash earlier) goes too
+      const year = event.archiveYear || archiveYear_(event.date);
+      const leftover = archiveBook_(year, false);
+      if (leftover && !event.archivedAt) {
+        ARCHIVE_TABLES.forEach(function (name) {
+          const sheet = leftover.getSheetByName(name);
+          if (!sheet) return;
+          const tab = { sheet: sheet, header: headerOf_(sheet) };
+          deleteTabRows_(tab, idSet_(tabRows_(tab).filter(function (r) { return r.eventId === eventId; })));
+        });
+      }
+      deleteTabRows_({ sheet: table_("Events"), header: headerFor_("Events") }, { [eventId]: true });
+      forgetLiveRows_();
+      dropTableCache_("Events");
+      ARCH_.rows = {};
+      log_(session.name, "event.delete", eventId, { name: event.name, date: event.date, tickets: tickets.length, orders: orders.length, paidOrders: paid });
+      return { ok: true, deleted: true, tickets: tickets.length, orders: orders.length };
+    });
+  });
+}
+
 // ---- The nightly job ---------------------------------------------------------------------------------
 
 /**

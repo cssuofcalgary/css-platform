@@ -92,6 +92,7 @@ function renderEvents() {
         ${e.status !== "draft" && e.status !== "archived" ? `<a class="link" target="_blank" rel="noopener" href="${publicLink(e)}">${T.viewPublicPage}</a>` : ""}
         ${state.role === "admin" && e.status !== "archived" ? `<button class="link danger" data-action="archive" data-id="${e.id}">${T.archive}</button>` : ""}
         ${state.role === "admin" && e.status === "archived" ? `<button class="link" data-action="restore" data-id="${e.id}">${T.restore}</button>` : ""}
+        ${state.role === "admin" ? `<button class="link danger" data-action="delete" data-id="${e.id}">${T.deleteEvent}</button>` : ""}
       </div>
     </li>`).join("");
 }
@@ -104,6 +105,7 @@ async function onEventsListClick(event) {
   if (button.dataset.action === "edit") return openEditor(target);
   if (button.dataset.action === "attendees") return openAttendees(target);
   if (button.dataset.action === "duplicate") return openEditor(copyOfEvent(target), false, T.duplicateTitle(target.name));
+  if (button.dataset.action === "delete") return deleteEventForGood(target, button);
 
   const status = { publish: "published", close: "closed", reopen: "published", archive: "archived", restore: "closed" }[button.dataset.action];
   if (status === "published" && target.status === "draft" && !confirm(T.confirmPublish)) return;
@@ -121,6 +123,25 @@ async function onEventsListClick(event) {
   if (status === "archived" || restoring) { eventsState.loaded = false; await loadEvents(); return; }   // counts and dates changed
   target.status = status;
   renderEvents();
+}
+
+/** Delete an event and everything on it, for good. The admin types the event's name; real payments need a second yes. */
+async function deleteEventForGood(target, button) {
+  const typed = prompt(T.deletePrompt(target.name));
+  if (typed === null) return;
+  button.disabled = true;
+  let reply = await api("deleteEvent", { eventId: target.id, confirmName: typed });
+  if (!reply.ok && reply.error === "NEEDS_FORCE") {
+    if (!confirm(`${reply.message}
+
+${T.deleteMoneyConfirm}`)) { button.disabled = false; return; }
+    reply = await api("deleteEvent", { eventId: target.id, confirmName: typed, force: true });
+  }
+  button.disabled = false;
+  if (!reply.ok) return handleEventError(reply, $("events-status"));
+  showToast(T.deletedDone(target.name, reply.tickets || 0, reply.orders || 0));
+  eventsState.loaded = false;
+  await loadEvents();
 }
 
 // ---- Editor -----------------------------------------------------------------

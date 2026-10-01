@@ -99,6 +99,9 @@ function route_(req) {
     case "saveEvent":
       return saveEvent_(requireSession_(req.token), req.event);
 
+    case "deleteEvent":
+      return deleteEvent_(requireAdmin_(req.token), req.eventId, req.confirmName, !!req.force);
+
     case "setEventStatus":
       return setEventStatus_(requireSession_(req.token), req.eventId, req.status);
 

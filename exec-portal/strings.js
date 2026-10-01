@@ -349,6 +349,14 @@ Its tickets and orders move out of the everyday sheet into this school year's ar
 
 This can take up to a minute for a big event.`,
     confirmRestore: (name) => `Restore "${name}"? Its tickets and orders move back into the everyday sheet and it shows as Closed.`,
+    deleteEvent: "Delete",
+    deletePrompt: (name) => `DELETE "${name}" FOR GOOD?
+
+This removes the event and every ticket and order on it. It cannot be undone. (To keep the history, use Archive instead.)
+
+Type the event's exact name to confirm:`,
+    deleteMoneyConfirm: "Delete it anyway? The record of that money will be gone (old backups in Drive still have a copy).",
+    deletedDone: (name, tickets, orders) => `Deleted "${name}" (${tickets} tickets, ${orders} orders).`,
     archiving: "Archiving…",
     restoring: "Restoring…",
     archivedBanner: (year) => `Archived (${year}). Read only: nothing here can be changed. Press Restore on the Events list to change it.`,

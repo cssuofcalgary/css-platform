@@ -14,7 +14,7 @@ const ACTIVITY_GROUPS = {
   door: ["checkin", "checkin.desk", "checkin.undo", "walkin", "entry.open", "entry.close", "entry.autoclose"],
   system: ["backup"],
   edits: ["ticket.edit"],
-  events: ["event.create", "event.update", "event.status", "image.upload", "event.email", "event.archive", "event.restore"],
+  events: ["event.create", "event.update", "event.status", "image.upload", "event.email", "event.archive", "event.restore", "event.delete"],
   settings: ["settings.save", "sessions.clear"]
 };
 
@@ -89,6 +89,7 @@ function activitySummary_(r, events) {
     case "event.update": return "edited the event " + (d.name || "");
     case "event.status": return "set " + (eventName || "an event") + " to " + d.status;
     case "event.email": return "emailed " + (d.sent || 0) + " " + (d.audience === "paid" ? "paid" : d.audience === "awaiting" ? "unpaid" : "registered") + " attendee" + (d.sent === 1 ? "" : "s") + (eventName ? " of " + eventName : "") + ": " + (d.subject || "");
+    case "event.delete": return "DELETED the event " + (d.name || "") + " (" + (d.tickets || 0) + " tickets, " + (d.orders || 0) + " orders" + (d.paidOrders ? ", " + d.paidOrders + " paid" : "") + ")";
     case "event.archive": return "archived " + (eventName || "an event") + ": moved " + (d.tickets || 0) + " tickets and " + (d.orders || 0) + " orders to the " + (d.year || "") + " archive";
     case "event.restore": return "restored " + (eventName || "an event") + " from the archive (" + (d.tickets || 0) + " tickets, " + (d.orders || 0) + " orders)";
     case "archive.done": return "archived old events: " + ((d.events || []).join(", "));
