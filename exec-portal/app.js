@@ -148,12 +148,14 @@ function showApp() {
   if (state.role === "door") $("full-portal-link").hidden = true;   // door volunteers only scan
   $("settings-tab-button").hidden = state.role !== "admin";
   $("activity-tab-button").hidden = state.role !== "admin";
+  $("admin-nav-label").hidden = state.role !== "admin";
+  $("who-avatar").textContent = state.name.trim().split(/s+/).map((p) => p[0]).join("").slice(0, 2).toUpperCase();
   showSearch();
-  // Phones are for the door: open straight to the Door tab.
+  // Phones are for the door: open straight to the Door tab. Everyone else lands on the Overview.
   // (The tab code loads after this file, so on first load wait until every script has run.)
-  if (!SCANNER_MODE && !isPhone()) return $("search-input").focus();
-  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", () => switchTab("door"));
-  else switchTab("door");
+  const landing = SCANNER_MODE || isPhone() ? "door" : "overview";
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", () => switchTab(landing));
+  else switchTab(landing);
 }
 
 /** A phone = small screen + touch. Tablets and laptops get the full portal. */

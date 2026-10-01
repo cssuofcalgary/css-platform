@@ -3,7 +3,7 @@
 For execs. No tech knowledge needed.
 
 ## Signing in
-1. Open the **Exec Portal**: https://cssuofcalgary.github.io/css-platform/exec-portal/ (bookmark it).
+1. Open the **Exec Portal**: https://exec.ucalgarycss.ca/ (bookmark it). It opens on the **Overview**: what needs attention, upcoming events and recent activity. The menu is on the left.
 2. Type the **exec password** (ask the President) and **your name**. Your name goes next to every change you make.
 3. You stay signed in for about 6 hours. **Sign out** on shared computers.
 
@@ -33,7 +33,7 @@ In the Events list, each event has:
 - **Duplicate:** starts a new event with the same prices, questions, capacity and picture. Pick the new date, check the details, save.
 - **Close registration:** the page stays up but says registration is closed. **Reopen** undoes it.
 - **Archive** *(admin password only)*: hides a finished or test event everywhere. Nothing is deleted. **Show archived events** → **Restore** brings it back.
-- **Public page ↗:** the link to share (Instagram, group chats). All upcoming events: https://cssuofcalgary.github.io/css-platform/public/
+- **Public page ↗:** the link to share (Instagram, group chats). All upcoming events: https://events.ucalgarycss.ca/
 
 ## What people see when they register
 1. They open the event's **public page** and tap **Register**.

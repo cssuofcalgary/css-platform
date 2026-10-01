@@ -5,9 +5,26 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex">
   <title>CSS Exec Portal</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Fraunces:opsz,wght@9..144,500;9..144,600&family=JetBrains+Mono:wght@400;500&display=swap">
   <link rel="stylesheet" href="styles.css?v=0.5.1">
+  <link rel="stylesheet" href="theme.css?v=0.7.0">
 </head>
 <body>
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+    <symbol id="i-home" viewBox="0 0 24 24"><path d="M3 11l9-8 9 8M5 10v10h5v-6h4v6h5V10"/></symbol>
+    <symbol id="i-users" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.6-3.6 3.2-5.5 6.5-5.5s5.9 1.9 6.5 5.5M16 4.8a3.5 3.5 0 010 6.4M18 14.8c2 .6 3.2 2.3 3.5 5.2"/></symbol>
+    <symbol id="i-cal" viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15.5" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/></symbol>
+    <symbol id="i-card" viewBox="0 0 24 24"><rect x="3" y="5.5" width="18" height="13" rx="2.5"/><path d="M3 10h18M7 15h4"/></symbol>
+    <symbol id="i-scan" viewBox="0 0 24 24"><path d="M4 8V5.5A1.5 1.5 0 015.5 4H8M16 4h2.5A1.5 1.5 0 0120 5.5V8M20 16v2.5a1.5 1.5 0 01-1.5 1.5H16M8 20H5.5A1.5 1.5 0 014 18.5V16M7 12h10"/></symbol>
+    <symbol id="i-pulse" viewBox="0 0 24 24"><path d="M3 12h4l2.5-7 5 14L17 12h4"/></symbol>
+    <symbol id="i-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></symbol>
+    <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></symbol>
+    <symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 4l9 16H3L12 4zM12 10v4M12 17.2v.1"/></symbol>
+    <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></symbol>
+    <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></symbol>
+  </defs></svg>
   <div id="demo-banner" class="demo-banner" hidden></div>
   <div id="toast" class="toast" role="status" hidden></div>
   <div id="connection-notice" class="connection-notice" role="status" hidden></div>
@@ -33,28 +50,55 @@
 
   <!-- Portal -->
   <div id="app-view" hidden>
-    <header class="topbar">
-      <div class="brand" id="brand" data-t="appTitle"></div>
-      <select id="global-event" class="global-event" aria-label="Event" hidden></select>
-      <div class="who">
-        <span class="muted" data-t="signedInAs"></span> <strong id="who-name"></strong>
-        <span id="admin-badge" class="pill good" data-t="roleAdmin" hidden></span>
-        <a id="full-portal-link" class="link" href="?full=1" data-t="fullPortal" hidden></a>
-        <button id="logout-button" class="link" data-t="signOut"></button>
+    <!-- Left sidebar: brand, navigation, who is signed in -->
+    <aside class="sidebar" id="sidebar">
+      <div class="brand-block">
+        <div class="mark" aria-hidden="true">CSS</div>
+        <div class="brand-text"><div class="brand" id="brand" data-t="appTitle"></div><span class="tagline">CONNECT ~ CULTURE ~ SOCIAL</span></div>
       </div>
+      <nav class="tabs" aria-label="Main">
+        <button class="tab active" data-tab="overview"><svg><use href="#i-home"/></svg><span data-t="tabOverview"></span></button>
+        <button class="tab" data-tab="members"><svg><use href="#i-users"/></svg><span data-t="tabMembers"></span></button>
+        <button class="tab" data-tab="events"><svg><use href="#i-cal"/></svg><span data-t="tabEvents"></span></button>
+        <button class="tab" data-tab="payments"><svg><use href="#i-card"/></svg><span data-t="tabPayments"></span><span id="pay-nav-count" class="nav-pill" hidden></span></button>
+        <button class="tab" data-tab="door"><svg><use href="#i-scan"/></svg><span data-t="tabDoor"></span><span id="door-nav-live" class="nav-live" hidden></span></button>
+        <div class="nav-label" id="admin-nav-label" hidden>Admin</div>
+        <button class="tab" id="activity-tab-button" data-tab="activity" hidden><svg><use href="#i-pulse"/></svg><span data-t="tabActivity"></span></button>
+        <button class="tab" id="settings-tab-button" data-tab="settings" hidden><svg><use href="#i-gear"/></svg><span data-t="tabSettings"></span></button>
+      </nav>
+      <div class="who">
+        <div class="avatar" id="who-avatar" aria-hidden="true"></div>
+        <div class="who-text">
+          <strong id="who-name"></strong>
+          <span class="who-role"><span class="muted" data-t="signedInAs"></span> <span id="admin-badge" class="pill good" data-t="roleAdmin" hidden></span></span>
+          <span class="who-links"><a id="full-portal-link" class="link" href="?full=1" data-t="fullPortal" hidden></a><button id="logout-button" class="link" data-t="signOut"></button></span>
+        </div>
+      </div>
+    </aside>
+
+    <div class="mainwrap">
+    <header class="topbar">
+      <button id="nav-burger" class="burger" type="button" aria-label="Menu"><svg><use href="#i-menu"/></svg></button>
+      <div class="crumb"><span class="crumb-root">CSS</span> / <b id="crumb"></b></div>
+      <select id="global-event" class="global-event" aria-label="Event" hidden></select>
     </header>
 
-    <nav class="tabs">
-      <button class="tab active" data-tab="members" data-t="tabMembers"></button>
-      <button class="tab" data-tab="events" data-t="tabEvents"></button>
-      <button class="tab" data-tab="payments" data-t="tabPayments"></button>
-      <button class="tab" data-tab="door" data-t="tabDoor"></button>
-      <button class="tab" id="activity-tab-button" data-tab="activity" data-t="tabActivity" hidden></button>
-      <button class="tab" id="settings-tab-button" data-tab="settings" data-t="tabSettings" hidden></button>
-    </nav>
-
     <main class="content">
-     <div id="tab-members">
+     <div id="tab-overview">
+      <div class="head">
+        <div class="grow"><div class="eyebrow" id="ov-date"></div><h1 id="ov-greeting"></h1><p class="sub" data-t="ovSub"></p></div>
+        <button id="ov-add" class="primary small-button" type="button" data-t="addOrder"></button>
+      </div>
+      <div id="ov-attention" class="attention"></div>
+      <div id="ov-tiles" class="stat-strip"></div>
+      <div class="ov-grid">
+        <section><div class="section-h"><h2 data-t="ovUpcoming"></h2><button class="link" type="button" data-goto="events" data-t="ovAllEvents"></button></div><div id="ov-events" class="card flush"></div></section>
+        <section id="ov-activity-wrap"><div class="section-h"><h2 data-t="ovRecent"></h2><button class="link" type="button" data-goto="activity" data-t="ovViewAll"></button></div><div id="ov-activity" class="card flush"></div></section>
+      </div>
+     </div>
+
+     <div id="tab-members" hidden>
+      <div class="head"><div class="grow"><h1 data-t="tabMembers"></h1><p class="sub" data-t="membersSub"></p></div></div>
       <section id="search-view">
         <label for="search-input" class="visually-hidden" data-t="searchLabel"></label>
         <input id="search-input" class="search" type="search" autocomplete="off" enterkeyhint="search">
@@ -75,8 +119,8 @@
 
      <div id="tab-events" hidden>
       <section id="events-list-view">
-        <div class="row-between">
-          <h2 class="section-title" data-t="eventsTitle"></h2>
+        <div class="head">
+          <div class="grow"><h1 data-t="eventsTitle"></h1><p class="sub" data-t="eventsSub"></p></div>
           <button id="new-event-button" class="primary small-button" data-t="newEvent"></button>
         </div>
         <p id="events-status" class="muted small" aria-live="polite"></p>
@@ -122,65 +166,84 @@
 
       <section id="event-editor-view" hidden>
         <button id="editor-back-button" class="link" data-t="backToEvents"></button>
-        <form id="event-form" class="card editor" novalidate>
-          <h2 id="editor-title"></h2>
-          <p id="editor-hint" class="muted small" hidden></p>
+        <form id="event-form" class="editor-form" novalidate>
+          <div class="head tight"><div class="grow"><h2 id="editor-title" class="page-title"></h2><p id="editor-hint" class="muted small" hidden></p></div></div>
 
-          <label for="ev-name" data-t="evName"></label>
-          <input id="ev-name" required maxlength="120">
-
-          <label data-t="evImage"></label>
-          <div class="image-picker">
-            <img id="ev-image-preview" alt="" hidden>
-            <input id="ev-image-file" type="file" accept="image/jpeg,image/png,image/webp">
-            <p id="ev-image-status" class="muted small"></p>
-          </div>
-
-          <div class="grid-3">
-            <div><label for="ev-date" data-t="evDate"></label><input id="ev-date" type="date" required></div>
-            <div><label for="ev-start" data-t="evStart"></label><input id="ev-start" type="time"></div>
-            <div><label for="ev-end" data-t="evEnd"></label><input id="ev-end" type="time"></div>
-          </div>
-
-          <label for="ev-location" data-t="evLocation"></label>
-          <input id="ev-location" maxlength="150">
-
-          <label for="ev-description" data-t="evDescription"></label>
-          <textarea id="ev-description" rows="6" maxlength="4000"></textarea>
-
-          <div class="grid-2">
-            <div><label for="ev-capacity" data-t="evCapacity"></label><input id="ev-capacity" type="number" min="0" inputmode="numeric"></div>
-            <div><label for="ev-capacity-rule" data-t="evCapacityRule"></label>
-              <select id="ev-capacity-rule">
-                <option value="paid" data-t="evCapacityPaid"></option>
-                <option value="all" data-t="evCapacityAll"></option>
-              </select>
+          <section class="card panel">
+            <header><h3 data-t="edBasics"></h3><p data-t="edBasicsHint"></p></header>
+            <div class="inner">
+              <div><label for="ev-name" data-t="evName"></label>
+              <input id="ev-name" required maxlength="120"></div>
+              <div><label data-t="evImage"></label>
+              <div class="image-picker">
+                <img id="ev-image-preview" alt="" hidden>
+                <input id="ev-image-file" type="file" accept="image/jpeg,image/png,image/webp">
+                <p id="ev-image-status" class="muted small"></p>
+              </div></div>
+              <div><label for="ev-description" data-t="evDescription"></label>
+              <textarea id="ev-description" rows="6" maxlength="4000"></textarea></div>
             </div>
-          </div>
+          </section>
 
-          <fieldset>
-            <legend data-t="evTickets"></legend>
-            <div id="ev-ticket-types"></div>
-            <button type="button" id="add-ticket-type" class="link" data-t="addTicketType"></button>
-          </fieldset>
+          <section class="card panel">
+            <header><h3 data-t="edSchedule"></h3><p data-t="edScheduleHint"></p></header>
+            <div class="inner">
+              <div class="grid-3">
+                <div><label for="ev-date" data-t="evDate"></label><input id="ev-date" type="date" required></div>
+                <div><label for="ev-start" data-t="evStart"></label><input id="ev-start" type="time"></div>
+                <div><label for="ev-end" data-t="evEnd"></label><input id="ev-end" type="time"></div>
+              </div>
+              <div><label for="ev-location" data-t="evLocation"></label>
+              <input id="ev-location" maxlength="150"></div>
+            </div>
+          </section>
 
-          <fieldset>
-            <legend data-t="evQuestions"></legend>
-            <p class="muted small" data-t="evQuestionsHint"></p>
-            <div id="ev-questions"></div>
-            <button type="button" id="add-question" class="link" data-t="addQuestion"></button>
-          </fieldset>
+          <section class="card panel">
+            <header><h3 data-t="edCapacity"></h3><p data-t="edCapacityHint"></p></header>
+            <div class="inner">
+              <div class="grid-2">
+                <div><label for="ev-capacity" data-t="evCapacity"></label><input id="ev-capacity" type="number" min="0" inputmode="numeric"></div>
+                <div><label for="ev-capacity-rule" data-t="evCapacityRule"></label>
+                  <select id="ev-capacity-rule">
+                    <option value="paid" data-t="evCapacityPaid"></option>
+                    <option value="all" data-t="evCapacityAll"></option>
+                  </select>
+                </div>
+              </div>
+            </div>
+          </section>
 
-          <label for="ev-closes" data-t="evCloses"></label>
-          <input id="ev-closes" type="datetime-local">
-          <p class="muted small" data-t="evClosesHint"></p>
+          <section class="card panel">
+            <header><h3 data-t="evTickets"></h3><p data-t="edTicketsHint"></p></header>
+            <div class="inner">
+              <div id="ev-ticket-types"></div>
+              <div><button type="button" id="add-ticket-type" class="link" data-t="addTicketType"></button></div>
+            </div>
+          </section>
 
-          <label for="ev-code-prefix" data-t="evCodePrefix"></label>
-          <input id="ev-code-prefix" maxlength="4" class="short">
-          <p class="muted small" data-t="evCodePrefixHint"></p>
+          <section class="card panel">
+            <header><h3 data-t="edRegistration"></h3><p data-t="evQuestionsHint"></p></header>
+            <div class="inner">
+              <div id="ev-questions"></div>
+              <div><button type="button" id="add-question" class="link" data-t="addQuestion"></button></div>
+              <div><label for="ev-closes" data-t="evCloses"></label>
+              <input id="ev-closes" type="datetime-local">
+              <p class="muted small" data-t="evClosesHint"></p></div>
+            </div>
+          </section>
+
+          <section class="card panel">
+            <header><h3 data-t="edPublishing"></h3><p data-t="edPublishingHint"></p></header>
+            <div class="inner">
+              <div><label for="ev-code-prefix" data-t="evCodePrefix"></label>
+              <input id="ev-code-prefix" maxlength="4" class="short">
+              <p class="muted small" data-t="evCodePrefixHint"></p></div>
+            </div>
+          </section>
 
           <p id="editor-error" class="error" role="alert" hidden></p>
-          <div class="button-row">
+          <div class="savebar">
+            <button type="button" id="editor-cancel" class="link" data-t="cancel"></button>
             <button type="submit" id="save-draft-button" class="secondary" data-t="saveDraft"></button>
             <button type="button" id="save-publish-button" class="primary" data-t="savePublish"></button>
           </div>
@@ -188,6 +251,7 @@
       </section>
      </div>
      <div id="tab-payments" hidden>
+      <div class="head"><div class="grow"><h1 data-t="tabPayments"></h1><p class="sub" data-t="paySub"></p></div></div>
       <div class="payments-top">
         <label for="pay-event" class="visually-hidden" data-t="payEvent"></label>
         <select id="pay-event" class="tab-event-select"></select>
@@ -217,71 +281,85 @@
       <button id="orders-more" class="secondary" type="button" data-t="loadMore" hidden></button>
      </div>
      <div id="tab-door" hidden>
-      <div class="door-top">
+      <div class="head door-head">
+        <div class="grow"><div class="eyebrow" data-t="doorEyebrow"></div><h1 data-t="tabDoor"></h1><p class="sub" data-t="doorSub"></p></div>
+        <label for="door-event" class="visually-hidden" data-t="payEvent"></label>
+        <select id="door-event" class="tab-event-select"></select>
+      </div>
+
+      <div class="entry-card" id="entry-card">
+        <div class="entry-main">
+          <span class="eyebrow" data-t="entryLabel"></span>
+          <button id="entry-toggle" class="entry-toggle" type="button" aria-live="polite"></button>
+          <span id="door-counts" class="muted small"></span>
+        </div>
         <div class="door-live" aria-live="polite">
           <span class="door-live-num"><span id="live-inside">0</span> / <span id="live-total">0</span></span>
           <span class="door-live-label" data-t="liveInside"></span>
           <span id="live-sub" class="door-live-sub"></span>
         </div>
-        <label for="door-event" class="visually-hidden" data-t="payEvent"></label>
-        <select id="door-event" class="tab-event-select"></select>
-        <div class="row-between">
-          <button id="entry-toggle" class="entry-toggle"></button>
-          <span id="door-counts" class="muted small"></span>
-        </div>
       </div>
 
       <div id="scan-result" class="scan-result idle" aria-live="assertive"></div>
-      <div id="camera" class="camera" hidden></div>
 
-      <div class="door-buttons">
-        <button id="camera-toggle" class="primary" data-t="startCamera"></button>
-        <button id="walkin-button" class="secondary" data-t="walkIn"></button>
+      <div class="door-grid">
+        <div class="door-left">
+          <div class="card pad find-card">
+            <div class="section-h"><h2 data-t="findTitle"></h2>
+              <button id="walkin-button" class="secondary small-button" type="button" data-t="walkIn"></button></div>
+            <form id="manual-form" class="manual">
+              <input id="manual-input" type="search" autocomplete="off" enterkeyhint="search">
+              <button type="submit" class="secondary" data-t="find"></button>
+            </form>
+            <ul id="manual-results" class="results"></ul>
+          </div>
+
+          <form id="walkin-form" class="card editor" hidden>
+            <h2 data-t="walkInTitle"></h2>
+            <label for="wi-name" data-t="walkInName"></label>
+            <input id="wi-name" maxlength="80" autocomplete="off">
+            <label for="wi-ucid" data-t="walkInUcid"></label>
+            <input id="wi-ucid" inputmode="numeric" maxlength="12" autocomplete="off">
+            <fieldset><legend data-t="ticket"></legend><div id="wi-types"></div></fieldset>
+            <div id="wi-member" hidden>
+              <label for="wi-member-id" data-t="walkInMemberId"></label>
+              <input id="wi-member-id" maxlength="20" autocomplete="off" placeholder="CSS…">
+            </div>
+            <fieldset><legend data-t="walkInPaidBy"></legend>
+              <label class="check"><input type="radio" name="wi-method" value="cash" checked> <span data-t="cash"></span></label>
+              <label class="check"><input type="radio" name="wi-method" value="etransfer"> <span data-t="etransfer"></span></label>
+            </fieldset>
+            <p id="wi-error" class="error" hidden></p>
+            <div class="button-row">
+              <button type="button" id="wi-cancel" class="secondary" data-t="cancel"></button>
+              <button type="submit" id="wi-submit" class="primary" data-t="walkInSubmit"></button>
+            </div>
+          </form>
+
+          <details id="unpaid-box" class="helpdesk card flush" open>
+            <summary id="unpaid-title"></summary>
+            <ul id="helpdesk-unpaid" class="results"></ul>
+          </details>
+          <details id="flagged-box" class="helpdesk card flush">
+            <summary id="flagged-title"></summary>
+            <ul id="helpdesk-flagged" class="results"></ul>
+          </details>
+        </div>
+
+        <div class="door-right">
+          <details id="recent-box" class="helpdesk card flush" open>
+            <summary><span id="recent-title"></span><span class="live-badge"><i></i>LIVE</span></summary>
+            <ul id="recent-list" class="results"></ul>
+          </details>
+          <div class="door-buttons">
+            <div id="camera" class="camera" hidden></div>
+            <button id="camera-toggle" class="primary" type="button" data-t="startCamera"></button>
+          </div>
+        </div>
       </div>
-
-      <form id="walkin-form" class="card editor" hidden>
-        <h2 data-t="walkInTitle"></h2>
-        <label for="wi-name" data-t="walkInName"></label>
-        <input id="wi-name" maxlength="80" autocomplete="off">
-        <label for="wi-ucid" data-t="walkInUcid"></label>
-        <input id="wi-ucid" inputmode="numeric" maxlength="12" autocomplete="off">
-        <fieldset><legend data-t="ticket"></legend><div id="wi-types"></div></fieldset>
-        <div id="wi-member" hidden>
-          <label for="wi-member-id" data-t="walkInMemberId"></label>
-          <input id="wi-member-id" maxlength="20" autocomplete="off" placeholder="CSS…">
-        </div>
-        <fieldset><legend data-t="walkInPaidBy"></legend>
-          <label class="check"><input type="radio" name="wi-method" value="cash" checked> <span data-t="cash"></span></label>
-          <label class="check"><input type="radio" name="wi-method" value="etransfer"> <span data-t="etransfer"></span></label>
-        </fieldset>
-        <p id="wi-error" class="error" hidden></p>
-        <div class="button-row">
-          <button type="button" id="wi-cancel" class="secondary" data-t="cancel"></button>
-          <button type="submit" id="wi-submit" class="primary" data-t="walkInSubmit"></button>
-        </div>
-      </form>
-
-      <details id="recent-box" class="helpdesk" open>
-        <summary id="recent-title"></summary>
-        <ul id="recent-list" class="results"></ul>
-      </details>
-
-      <form id="manual-form" class="manual">
-        <input id="manual-input" type="search" autocomplete="off" enterkeyhint="search">
-        <button type="submit" class="secondary" data-t="find"></button>
-      </form>
-      <ul id="manual-results" class="results"></ul>
-
-      <details id="unpaid-box" class="helpdesk" open>
-        <summary id="unpaid-title"></summary>
-        <ul id="helpdesk-unpaid" class="results"></ul>
-      </details>
-      <details id="flagged-box" class="helpdesk">
-        <summary id="flagged-title"></summary>
-        <ul id="helpdesk-flagged" class="results"></ul>
-      </details>
      </div>
      <div id="tab-activity" hidden>
+      <div class="head"><div class="grow"><h1 data-t="tabActivity"></h1><p class="sub" data-t="actSub"></p></div></div>
       <div class="payments-top">
         <div class="grid-2">
           <select id="act-event" aria-label="Event"></select>
@@ -305,7 +383,7 @@
      </div>
 
      <div id="tab-settings" hidden>
-      <h2 class="section-title" data-t="tabSettings"></h2>
+      <div class="head"><div class="grow"><h1 data-t="tabSettings"></h1><p class="sub" data-t="setSub"></p></div></div>
       <p id="set-status" class="muted small"></p>
 
       <form id="set-general-form" class="card editor" novalidate>
@@ -408,6 +486,7 @@
       </div>
      </div>
     </main>
+    </div>
   </div>
 
   <!-- Email everyone registered -->
@@ -521,10 +600,10 @@
   </footer>
 
   <script src="config.js?v=0.3.7"></script>
-  <script src="strings.js?v=0.6.1"></script>
+  <script src="strings.js?v=0.7.0"></script>
   <script src="mock.js?v=0.3.7"></script>
-  <script src="app.js?v=0.5.0"></script>
-  <script src="events.js?v=0.6.1"></script>
+  <script src="app.js?v=0.7.0"></script>
+  <script src="events.js?v=0.7.0"></script>
   <script src="payments.js?v=0.5.0"></script>
   <script src="edit.js?v=0.3.7"></script>
   <script src="finance.js?v=0.5.0"></script>
@@ -534,6 +613,7 @@
   <script src="mailall.js?v=0.3.7"></script>
   <script src="attendees.js?v=0.6.0"></script>
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
-  <script src="door.js?v=0.5.0"></script>
+  <script src="door.js?v=0.7.0"></script>
+  <script src="overview.js?v=0.7.0"></script>
 </body>
 </html>

@@ -437,16 +437,23 @@ function getTicket_(secret) {
 
 // ---- Links -------------------------------------------------------------------------
 
-/** The public site's address, remembered from the Exec Portal, for links in emails. */
+/** Only these addresses may appear in ticket emails. A portal opened from anywhere else (GitHub Pages, a local folder) is ignored. */
+const SITE_URL_DEFAULT = "https://events.ucalgarycss.ca/";
+function allowedSiteUrl_(url) {
+  return /^https:\/\/(events\.ucalgarycss\.ca|css-platform-public\.vercel\.app)\/?$/.test(String(url || "").trim());
+}
+
+/** The public site's address, remembered from the Exec Portal, for links in emails (allowed addresses only). */
 function rememberSiteUrl_(url) {
   const clean = String(url || "").trim();
-  if (/^https?:\/\/[^\s"<>]+$/.test(clean)) {
+  if (allowedSiteUrl_(clean)) {
     PropertiesService.getScriptProperties().setProperty("PUBLIC_SITE_URL", clean.replace(/\/?$/, "/"));
   }
 }
 
 function ticketLink_(ticket) {
-  // Public registrations never pass a site address, so fall back to the live site rather than a broken relative link.
-  const base = PropertiesService.getScriptProperties().getProperty("PUBLIC_SITE_URL") || "https://events.ucalgarycss.ca/";
+  // A stored address that is not on the allowed list (e.g. an old GitHub Pages one) is ignored.
+  const stored = PropertiesService.getScriptProperties().getProperty("PUBLIC_SITE_URL");
+  const base = allowedSiteUrl_(stored) ? String(stored).replace(/\/?$/, "/") : SITE_URL_DEFAULT;
   return base + "ticket.html?t=" + encodeURIComponent(ticket.secret);
 }

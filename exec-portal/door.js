@@ -17,7 +17,8 @@ async function openDoorTab() {
   showIdle();
   await loadDoor();
   clearInterval(doorState.refreshTimer);
-  doorState.refreshTimer = setInterval(() => { if (!$("tab-door").hidden && !doorState.busy) loadDoor(true); }, 30000);
+  // Help desk: refresh every few seconds so recent scans show up live. Scanner phones don't need to refresh as often.
+  doorState.refreshTimer = setInterval(() => { if (!$("tab-door").hidden && !doorState.busy && !document.hidden) loadDoor(true); }, SCANNER_MODE ? 20000 : 6000);
 }
 
 /** `quiet` = the background refresh: if it fails, keep showing what we have instead of covering the scan result. */
@@ -38,6 +39,11 @@ function renderDoor() {
   $("live-sub").textContent = d.counts.awaiting ? T.liveNotPaid(d.counts.awaiting) : "";
   $("entry-toggle").textContent = SCANNER_MODE ? (d.event.entryOpen ? T.entryOpenPlain : T.entryClosedPlain)
     : d.event.entryOpen ? T.entryOpen : T.entryClosed;
+  $("entry-toggle").classList.toggle("on", !!d.event.entryOpen);
+  $("entry-toggle").setAttribute("aria-pressed", d.event.entryOpen ? "true" : "false");
+  $("entry-card").classList.toggle("closed", !d.event.entryOpen);
+  document.body.classList.toggle("entry-closed", !d.event.entryOpen);
+  $("door-nav-live").hidden = !d.event.entryOpen;
   $("door-counts").textContent = T.doorCounts(d.counts.checkedIn, d.counts.paid, d.counts.awaiting);
 
   // The server sends only the small lists (not paid / needs checking / latest check-ins), plus the real totals.
@@ -155,7 +161,7 @@ function markInsideLocally(ticketId) {
 function showIdle(text) {
   const box = $("scan-result");
   box.className = "scan-result idle";
-  box.textContent = text || T.readyToScan;
+  box.textContent = text || (SCANNER_MODE || doorState.scanner ? T.readyToScan : T.deskReady);
 }
 
 function showResult(result) {

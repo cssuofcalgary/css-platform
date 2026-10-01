@@ -8,13 +8,18 @@ const eventsState = { events: [], editing: null, loaded: false, showArchived: fa
 
 function switchTab(name) {
   document.querySelectorAll(".tab").forEach((b) => b.classList.toggle("active", b.dataset.tab === name));
+  $("tab-overview").hidden = name !== "overview";
   $("tab-members").hidden = name !== "members";
   $("tab-events").hidden = name !== "events";
   $("tab-payments").hidden = name !== "payments";
   $("tab-door").hidden = name !== "door";
   $("tab-activity").hidden = name !== "activity";
   $("tab-settings").hidden = name !== "settings";
+  $("crumb").textContent = { overview: T.tabOverview, members: T.tabMembers, events: T.tabEvents, payments: T.tabPayments, door: T.tabDoor, activity: T.tabActivity, settings: T.tabSettings }[name] || "";
+  document.body.classList.remove("nav-open");
+  window.scrollTo(0, 0);
   if (name !== "door" && doorState.scanner) stopCamera();
+  if (name === "overview") openOverview();
   if (name === "events") { showEventsList(); if (!eventsState.loaded) loadEvents(); }
   if (name === "payments") openPaymentsTab();
   if (name === "door") openDoorTab();
@@ -73,13 +78,19 @@ function renderEvents() {
   toggle.hidden = !archived.length;
   toggle.textContent = eventsState.showArchived ? T.hideArchived : T.showArchived(archived.length);
   $("events-status").textContent = list.length ? "" : T.noEvents;
-  $("events-list").innerHTML = list.map((e) => `
-    <li class="card event-row">
-      <div>
+  $("events-list").innerHTML = list.map((e) => {
+    const c = (eventsState.counts || {})[e.id] || { awaiting: 0, paid: 0 };
+    const pct = e.capacity ? Math.min(100, Math.round((c.paid / e.capacity) * 100)) : 0;
+    const cover = e.imageUrl ? `<img class="ev-cover" src="${escapeHtml(e.imageUrl)}" alt="" loading="lazy">` : "";
+    return `
+    <li class="card event-row event-card">
+      <div class="ev-banner">${cover}${statusPill(e.status)}</div>
+      <div class="ev-info">
         <div class="name">${escapeHtml(e.name)}</div>
         <div class="sub">${escapeHtml(formatEventDate(e))}${e.location ? " · " + escapeHtml(e.location) : ""}</div>
         <div class="sub">${countsText(e)}</div>
-        <div class="badges">${statusPill(e.status)}${e.ticketTypes.map((t) =>
+        ${e.capacity ? `<div class="bar"><i style="width:${pct}%"></i></div>` : ""}
+        <div class="badges">${e.ticketTypes.map((t) =>
           `<span class="pill neutral">${escapeHtml(t.name)} ${money(t.price)}</span>`).join("")}</div>
       </div>
       <div class="event-actions">
@@ -94,7 +105,8 @@ function renderEvents() {
         ${state.role === "admin" && e.status === "archived" ? `<button class="link" data-action="restore" data-id="${e.id}">${T.restore}</button>` : ""}
         ${state.role === "admin" ? `<button class="link danger" data-action="delete" data-id="${e.id}">${T.deleteEvent}</button>` : ""}
       </div>
-    </li>`).join("");
+    </li>`;
+  }).join("");
 }
 
 async function onEventsListClick(event) {
@@ -397,6 +409,10 @@ $("global-event").addEventListener("change", onGlobalEventChange);
 $("new-event-button").addEventListener("click", () => openEditor(null));
 $("toggle-archived").addEventListener("click", () => { eventsState.showArchived = !eventsState.showArchived; renderEvents(); });
 $("editor-back-button").addEventListener("click", showEventsList);
+$("editor-cancel").addEventListener("click", showEventsList);
+$("nav-burger").addEventListener("click", () => document.body.classList.toggle("nav-open"));
+$("sidebar").addEventListener("click", (e) => { if (e.target.closest(".tab")) document.body.classList.remove("nav-open"); });
+document.querySelector(".mainwrap").addEventListener("click", (e) => { if (!e.target.closest("#nav-burger")) document.body.classList.remove("nav-open"); });
 $("events-list").addEventListener("click", onEventsListClick);
 $("add-ticket-type").addEventListener("click", () => {
   readAllRows();

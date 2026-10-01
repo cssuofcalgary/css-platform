@@ -38,8 +38,8 @@ The old system (`../CSS Ticketing System/`) keeps running until this one is prov
 | Event images | Drive folder "CSS Platform/Event images" (ID in Script Property `IMAGE_FOLDER_ID`) |
 | Local code | `Chinese Student Society/CSS Ticketing System V2/` (OneDrive), a git repo |
 | GitHub repo | https://github.com/cssuofcalgary/css-platform (public for now; can go private once it moves to Vercel) |
-| **Public site (live)** | https://cssuofcalgary.github.io/css-platform/public/ (event page: `…/public/?e=<slug>`, ticket: `…/public/ticket.html?t=<secret>`) |
-| **Exec Portal (live)** | https://cssuofcalgary.github.io/css-platform/exec-portal/ |
+| **Public site (live)** | https://events.ucalgarycss.ca/ (event page: `/?e=<slug>`, ticket: `/ticket.html?t=<secret>`) |
+| **Exec Portal (live)** | https://exec.ucalgarycss.ca/ (door scanner: `/scanner/`). Layout: `theme.css` is the look (sidebar, cards, Overview, help-desk Door); the JS files are unchanged logic. |
 | Hosting | GitHub Pages (branch `main`, folder `/ (root)`, about a minute per push) until the Vercel move; then Vercel, see "Hosting on Vercel" below |
 
 ## 3. Files

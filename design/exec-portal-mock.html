@@ -1,0 +1,832 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>CSS Exec Portal (design mock)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Fraunces:opsz,wght@9..144,500;9..144,600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* =====================================================================
+   DESIGN MOCK. All data below is placeholder. Not connected to the API.
+   Tokens first: the real build would put these at the top of styles.css.
+   ===================================================================== */
+:root {
+  --bg: #f7f5f1; --surface: #ffffff; --raised: #fbfaf8; --sunken: #f0ede7;
+  --text: #1d1a17; --text-2: #5f5850; --text-3: #8d857b;
+  --line: #e7e2da; --line-2: #d8d1c6;
+  --brand: #c8201e; --brand-ink: #a31715; --brand-soft: #fbe9e7; --gold: #b9893a; --gold-soft: #f6ecd6;
+  --ok: #17794a; --ok-soft: #dff4e8; --warn: #a15c07; --warn-soft: #fdf0d2; --bad: #b4231f; --bad-soft: #fbe3e1; --info: #2457c5; --info-soft: #e4ecfb;
+  --shadow-1: 0 1px 2px rgba(40,28,10,.05); --shadow-2: 0 8px 24px -8px rgba(40,28,10,.18), 0 2px 6px rgba(40,28,10,.06);
+  --r: 10px; --r-sm: 7px; --side: 244px;
+  --font: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif; --display: "Fraunces", Georgia, serif; --mono: "JetBrains Mono", ui-monospace, Consolas, monospace;
+  --ease: cubic-bezier(.2,.7,.2,1);
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg:#141210; --surface:#1c1916; --raised:#211e1a; --sunken:#100e0c; --text:#f2eee8; --text-2:#b3aba1; --text-3:#7f776d; --line:#2c2823; --line-2:#3a352e; --brand:#ef4a44; --brand-ink:#ff6b66; --brand-soft:#3a1816; --gold:#d9a95a; --gold-soft:#33291a; --ok:#4cc88a; --ok-soft:#14301f; --warn:#e8ae4d; --warn-soft:#352610; --bad:#ff7d77; --bad-soft:#3b1917; --info:#7fa6ff; --info-soft:#18233f; --shadow-1:none; --shadow-2:0 12px 32px -8px rgba(0,0,0,.6); } }
+:root[data-theme="dark"] { --bg:#141210; --surface:#1c1916; --raised:#211e1a; --sunken:#100e0c; --text:#f2eee8; --text-2:#b3aba1; --text-3:#7f776d; --line:#2c2823; --line-2:#3a352e; --brand:#ef4a44; --brand-ink:#ff6b66; --brand-soft:#3a1816; --gold:#d9a95a; --gold-soft:#33291a; --ok:#4cc88a; --ok-soft:#14301f; --warn:#e8ae4d; --warn-soft:#352610; --bad:#ff7d77; --bad-soft:#3b1917; --info:#7fa6ff; --info-soft:#18233f; --shadow-1:none; --shadow-2:0 12px 32px -8px rgba(0,0,0,.6); }
+
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.5 var(--font); -webkit-font-smoothing: antialiased; }
+button, input, select, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; }
+a { color: inherit; }
+svg { width: 18px; height: 18px; stroke: currentColor; fill: none; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+.mono { font-family: var(--mono); font-feature-settings: "zero"; }
+.num { font-variant-numeric: tabular-nums; }
+:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; border-radius: 4px; }
+[hidden] { display: none !important; }
+
+/* ---------- shell ---------- */
+.shell { display: grid; grid-template-columns: var(--side) 1fr; min-height: 100vh; }
+.side { position: sticky; top: 0; height: 100vh; display: flex; flex-direction: column; padding: 18px 12px 14px; background: var(--surface); border-right: 1px solid var(--line); z-index: 30; transition: transform .25s var(--ease); }
+.brand { display: flex; align-items: center; gap: 11px; padding: 4px 8px 18px; }
+.mark { width: 36px; height: 36px; border-radius: 9px; background: var(--brand); color: #fff; display: grid; place-items: center; font: 600 15px var(--display); letter-spacing: .5px; position: relative; box-shadow: inset 0 -3px 0 rgba(0,0,0,.18); }
+.mark::after { content: ""; position: absolute; right: -3px; bottom: -3px; width: 11px; height: 11px; border-radius: 50%; background: var(--gold); border: 2px solid var(--surface); }
+.brand b { display: block; font: 600 15px/1.1 var(--display); letter-spacing: .2px; }
+.brand span { font-size: 10px; letter-spacing: 1.6px; color: var(--text-3); font-weight: 500; }
+.nav-label { font-size: 10.5px; letter-spacing: 1.4px; text-transform: uppercase; color: var(--text-3); padding: 14px 10px 6px; font-weight: 500; }
+.nav a { display: flex; align-items: center; gap: 11px; padding: 8px 10px; border-radius: var(--r-sm); color: var(--text-2); text-decoration: none; font-weight: 500; position: relative; transition: background .15s, color .15s; }
+.nav a:hover { background: var(--sunken); color: var(--text); }
+.nav a.on { background: var(--brand-soft); color: var(--brand-ink); }
+.nav a.on::before { content: ""; position: absolute; left: -12px; top: 8px; bottom: 8px; width: 3px; border-radius: 0 3px 3px 0; background: var(--brand); }
+.nav a .pill { margin-left: auto; font-size: 11px; background: var(--brand); color: #fff; border-radius: 99px; padding: 0 7px; line-height: 18px; font-weight: 600; }
+.nav a[data-go="door"] .live { margin-left: auto; width: 7px; height: 7px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 0 0 var(--ok); animation: ping 2s infinite; }
+@keyframes ping { 70% { box-shadow: 0 0 0 7px transparent; } 100% { box-shadow: 0 0 0 0 transparent; } }
+.side-foot { margin-top: auto; border-top: 1px solid var(--line); padding-top: 12px; display: flex; align-items: center; gap: 10px; }
+.avatar { width: 34px; height: 34px; border-radius: 50%; background: var(--gold-soft); color: var(--gold); display: grid; place-items: center; font-weight: 600; font-size: 13px; border: 1px solid var(--line-2); }
+.side-foot .who { line-height: 1.25; min-width: 0; }
+.side-foot .who b { display: block; font-weight: 600; }
+.side-foot .who small { color: var(--text-3); font-size: 12px; display: flex; align-items: center; gap: 5px; }
+.dot { width: 6px; height: 6px; border-radius: 50%; background: var(--ok); display: inline-block; }
+.icon-btn { margin-left: auto; width: 32px; height: 32px; border-radius: var(--r-sm); border: 1px solid transparent; background: none; display: grid; place-items: center; color: var(--text-3); }
+.icon-btn:hover { background: var(--sunken); color: var(--text); }
+
+.main { min-width: 0; }
+.top { position: sticky; top: 0; z-index: 20; display: flex; align-items: center; gap: 12px; padding: 12px 32px; background: color-mix(in srgb, var(--bg) 86%, transparent); backdrop-filter: blur(10px); border-bottom: 1px solid var(--line); }
+.burger { display: none; }
+.crumb { color: var(--text-3); font-size: 13px; }
+.crumb b { color: var(--text); font-weight: 500; }
+.search-top { margin-left: auto; display: flex; align-items: center; gap: 8px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-sm); padding: 6px 10px; width: min(300px, 40vw); color: var(--text-3); }
+.search-top input { border: 0; background: none; outline: 0; width: 100%; }
+kbd { font: 500 11px var(--mono); border: 1px solid var(--line-2); border-radius: 4px; padding: 0 5px; color: var(--text-3); background: var(--raised); }
+.page { padding: 28px 32px 64px; max-width: 1180px; margin: 0 auto; animation: rise .35s var(--ease); }
+@keyframes rise { from { opacity: 0; transform: translateY(6px); } }
+.view { display: none; } .view.on { display: block; }
+
+/* ---------- type ---------- */
+h1 { font: 600 30px/1.15 var(--display); letter-spacing: -.3px; margin: 0; }
+h2 { font: 600 15px/1.3 var(--font); margin: 0; }
+.sub { color: var(--text-2); margin: 6px 0 0; }
+.eyebrow { font-size: 11px; letter-spacing: 1.4px; text-transform: uppercase; color: var(--text-3); font-weight: 500; }
+.head { display: flex; align-items: flex-end; gap: 16px; margin-bottom: 24px; flex-wrap: wrap; }
+.head .grow { flex: 1; min-width: 220px; }
+.section { margin-top: 32px; }
+.section-h { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.section-h a { font-size: 13px; color: var(--brand-ink); text-decoration: none; font-weight: 500; }
+
+/* ---------- controls ---------- */
+.btn { display: inline-flex; align-items: center; gap: 8px; border: 1px solid var(--line-2); background: var(--surface); border-radius: var(--r-sm); padding: 7px 13px; font-weight: 500; transition: transform .1s, background .15s, border-color .15s, box-shadow .15s; box-shadow: var(--shadow-1); text-decoration: none; white-space: nowrap; }
+.btn:hover { border-color: var(--text-3); }
+.btn:active { transform: scale(.97); }
+.btn.primary { background: var(--brand); border-color: var(--brand); color: #fff; box-shadow: 0 1px 0 rgba(255,255,255,.2) inset, 0 2px 8px -2px color-mix(in srgb, var(--brand) 60%, transparent); }
+.btn.primary:hover { background: var(--brand-ink); border-color: var(--brand-ink); }
+.btn.ghost { border-color: transparent; background: none; box-shadow: none; color: var(--text-2); }
+.btn.ghost:hover { background: var(--sunken); color: var(--text); }
+.btn.sm { padding: 4px 10px; font-size: 13px; }
+.btn.danger { color: var(--bad); }
+.btn[disabled] { opacity: .55; pointer-events: none; }
+.input, select.input, textarea.input { width: 100%; border: 1px solid var(--line-2); background: var(--surface); border-radius: var(--r-sm); padding: 8px 11px; transition: border-color .15s, box-shadow .15s; }
+.input:focus { outline: 0; border-color: var(--brand); box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand) 18%, transparent); }
+textarea.input { min-height: 84px; resize: vertical; }
+label.f { display: block; font-size: 12.5px; font-weight: 500; color: var(--text-2); margin-bottom: 5px; }
+.hint { font-size: 12px; color: var(--text-3); margin-top: 4px; }
+.field.bad .input { border-color: var(--bad); } .field .err { display: none; color: var(--bad); font-size: 12px; margin-top: 4px; } .field.bad .err { display: block; }
+.seg { display: inline-flex; background: var(--sunken); border-radius: var(--r-sm); padding: 3px; gap: 2px; flex-wrap: wrap; }
+.seg button { border: 0; background: none; padding: 4px 11px; border-radius: 5px; color: var(--text-2); font-weight: 500; font-size: 13px; }
+.seg button.on { background: var(--surface); color: var(--text); box-shadow: var(--shadow-1); }
+.seg button .c { color: var(--text-3); margin-left: 5px; font-variant-numeric: tabular-nums; }
+.toggle { appearance: none; width: 34px; height: 20px; border-radius: 99px; background: var(--line-2); position: relative; transition: background .2s; cursor: pointer; flex: none; border: 0; }
+.toggle::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: transform .2s var(--ease); box-shadow: 0 1px 2px rgba(0,0,0,.3); }
+.toggle:checked { background: var(--ok); } .toggle:checked::after { transform: translateX(14px); }
+
+/* ---------- surfaces ---------- */
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); box-shadow: var(--shadow-1); }
+.pad { padding: 18px 20px; }
+.badge { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 500; padding: 2px 9px 2px 8px; border-radius: 99px; line-height: 18px; white-space: nowrap; }
+.badge::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.b-ok { background: var(--ok-soft); color: var(--ok); } .b-warn { background: var(--warn-soft); color: var(--warn); } .b-bad { background: var(--bad-soft); color: var(--bad); }
+.b-info { background: var(--info-soft); color: var(--info); } .b-mute { background: var(--sunken); color: var(--text-2); } .b-gold { background: var(--gold-soft); color: var(--gold); }
+.bar { height: 6px; border-radius: 9px; background: var(--sunken); overflow: hidden; }
+.bar i { display: block; height: 100%; border-radius: 9px; background: var(--brand); transition: width .8s var(--ease); }
+.bar.ok i { background: var(--ok); }
+
+/* ---------- overview ---------- */
+.attention { display: grid; gap: 8px; margin-bottom: 8px; }
+.att { display: flex; align-items: center; gap: 14px; padding: 12px 16px; border-radius: var(--r); border: 1px solid var(--line); background: var(--surface); text-decoration: none; transition: border-color .15s, transform .15s var(--ease); cursor: pointer; }
+.att:hover { border-color: var(--line-2); transform: translateX(2px); }
+.att .ic { width: 34px; height: 34px; border-radius: 9px; display: grid; place-items: center; }
+.att b { font-weight: 600; } .att small { color: var(--text-2); display: block; }
+.att .go { margin-left: auto; color: var(--text-3); }
+.stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0; }
+.stat { padding: 18px 20px; border-right: 1px solid var(--line); }
+.stat:last-child { border-right: 0; }
+.stat .lbl { font-size: 12px; color: var(--text-2); display: flex; align-items: center; gap: 7px; }
+.stat .big { font: 600 34px/1.1 var(--display); margin: 8px 0 2px; letter-spacing: -.5px; font-variant-numeric: tabular-nums; }
+.stat .note { font-size: 12.5px; color: var(--text-3); }
+.grid-2 { display: grid; grid-template-columns: 1.55fr 1fr; gap: 20px; align-items: start; }
+.event-row { display: grid; grid-template-columns: 54px 1fr auto; gap: 16px; align-items: center; padding: 14px 18px; border-bottom: 1px solid var(--line); cursor: pointer; transition: background .15s; }
+.event-row:last-child { border-bottom: 0; } .event-row:hover { background: var(--raised); }
+.date-chip { width: 54px; text-align: center; border: 1px solid var(--line); border-radius: 9px; overflow: hidden; background: var(--surface); }
+.date-chip i { display: block; font: 600 10px/16px var(--font); font-style: normal; letter-spacing: 1.2px; background: var(--brand); color: #fff; }
+.date-chip b { display: block; font: 600 20px/30px var(--display); }
+.event-row h3 { margin: 0; font-size: 15px; font-weight: 600; }
+.event-row .meta { color: var(--text-2); font-size: 13px; margin-top: 2px; }
+.event-row .right { text-align: right; display: grid; gap: 6px; justify-items: end; }
+.feed { padding: 6px 0; }
+.feed-i { display: flex; gap: 12px; padding: 9px 18px; align-items: flex-start; }
+.feed-i .ic { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; flex: none; margin-top: 1px; }
+.feed-i .ic svg { width: 14px; height: 14px; }
+.feed-i p { margin: 0; } .feed-i small { color: var(--text-3); }
+.feed-i time { margin-left: auto; color: var(--text-3); font-size: 12px; white-space: nowrap; }
+
+/* ---------- members ---------- */
+.searchbox { display: flex; align-items: center; gap: 10px; background: var(--surface); border: 1px solid var(--line-2); border-radius: var(--r); padding: 10px 14px; box-shadow: var(--shadow-1); transition: border-color .15s, box-shadow .15s; }
+.searchbox:focus-within { border-color: var(--brand); box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand) 16%, transparent); }
+.searchbox input { border: 0; background: none; outline: 0; width: 100%; font-size: 15px; }
+.searchbox svg { color: var(--text-3); }
+.members { display: grid; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); gap: 14px; margin-top: 18px; }
+.member { padding: 16px 18px; transition: border-color .15s, box-shadow .2s, transform .2s var(--ease); animation: rise .3s var(--ease) backwards; }
+.member:hover { border-color: var(--line-2); box-shadow: var(--shadow-2); transform: translateY(-2px); }
+.m-top { display: flex; align-items: center; gap: 12px; }
+.m-top h3 { margin: 0; font-size: 15px; font-weight: 600; line-height: 1.2; }
+.m-top small { color: var(--text-3); }
+.m-top .badge { margin-left: auto; }
+.kv { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 14px 0; padding: 12px 0; border-block: 1px dashed var(--line-2); }
+.kv span { display: block; font-size: 11px; color: var(--text-3); letter-spacing: .4px; text-transform: uppercase; }
+.kv b { font-weight: 500; font-size: 13px; }
+.m-foot { display: flex; align-items: center; gap: 8px; color: var(--text-2); font-size: 13px; }
+.m-foot .btn { margin-left: auto; }
+
+/* ---------- events ---------- */
+.cards-3 { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 18px; }
+.ev { overflow: hidden; cursor: pointer; transition: box-shadow .2s, transform .2s var(--ease), border-color .15s; }
+.ev:hover { box-shadow: var(--shadow-2); transform: translateY(-3px); border-color: var(--line-2); }
+.ev .img { height: 138px; position: relative; display: flex; align-items: flex-end; padding: 12px; color: #fff; }
+.ev .img .badge { background: rgba(255,255,255,.92); color: #222; }
+.ev .img.empty { background-image: repeating-linear-gradient(45deg, rgba(255,255,255,.07) 0 8px, transparent 8px 16px); }
+.ev .body { padding: 14px 16px 16px; }
+.ev h3 { margin: 0 0 3px; font: 600 17px/1.25 var(--display); }
+.ev .meta { color: var(--text-2); font-size: 13px; }
+.ev .cap { display: flex; justify-content: space-between; font-size: 12.5px; color: var(--text-2); margin: 14px 0 6px; }
+.ev.draft { border-style: dashed; }
+.ev.new { display: grid; place-items: center; min-height: 250px; color: var(--text-3); border-style: dashed; background: transparent; box-shadow: none; text-align: center; }
+.ev.new:hover { color: var(--brand); border-color: var(--brand); }
+.ev.new b { display: block; color: inherit; margin-top: 8px; font-weight: 500; }
+
+.back { color: var(--text-2); text-decoration: none; font-size: 13px; display: inline-flex; align-items: center; gap: 4px; margin-bottom: 14px; cursor: pointer; background: none; border: 0; padding: 0; }
+.back:hover { color: var(--text); }
+.hero { display: grid; grid-template-columns: 1fr auto; gap: 20px; padding: 24px; position: relative; overflow: hidden; }
+.hero::after { content: "CSS"; position: absolute; right: -10px; top: -34px; font: 600 150px/1 var(--display); color: var(--brand); opacity: .045; pointer-events: none; }
+.facts { display: flex; gap: 22px; flex-wrap: wrap; margin-top: 12px; color: var(--text-2); }
+.facts span { display: inline-flex; align-items: center; gap: 7px; }
+.hero .actions { display: flex; gap: 8px; align-items: flex-start; flex-wrap: wrap; }
+.kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-top: 16px; }
+.kpi { padding: 16px 18px; }
+.kpi .big { font: 600 28px/1.1 var(--display); margin: 6px 0 8px; font-variant-numeric: tabular-nums; }
+.kpi .big small { font: 400 14px var(--font); color: var(--text-3); }
+.kpi .note { font-size: 12.5px; color: var(--text-3); margin-top: 8px; }
+.toolbar { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; padding: 12px 16px; border-bottom: 1px solid var(--line); }
+.toolbar .searchbox { padding: 6px 10px; flex: 1; min-width: 180px; box-shadow: none; }
+table { width: 100%; border-collapse: collapse; }
+th { text-align: left; font-size: 11px; letter-spacing: 1px; text-transform: uppercase; color: var(--text-3); font-weight: 500; padding: 9px 16px; background: var(--raised); border-bottom: 1px solid var(--line); }
+td { padding: 11px 16px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+tr:last-child td { border-bottom: 0; }
+tbody tr { transition: background .12s; } tbody tr:hover { background: var(--raised); }
+.who-cell { display: flex; align-items: center; gap: 10px; } .who-cell .avatar { width: 30px; height: 30px; font-size: 12px; }
+.who-cell small { display: block; color: var(--text-3); }
+.tfoot { display: flex; justify-content: space-between; align-items: center; padding: 11px 16px; color: var(--text-3); font-size: 13px; border-top: 1px solid var(--line); }
+.table-wrap { overflow-x: auto; }
+
+/* ---------- editor ---------- */
+.editor { display: grid; grid-template-columns: 200px 1fr; gap: 28px; }
+.steps { position: sticky; top: 76px; align-self: start; display: grid; gap: 2px; }
+.steps a { padding: 7px 11px; border-radius: var(--r-sm); text-decoration: none; color: var(--text-2); font-weight: 500; border-left: 2px solid transparent; }
+.steps a:hover { background: var(--sunken); } .steps a.on { color: var(--brand-ink); border-left-color: var(--brand); background: var(--brand-soft); }
+.panel { margin-bottom: 18px; scroll-margin-top: 80px; }
+.panel > header { padding: 16px 20px 0; } .panel > header p { margin: 2px 0 0; color: var(--text-3); font-size: 13px; }
+.panel .inner { padding: 16px 20px 20px; display: grid; gap: 14px; }
+.row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; } .row-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+.drop { border: 1.5px dashed var(--line-2); border-radius: var(--r); padding: 22px; text-align: center; color: var(--text-3); background: var(--raised); transition: border-color .15s, background .15s; cursor: pointer; }
+.drop:hover { border-color: var(--brand); background: var(--brand-soft); color: var(--brand-ink); }
+.tt { display: grid; grid-template-columns: 1.4fr .7fr .8fr auto; gap: 10px; align-items: center; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--raised); }
+.savebar { position: sticky; bottom: 14px; display: flex; align-items: center; gap: 10px; padding: 10px 14px; background: var(--text); color: var(--bg); border-radius: var(--r); box-shadow: var(--shadow-2); margin-top: 18px; }
+.savebar span { margin-right: auto; font-size: 13px; opacity: .85; }
+.savebar .btn.ghost { color: var(--bg); } .savebar .btn.ghost:hover { background: rgba(255,255,255,.12); color: var(--bg); }
+
+/* ---------- payments ---------- */
+.pay-sum { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 16px; }
+.pay-tile { padding: 14px 16px; border-radius: var(--r); border: 1px solid var(--line); background: var(--surface); text-align: left; transition: border-color .15s, transform .15s; border-top-width: 3px; }
+.pay-tile:hover { transform: translateY(-1px); } .pay-tile.on { box-shadow: 0 0 0 2px color-mix(in srgb, var(--text) 80%, transparent); }
+.pay-tile .big { font: 600 24px/1.1 var(--display); font-variant-numeric: tabular-nums; margin: 4px 0 1px; } .pay-tile small { color: var(--text-3); }
+.pay-tile.t-warn { border-top-color: var(--warn); } .pay-tile.t-bad { border-top-color: var(--bad); } .pay-tile.t-ok { border-top-color: var(--ok); } .pay-tile.t-mute { border-top-color: var(--text-3); }
+.bulk { display: none; align-items: center; gap: 10px; padding: 9px 16px; background: var(--brand-soft); color: var(--brand-ink); border-bottom: 1px solid var(--line); font-weight: 500; animation: rise .2s var(--ease); }
+.bulk.on { display: flex; }
+input[type=checkbox].cb { width: 16px; height: 16px; accent-color: var(--brand); }
+
+.viewfinder { position: relative; aspect-ratio: 1; max-width: 340px; margin: 0 auto 16px; border-radius: 20px; background: #0e0c0a; overflow: hidden; display: grid; place-items: center; color: #8d857b; }
+.viewfinder::before { content: ""; position: absolute; inset: 0; background: radial-gradient(circle at 30% 20%, #2a241e, #0e0c0a 70%); }
+.viewfinder .corners { position: absolute; inset: 38px; border-radius: 10px; --c: rgba(255,255,255,.9); background:
+  linear-gradient(var(--c),var(--c)) 0 0/28px 3px no-repeat, linear-gradient(var(--c),var(--c)) 0 0/3px 28px no-repeat,
+  linear-gradient(var(--c),var(--c)) 100% 0/28px 3px no-repeat, linear-gradient(var(--c),var(--c)) 100% 0/3px 28px no-repeat,
+  linear-gradient(var(--c),var(--c)) 0 100%/28px 3px no-repeat, linear-gradient(var(--c),var(--c)) 0 100%/3px 28px no-repeat,
+  linear-gradient(var(--c),var(--c)) 100% 100%/28px 3px no-repeat, linear-gradient(var(--c),var(--c)) 100% 100%/3px 28px no-repeat; }
+.viewfinder::before { content: ""; position: absolute; inset: 0; background: radial-gradient(circle at 30% 20%, #2a241e, #0e0c0a 70%); }
+.viewfinder .laser { position: absolute; left: 38px; right: 38px; height: 2px; background: var(--brand); box-shadow: 0 0 14px 2px var(--brand); animation: laser 2.4s ease-in-out infinite alternate; }
+@keyframes laser { from { top: 44px; } to { top: calc(100% - 46px); } }
+.viewfinder .txt { position: relative; font-weight: 500; letter-spacing: 1px; }
+.verdict { position: absolute; inset: 0; display: none; flex-direction: column; align-items: center; justify-content: center; gap: 4px; color: #fff; text-align: center; padding: 20px; z-index: 2; }
+.verdict.on { display: flex; animation: pop .28s var(--ease); }
+@keyframes pop { from { transform: scale(.94); opacity: 0; } }
+.verdict svg { width: 64px; height: 64px; stroke-width: 2.2; } .verdict b { font: 600 26px/1.2 var(--display); } .verdict span { opacity: .9; }
+.verdict.v-ok { background: #17794a; } .verdict.v-dupe { background: #b86a05; } .verdict.v-bad { background: #b4231f; } .verdict.v-unpaid { background: #2457c5; }
+.sim { margin: 14px 0 0; display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; }
+.sim .btn { font-size: 12px; padding: 3px 9px; }
+/* ---------- door help desk ---------- */
+.entry-card { display: grid; grid-template-columns: 1.1fr 1fr auto; gap: 24px; align-items: center; padding: 22px 26px; margin-bottom: 18px; transition: border-color .25s, background .25s; border-left: 4px solid var(--ok); }
+.entry-card.closed { border-left-color: var(--bad); background: color-mix(in srgb, var(--bad-soft) 35%, var(--surface)); }
+.entry-main { display: flex; align-items: center; gap: 18px; }
+.entry-state { font: 600 34px/1.1 var(--display); color: var(--ok); } .entry-card.closed .entry-state { color: var(--bad); }
+.switch { width: 64px; height: 36px; border-radius: 99px; border: 0; background: var(--ok); position: relative; transition: background .25s; flex: none; }
+.switch i { position: absolute; top: 4px; left: 32px; width: 28px; height: 28px; border-radius: 50%; background: #fff; transition: left .25s var(--ease); box-shadow: 0 1px 4px rgba(0,0,0,.3); }
+.switch[aria-checked="false"] { background: var(--line-2); } .switch[aria-checked="false"] i { left: 4px; }
+.entry-count { display: flex; align-items: center; gap: 16px; } .entry-count .n { font: 600 64px/1 var(--display); letter-spacing: -1.5px; font-variant-numeric: tabular-nums; transition: transform .25s var(--ease), color .25s; }
+.entry-count .n.bump { transform: scale(1.12); color: var(--ok); } .l { font-size: 11px; letter-spacing: 3px; color: var(--text-3); font-weight: 600; }
+.entry-mini { display: flex; gap: 22px; } .entry-mini div { text-align: center; } .entry-mini b { display: block; font: 600 22px var(--display); } .entry-mini span { font-size: 12px; color: var(--text-3); }
+.door-grid { display: grid; grid-template-columns: 1fr 1.1fr; gap: 18px; align-items: start; }
+.live-badge { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 600; letter-spacing: 1.2px; color: var(--ok); background: var(--ok-soft); border-radius: 99px; padding: 2px 9px; } .live-badge i { width: 6px; height: 6px; border-radius: 50%; background: currentColor; animation: ping 2s infinite; }
+.live-badge.paused { color: var(--text-3); background: var(--sunken); } .live-badge.paused i { animation: none; }
+.live-feed { max-height: 520px; overflow: auto; }
+.lf { display: grid; grid-template-columns: 30px 1fr auto; gap: 12px; align-items: center; padding: 11px 18px; border-bottom: 1px solid var(--line); }
+.lf.new { animation: slidein .45s var(--ease); background: color-mix(in srgb, var(--gold-soft) 60%, transparent); } @keyframes slidein { from { opacity: 0; transform: translateY(-14px); } }
+.lf .ic { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; } .lf .ic svg { width: 15px; height: 15px; stroke-width: 2.4; }
+.lf b { font-weight: 500; display: block; } .lf small { color: var(--text-3); } .lf time { color: var(--text-3); font-size: 13px; text-align: right; }
+.dq { display: flex; align-items: center; gap: 12px; padding: 12px 18px; border-bottom: 1px solid var(--line); } .dq:last-child { border-bottom: 0; } .dq .grow { flex: 1; } .dq small { color: var(--text-3); display: block; }
+.fr { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--line); } .fr .grow { flex: 1; } .fr small { color: var(--text-3); display: block; }
+/* ---------- scanner page (phone, scan-only) ---------- */
+body.bare .side, body.bare .top { display: none; } body.bare .shell { display: block; } body.bare .page { max-width: 480px; padding: 16px 16px 40px; }
+.scan-app { max-width: 440px; margin: 0 auto; } .scan-brand { display: flex; align-items: center; gap: 11px; margin-bottom: 18px; } .scan-brand b { font: 600 15px var(--display); display: block; line-height: 1.1; } .scan-brand span { font-size: 11px; color: var(--text-3); }
+.scan-card { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 24px 20px; box-shadow: var(--shadow-1); }
+.big-in { font-size: 18px; padding: 14px 16px; border-radius: 12px; } .big-btn { width: 100%; justify-content: center; padding: 16px; font-size: 17px; font-weight: 600; border-radius: 12px; }
+.sc-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; } .sc-ev { font-weight: 600; text-align: right; }
+.sc-count { display: flex; align-items: baseline; justify-content: center; gap: 8px; margin: 4px 0 12px; } .sc-count span { font: 600 54px/1 var(--display); font-variant-numeric: tabular-nums; } .sc-count small { color: var(--text-3); letter-spacing: 3px; text-transform: uppercase; font-size: 12px; font-weight: 600; }
+.sc-closed { text-align: center; padding: 30px 8px 12px; } .sc-closed .ill { width: 78px; height: 40px; margin: 0 auto 14px; border-radius: 10px; background: var(--bad-soft); color: var(--bad); display: grid; place-items: center; font: 700 11px var(--mono); letter-spacing: 1.5px; } .sc-closed b { font: 600 24px var(--display); display: block; } .sc-closed p { color: var(--text-2); margin: 6px 0 16px; }
+.sc-last { margin-top: 16px; } .sc-last .r { display: flex; align-items: center; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--line); } .sc-last .r time { margin-left: auto; color: var(--text-3); font-size: 13px; }
+@media (max-width: 1020px) { .entry-card { grid-template-columns: 1fr; gap: 16px; } .door-grid { grid-template-columns: 1fr; } }
+
+/* ---------- activity ---------- */
+.day { font-size: 12px; letter-spacing: 1.2px; text-transform: uppercase; color: var(--text-3); font-weight: 500; margin: 26px 0 10px; }
+.tl { position: relative; margin-left: 12px; border-left: 1px solid var(--line-2); }
+.tl-i { position: relative; padding: 0 0 20px 26px; }
+.tl-i::before { content: ""; position: absolute; left: -5px; top: 5px; width: 9px; height: 9px; border-radius: 50%; background: var(--surface); border: 2px solid var(--c, var(--text-3)); }
+.tl-i time { font: 500 12px var(--mono); color: var(--text-3); }
+.tl-i p { margin: 1px 0 0; font-weight: 500; } .tl-i small { color: var(--text-2); }
+
+/* ---------- settings ---------- */
+.set-grid { display: grid; grid-template-columns: 200px 1fr; gap: 28px; }
+.set-row { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 14px 0; border-bottom: 1px solid var(--line); }
+.set-row:last-child { border-bottom: 0; } .set-row b { font-weight: 500; display: block; } .set-row small { color: var(--text-3); }
+.health { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+.health div { padding: 12px 14px; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--raised); }
+.health small { color: var(--text-3); display: block; } .health b { font-weight: 500; }
+
+/* ---------- states ---------- */
+.state { text-align: center; padding: 46px 20px; color: var(--text-2); }
+.state .ill { width: 52px; height: 52px; margin: 0 auto 12px; border-radius: 14px; background: var(--sunken); display: grid; place-items: center; color: var(--text-3); }
+.state.err .ill { background: var(--bad-soft); color: var(--bad); }
+.state b { display: block; color: var(--text); font-size: 15px; font-weight: 600; } .state p { margin: 4px 0 14px; }
+.spin { width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--line-2); border-top-color: var(--brand); animation: spin .7s linear infinite; display: inline-block; vertical-align: -4px; margin-right: 8px; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.skel { height: 14px; border-radius: 6px; background: linear-gradient(90deg, var(--sunken) 25%, var(--line) 50%, var(--sunken) 75%); background-size: 200% 100%; animation: sh 1.2s infinite; }
+@keyframes sh { to { background-position: -200% 0; } }
+
+/* ---------- modal + toast ---------- */
+.scrim { position: fixed; inset: 0; background: rgba(20,14,8,.45); backdrop-filter: blur(3px); display: none; place-items: center; z-index: 80; padding: 16px; }
+.scrim.on { display: grid; animation: fade .2s; } @keyframes fade { from { opacity: 0; } }
+.modal { width: min(560px, 100%); max-height: calc(100vh - 32px); overflow: auto; background: var(--surface); border-radius: 14px; box-shadow: var(--shadow-2); border: 1px solid var(--line); animation: pop .26s var(--ease); }
+.modal > header { padding: 20px 22px 4px; display: flex; gap: 12px; align-items: flex-start; } .modal > header p { margin: 2px 0 0; color: var(--text-2); font-size: 13px; }
+.modal > header .icon-btn { margin-left: auto; }
+.modal .inner { padding: 14px 22px 8px; display: grid; gap: 14px; }
+.modal > footer { padding: 14px 22px 18px; display: flex; gap: 8px; justify-content: flex-end; align-items: center; }
+.modal > footer .l { margin-right: auto; color: var(--text-3); font-size: 12.5px; }
+.chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.chip { border: 1px solid var(--line-2); border-radius: 99px; padding: 2px 11px; font-size: 13px; background: var(--surface); color: var(--text-2); }
+.chip.on { background: var(--text); color: var(--bg); border-color: var(--text); }
+.toasts { position: fixed; right: 18px; bottom: 18px; z-index: 100; display: grid; gap: 8px; }
+.toast { background: var(--text); color: var(--bg); padding: 10px 14px; border-radius: 10px; box-shadow: var(--shadow-2); display: flex; gap: 10px; align-items: center; animation: toastin .3s var(--ease); max-width: 340px; }
+.toast svg { color: #5ee0a0; } @keyframes toastin { from { transform: translateY(12px); opacity: 0; } }
+.mockbar { position: fixed; left: 50%; bottom: 10px; transform: translateX(-50%); z-index: 90; background: var(--text); color: var(--bg); font-size: 12px; padding: 5px 12px; border-radius: 99px; opacity: .8; pointer-events: none; white-space: nowrap; }
+
+/* ---------- second skin: "Ink" (ink-wash sidebar, paper page, vermilion seal) ---------- */
+:root[data-skin="ink"] { --bg:#efe9dc; --surface:#fbf8f1; --raised:#f6f1e6; --sunken:#e8e1d0; --line:#ddd4c0; --line-2:#cbbfa5; --brand:#d23a22; --brand-ink:#b02c17; --brand-soft:#f8e2d9; --gold:#a9803a; --ok:#2f6f55; --ok-soft:#dbeadf; --r:6px; --r-sm:5px; }
+:root[data-skin="ink"] .side { background:#171513; border-right:0; color:#d9d2c5; }
+:root[data-skin="ink"] .side .brand b { color:#f5efe3; } :root[data-skin="ink"] .side .brand span, :root[data-skin="ink"] .nav-label, :root[data-skin="ink"] .side-foot .who small { color:#8f877a; }
+:root[data-skin="ink"] .side .mark { border-radius:4px; box-shadow:none; } :root[data-skin="ink"] .side .mark::after { border-color:#171513; }
+:root[data-skin="ink"] .nav a { color:#b9b1a3; } :root[data-skin="ink"] .nav a:hover { background:#24211e; color:#f5efe3; }
+:root[data-skin="ink"] .nav a.on { background:#24211e; color:#fff; } :root[data-skin="ink"] .nav a.on::before { background:var(--brand); }
+:root[data-skin="ink"] .side-foot { border-color:#2c2824; } :root[data-skin="ink"] .side-foot .who b { color:#f5efe3; } :root[data-skin="ink"] .side .icon-btn:hover { background:#24211e; color:#fff; }
+:root[data-skin="ink"] .side .avatar { background:#2c2824; color:#d9b56e; border-color:#3a352e; }
+:root[data-skin="ink"] .top { background:color-mix(in srgb,#efe9dc 88%,transparent); }
+:root[data-skin="ink"] h1 { font-weight:500; letter-spacing:-.6px; font-size:34px; }
+:root[data-skin="ink"] .card { box-shadow:none; border-color:var(--line-2); }
+:root[data-skin="ink"] .hero::after { content:"\793E"; right:10px; top:-30px; font-size:190px; opacity:.07; font-family:"Noto Serif SC","Songti SC","SimSun",serif; }
+:root[data-skin="ink"] .date-chip i { background:#171513; } :root[data-skin="ink"] .stat .big, :root[data-skin="ink"] .kpi .big { font-weight:500; }
+@media (prefers-color-scheme: dark) { :root[data-skin="ink"]:not([data-theme="light"]) { --bg:#100f0d; --surface:#1a1816; --raised:#1f1c19; --sunken:#0c0b0a; --line:#2a2622; --line-2:#3a352e; } }
+:root[data-skin="ink"][data-theme="dark"] { --bg:#100f0d; --surface:#1a1816; --raised:#1f1c19; --sunken:#0c0b0a; --line:#2a2622; --line-2:#3a352e; }
+.side-foot .icon-btn { margin-left: 0; } .side-foot .who { flex: 1; }
+
+/* ---------- responsive ---------- */
+@media (max-width: 1020px) { .stats, .kpis, .pay-sum { grid-template-columns: repeat(2, 1fr); } .stat:nth-child(2) { border-right: 0; } .stat:nth-child(-n+2) { border-bottom: 1px solid var(--line); } .grid-2, .editor, .set-grid { grid-template-columns: 1fr; } .steps, .set-grid .steps { position: static; display: flex; overflow-x: auto; } .steps a { white-space: nowrap; border-left: 0; } }
+@media (max-width: 820px) {
+  .shell { display: block; }
+  .side { position: fixed; inset: 0 auto 0 0; width: 264px; transform: translateX(-100%); box-shadow: var(--shadow-2); }
+  body.nav-open .side { transform: none; } body.nav-open::after { content: ""; position: fixed; inset: 0; background: rgba(0,0,0,.35); z-index: 25; }
+  .burger { display: grid; margin-left: -8px; } .top, .page { padding-left: 16px; padding-right: 16px; } .search-top { display: none; }
+  .hero { grid-template-columns: 1fr; } h1 { font-size: 25px; } .row-2, .row-3, .tt { grid-template-columns: 1fr; }
+  .event-row { grid-template-columns: 46px 1fr; } .event-row .right { grid-column: 2; justify-items: start; text-align: left; }
+  .stats { grid-template-columns: 1fr 1fr; } .count .n { font-size: 76px; } .mockbar { display: none; }
+  .pay-sum { grid-template-columns: 1fr 1fr; } .members { grid-template-columns: 1fr; }
+}
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+  <symbol id="i-home" viewBox="0 0 24 24"><path d="M3 11l9-8 9 8M5 10v10h5v-6h4v6h5V10"/></symbol>
+  <symbol id="i-users" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.6-3.6 3.2-5.5 6.5-5.5s5.9 1.9 6.5 5.5M16 4.8a3.5 3.5 0 010 6.4M18 14.8c2 .6 3.2 2.3 3.5 5.2"/></symbol>
+  <symbol id="i-cal" viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15.5" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/></symbol>
+  <symbol id="i-card" viewBox="0 0 24 24"><rect x="3" y="5.5" width="18" height="13" rx="2.5"/><path d="M3 10h18M7 15h4"/></symbol>
+  <symbol id="i-scan" viewBox="0 0 24 24"><path d="M4 8V5.5A1.5 1.5 0 015.5 4H8M16 4h2.5A1.5 1.5 0 0120 5.5V8M20 16v2.5a1.5 1.5 0 01-1.5 1.5H16M8 20H5.5A1.5 1.5 0 014 18.5V16M7 12h10"/></symbol>
+  <symbol id="i-pulse" viewBox="0 0 24 24"><path d="M3 12h4l2.5-7 5 14L17 12h4"/></symbol>
+  <symbol id="i-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 00.3 1.8l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.7 1.7 0 00-1.8-.3 1.7 1.7 0 00-1 1.5V21a2 2 0 11-4 0v-.1a1.7 1.7 0 00-1.1-1.5 1.7 1.7 0 00-1.8.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.7 1.7 0 00.3-1.8 1.7 1.7 0 00-1.5-1H3a2 2 0 110-4h.1a1.7 1.7 0 001.5-1.1 1.7 1.7 0 00-.3-1.8l-.1-.1a2 2 0 112.8-2.8l.1.1a1.7 1.7 0 001.8.3H9a1.7 1.7 0 001-1.5V3a2 2 0 114 0v.1a1.7 1.7 0 001 1.5 1.7 1.7 0 001.8-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.7 1.7 0 00-.3 1.8V9a1.7 1.7 0 001.5 1H21a2 2 0 110 4h-.1a1.7 1.7 0 00-1.5 1z"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4-4"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+  <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
+  <symbol id="i-back" viewBox="0 0 24 24"><path d="M19 12H5M11 6l-6 6 6 6"/></symbol>
+  <symbol id="i-pin" viewBox="0 0 24 24"><path d="M12 21s7-6.2 7-11.5A7 7 0 005 9.5C5 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></symbol>
+  <symbol id="i-mail" viewBox="0 0 24 24"><rect x="3" y="5.5" width="18" height="13" rx="2.5"/><path d="M3.5 7l8.5 6 8.5-6"/></symbol>
+  <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></symbol>
+  <symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 4l9 16H3L12 4zM12 10v4M12 17.2v.1"/></symbol>
+  <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 019.5 4 8 8 0 1020 14.5z"/></symbol>
+  <symbol id="i-down" viewBox="0 0 24 24"><path d="M12 4v11M7 11l5 5 5-5M5 20h14"/></symbol>
+  <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.8"/><path d="M4.5 20.5c.7-4 3.7-6 7.5-6s6.8 2 7.5 6"/></symbol>
+  <symbol id="i-edit" viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16v4zM13.5 6.5l4 4"/></symbol>
+</defs></svg>
+
+<div class="shell">
+  <!-- ============ SIDEBAR ============ -->
+  <aside class="side" id="side">
+    <div class="brand"><div class="mark">CSS</div><div><b>Exec Portal</b><span>CONNECT ~ CULTURE ~ SOCIAL</span></div></div>
+    <nav class="nav" aria-label="Main">
+      <a href="#overview" data-go="overview" class="on"><svg><use href="#i-home"/></svg>Overview</a>
+      <a href="#members" data-go="members"><svg><use href="#i-users"/></svg>Members</a>
+      <a href="#events" data-go="events"><svg><use href="#i-cal"/></svg>Events</a>
+      <a href="#payments" data-go="payments"><svg><use href="#i-card"/></svg>Payments<span class="pill">12</span></a>
+      <a href="#door" data-go="door"><svg><use href="#i-scan"/></svg>Door<span class="live" title="Entry is open"></span></a>
+      <div class="nav-label">Admin</div>
+      <a href="#activity" data-go="activity"><svg><use href="#i-pulse"/></svg>Activity</a>
+      <a href="#settings" data-go="settings"><svg><use href="#i-gear"/></svg>Settings</a>
+    </nav>
+    <div class="side-foot">
+      <div class="avatar">GC</div>
+      <div class="who"><b>Gordon Chen</b><small><span class="dot"></span>President · Admin</small></div>
+      <button class="icon-btn" id="skin" title="Switch theme (Warm / Ink)"><svg><use href="#i-pulse"/></svg></button>
+      <button class="icon-btn" id="theme" title="Toggle light/dark"><svg><use href="#i-moon"/></svg></button>
+    </div>
+  </aside>
+
+  <div class="main">
+    <div class="top">
+      <button class="icon-btn burger" id="burger" aria-label="Menu"><svg><use href="#i-menu"/></svg></button>
+      <div class="crumb">Exec Portal / <b id="crumb">Overview</b></div>
+      <label class="search-top"><svg><use href="#i-search"/></svg><input placeholder="Find a member or ticket" aria-label="Quick find"><kbd>/</kbd></label>
+    </div>
+
+    <main class="page" id="page">
+
+      <!-- ============ OVERVIEW ============ -->
+      <section class="view on" id="v-overview">
+        <div class="head"><div class="grow"><div class="eyebrow" id="today">Tuesday, Sept 30</div><h1 id="greet">Good evening, Gordon</h1><p class="sub">Here's what's happening with CSS.</p></div>
+          <button class="btn primary" data-open="m-add"><svg><use href="#i-plus"/></svg>Add paid registration</button></div>
+
+        <div class="eyebrow" style="margin-bottom:8px">Needs attention</div>
+        <div class="attention">
+          <div class="att" data-go="payments"><div class="ic" style="background:var(--bad-soft);color:var(--bad)"><svg><use href="#i-alert"/></svg></div><div><b>5 orders are overdue</b><small>Payment window passed. Close them to free up spots.</small></div><svg class="go"><use href="#i-arrow"/></svg></div>
+          <div class="att" data-go="payments"><div class="ic" style="background:var(--warn-soft);color:var(--warn)"><svg><use href="#i-clock"/></svg></div><div><b>7 orders are awaiting e-transfer</b><small>$420 expected · 3 reminders are due today.</small></div><svg class="go"><use href="#i-arrow"/></svg></div>
+          <div class="att" data-go="door"><div class="ic" style="background:var(--ok-soft);color:var(--ok)"><svg><use href="#i-scan"/></svg></div><div><b>Karaoke Night is open at the door</b><small>47 inside · 2 tickets flagged.</small></div><svg class="go"><use href="#i-arrow"/></svg></div>
+        </div>
+
+        <div class="card section" style="margin-top:20px"><div class="stats">
+          <div class="stat"><div class="lbl"><svg><use href="#i-cal"/></svg>Upcoming events</div><div class="big">3</div><div class="note">Next: Oct 10</div></div>
+          <div class="stat"><div class="lbl"><svg><use href="#i-users"/></svg>Registered</div><div class="big">129</div><div class="note">across upcoming events</div></div>
+          <div class="stat"><div class="lbl"><svg><use href="#i-card"/></svg>Awaiting payment</div><div class="big">$420</div><div class="note">7 orders</div></div>
+          <div class="stat"><div class="lbl"><svg><use href="#i-scan"/></svg>Inside tonight</div><div class="big">47</div><div class="note">of 82 paid</div></div>
+        </div></div>
+
+        <div class="grid-2 section">
+          <div><div class="section-h"><h2>Upcoming events</h2><a href="#events" data-go="events">All events →</a></div>
+            <div class="card" id="ov-events"></div></div>
+          <div><div class="section-h"><h2>Recent activity</h2><a href="#activity" data-go="activity">View all →</a></div>
+            <div class="card feed" id="ov-feed"></div></div>
+        </div>
+      </section>
+
+      <!-- ============ MEMBERS ============ -->
+      <section class="view" id="v-members">
+        <div class="head"><div class="grow"><h1>Members</h1><p class="sub">Look anyone up by name, email, UCID or member ID.</p></div></div>
+        <label class="searchbox"><svg><use href="#i-search"/></svg><input id="m-q" placeholder="Search 428 members" autocomplete="off"><kbd>/</kbd></label>
+        <div class="chips" style="margin-top:12px" id="m-chips"><span class="chip on">All</span><span class="chip">Active</span><span class="chip">Expired</span></div>
+        <div class="members" id="m-list"></div>
+        <div id="m-state"></div>
+        <div style="text-align:center;margin-top:18px"><button class="btn" id="m-demo-empty">Demo: empty</button> <button class="btn" id="m-demo-load">Demo: loading</button> <button class="btn" id="m-demo-err">Demo: error</button> <button class="btn" id="m-demo-reset">Reset</button></div>
+      </section>
+
+      <!-- ============ EVENTS LIST ============ -->
+      <section class="view" id="v-events">
+        <div class="head"><div class="grow"><h1>Events</h1><p class="sub">Create, publish and run every CSS event from here.</p></div>
+          <button class="btn primary" id="new-event"><svg><use href="#i-plus"/></svg>Create event</button></div>
+        <div class="seg" id="ev-seg"><button class="on">Upcoming<span class="c">3</span></button><button>Drafts<span class="c">1</span></button><button>Past<span class="c">6</span></button></div>
+        <div class="cards-3" style="margin-top:20px" id="ev-cards"></div>
+      </section>
+
+      <!-- ============ EVENT DETAIL ============ -->
+      <section class="view" id="v-event">
+        <button class="back" data-go="events"><svg style="width:15px;height:15px"><use href="#i-back"/></svg>All events</button>
+        <div class="card hero">
+          <div><span class="badge b-ok">Published · registration open</span>
+            <h1 style="margin-top:10px">Pearls N' Pearls</h1>
+            <div class="facts"><span><svg><use href="#i-cal"/></svg>Fri, Oct 10</span><span><svg><use href="#i-clock"/></svg>5:00 to 8:00 PM</span><span><svg><use href="#i-pin"/></svg>MacHall Ballroom</span></div></div>
+          <div class="actions"><button class="btn" data-open="m-mail"><svg><use href="#i-mail"/></svg>Email attendees</button><button class="btn" id="edit-event"><svg><use href="#i-edit"/></svg>Edit</button><button class="btn primary" data-go="door"><svg><use href="#i-scan"/></svg>Open door</button></div>
+        </div>
+        <div class="kpis">
+          <div class="card kpi"><div class="eyebrow">Registered</div><div class="big">47 <small>/ 100</small></div><div class="bar"><i style="width:47%"></i></div><div class="note">53 spots left</div></div>
+          <div class="card kpi"><div class="eyebrow">Paid</div><div class="big">41</div><div class="bar ok"><i style="width:87%"></i></div><div class="note">87% of registered</div></div>
+          <div class="card kpi"><div class="eyebrow">Awaiting</div><div class="big">$180</div><div class="note">4 orders · 1 overdue</div></div>
+          <div class="card kpi"><div class="eyebrow">Checked in</div><div class="big">0 <small>/ 41</small></div><div class="note">Entry opens at the event</div></div>
+        </div>
+        <div class="card section" style="margin-top:22px">
+          <div class="toolbar"><div class="seg" id="att-seg"><button class="on" data-f="all">All<span class="c">47</span></button><button data-f="paid">Paid<span class="c">41</span></button><button data-f="awaiting">Awaiting<span class="c">4</span></button><button data-f="in">Checked in<span class="c">0</span></button></div>
+            <label class="searchbox"><svg><use href="#i-search"/></svg><input id="att-q" placeholder="Search attendees"></label>
+            <button class="btn sm"><svg><use href="#i-down"/></svg>CSV</button></div>
+          <div class="table-wrap"><table><thead><tr><th>Attendee</th><th>Ticket</th><th>Status</th><th>Code</th><th></th></tr></thead><tbody id="att-body"></tbody></table></div>
+          <div class="tfoot"><span id="att-count">Showing 8 of 47</span><button class="btn sm">Show more</button></div>
+        </div>
+      </section>
+
+      <!-- ============ EVENT EDITOR ============ -->
+      <section class="view" id="v-editor">
+        <button class="back" data-go="event"><svg style="width:15px;height:15px"><use href="#i-back"/></svg>Back to event</button>
+        <div class="head"><div class="grow"><h1>Edit event</h1><p class="sub">Changes are saved when you press Save. Nothing is public until you publish.</p></div><span class="badge b-ok">Published</span></div>
+        <div class="editor">
+          <nav class="steps" id="steps"><a href="#p-basics" class="on">Basics</a><a href="#p-when">Schedule</a><a href="#p-cap">Capacity</a><a href="#p-tix">Tickets</a><a href="#p-reg">Registration</a><a href="#p-pub">Publishing</a></nav>
+          <div>
+            <div class="card panel" id="p-basics"><header><h2>Basics</h2><p>What people see first on the event page.</p></header><div class="inner">
+              <div class="field"><label class="f">Event name</label><input class="input" value="Pearls N' Pearls"></div>
+              <div><label class="f">Cover image</label><div class="drop"><svg style="width:22px;height:22px"><use href="#i-plus"/></svg><div>Drop an image here or click to upload</div><div class="hint">JPG or PNG, wide images look best</div></div></div>
+              <div><label class="f">Description</label><textarea class="input">Bubble tea, board games and new friends. Open to everyone.</textarea></div></div></div>
+            <div class="card panel" id="p-when"><header><h2>Schedule</h2><p>Times are Mountain Time.</p></header><div class="inner">
+              <div class="row-3"><div><label class="f">Date</label><input class="input" type="date" value="2026-10-10"></div><div><label class="f">Starts</label><input class="input" type="time" value="17:00"></div><div><label class="f">Ends</label><input class="input" type="time" value="20:00"></div></div>
+              <div><label class="f">Location</label><input class="input" value="MacHall Ballroom"></div></div></div>
+            <div class="card panel" id="p-cap"><header><h2>Capacity</h2><p>Decide when an event counts as full.</p></header><div class="inner"><div class="row-2">
+              <div><label class="f">Capacity</label><input class="input" type="number" value="100"><div class="hint">Leave empty for no limit.</div></div>
+              <div><label class="f">Spots are taken by</label><select class="input"><option>Paid tickets only</option><option>All registrations</option></select></div></div></div></div>
+            <div class="card panel" id="p-tix"><header><h2>Tickets</h2><p>Free tickets still get a QR code.</p></header><div class="inner">
+              <div class="tt"><input class="input" value="Member"><input class="input" value="$5.00"><select class="input"><option>Members only</option></select><button class="btn ghost sm danger">Remove</button></div>
+              <div class="tt"><input class="input" value="General"><input class="input" value="$8.00"><select class="input"><option>Everyone</option></select><button class="btn ghost sm danger">Remove</button></div>
+              <div><button class="btn sm"><svg style="width:15px;height:15px"><use href="#i-plus"/></svg>Add ticket type</button></div></div></div>
+            <div class="card panel" id="p-reg"><header><h2>Registration</h2><p>Questions and when sign-ups close.</p></header><div class="inner">
+              <div><label class="f">Registration closes</label><input class="input" type="datetime-local" value="2026-10-10T12:00"></div>
+              <div class="tt" style="grid-template-columns:1.5fr 1fr auto"><input class="input" value="Any dietary restrictions?"><select class="input"><option>Optional</option></select><button class="btn ghost sm danger">Remove</button></div>
+              <div><button class="btn sm"><svg style="width:15px;height:15px"><use href="#i-plus"/></svg>Add question</button></div></div></div>
+            <div class="card panel" id="p-pub"><header><h2>Publishing</h2><p>Draft events are only visible to execs.</p></header><div class="inner">
+              <div class="set-row" style="padding:0"><div><b>Published</b><small>Shows on events.ucalgarycss.ca and accepts registrations.</small></div><input type="checkbox" class="toggle" checked></div></div></div>
+            <div class="savebar"><span>Unsaved changes</span><button class="btn ghost sm" data-go="event">Discard</button><button class="btn primary sm" id="save-event">Save changes</button></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ PAYMENTS ============ -->
+      <section class="view" id="v-payments">
+        <div class="head"><div class="grow"><h1>Payments</h1><p class="sub">E-transfers for <select class="input" style="width:auto;display:inline-block;padding:2px 8px"><option>Pearls N' Pearls</option><option>Karaoke Night</option></select></p></div>
+          <button class="btn" data-open="m-mail"><svg><use href="#i-mail"/></svg>Send reminders</button><button class="btn primary" data-open="m-add"><svg><use href="#i-plus"/></svg>Add paid registration</button></div>
+        <div class="pay-sum" id="pay-sum">
+          <button class="pay-tile t-warn on" data-pf="awaiting"><div class="eyebrow">Awaiting</div><div class="big">$180</div><small>4 orders</small></button>
+          <button class="pay-tile t-bad" data-pf="overdue"><div class="eyebrow">Overdue</div><div class="big">$40</div><small>1 order · close it</small></button>
+          <button class="pay-tile t-ok" data-pf="paid"><div class="eyebrow">Paid</div><div class="big">$1,240</div><small>41 orders</small></button>
+          <button class="pay-tile t-mute" data-pf="closed"><div class="eyebrow">Closed</div><div class="big">3</div><small>spots freed</small></button>
+        </div>
+        <div class="card">
+          <div class="bulk" id="bulk"><span id="bulk-n">0 selected</span><button class="btn sm primary" id="bulk-paid">Mark paid</button><button class="btn sm" data-open="m-mail">Email</button><button class="btn sm danger">Close orders</button></div>
+          <div class="toolbar"><label class="searchbox"><svg><use href="#i-search"/></svg><input placeholder="Search name, email or order code"></label></div>
+          <div class="table-wrap"><table><thead><tr><th style="width:36px"><input type="checkbox" class="cb" id="cb-all" aria-label="Select all"></th><th>Order</th><th>Amount</th><th>Status</th><th>Placed</th><th></th></tr></thead><tbody id="pay-body"></tbody></table></div>
+        </div>
+      </section>
+
+      <!-- ============ DOOR (help desk) ============ -->
+      <section class="view" id="v-door">
+        <div class="head"><div class="grow"><div class="eyebrow">Help desk</div><h1>Door</h1><p class="sub">Run the front table: open entry, add walk-ins, find people. Scanning happens on the scanner phones.</p></div>
+          <select class="input" style="width:auto;min-width:200px"><option>Pearls N' Pearls</option><option>Karaoke Night</option></select></div>
+
+        <div class="card entry-card" id="entry-card">
+          <div class="entry-main"><div><div class="eyebrow">Entry</div><div class="entry-state" id="entry-state">Open</div><p class="hint" id="entry-hint" style="margin:2px 0 0">Scanners are accepting tickets right now.</p></div>
+            <button class="switch" id="entry" role="switch" aria-checked="true" aria-label="Entry open"><i></i></button></div>
+          <div class="entry-count"><div class="n" id="inside">47</div><div><div class="l">INSIDE</div><div class="bar ok" style="width:150px;margin:6px 0 4px"><i id="inside-bar" style="width:47%"></i></div><div class="hint" style="margin:0">of 100 spots</div></div></div>
+          <div class="entry-mini"><div><b>41</b><span>paid</span></div><div><b>4</b><span>awaiting</span></div><div><b>2</b><span>flagged</span></div></div>
+        </div>
+
+        <div class="door-grid">
+          <div>
+            <div class="card pad" style="margin-bottom:16px">
+              <div class="section-h" style="margin-bottom:10px"><h2>Find person</h2><button class="btn sm primary" data-open="m-walk"><svg style="width:15px;height:15px"><use href="#i-plus"/></svg>Walk-in</button></div>
+              <label class="searchbox"><svg><use href="#i-search"/></svg><input id="find-inline" placeholder="Name, email, UCID or ticket code" autocomplete="off"></label>
+              <div id="find-inline-res"></div>
+            </div>
+            <div class="card">
+              <div class="toolbar"><div class="seg" id="dq-seg"><button class="on" data-q="unpaid">Unpaid<span class="c">4</span></button><button data-q="flag">Flagged<span class="c">2</span></button></div></div>
+              <div id="dq-list"></div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="toolbar"><h2>Recent scans</h2><span class="live-badge" id="live-badge"><i></i>LIVE</span><button class="btn ghost sm" id="live-pause" style="margin-left:auto">Pause</button></div>
+            <div id="recent" class="live-feed"></div>
+            <div class="tfoot"><span>Updates every few seconds</span><a href="#scanner" data-go="scanner" style="color:var(--brand-ink);text-decoration:none;font-weight:500">Open scanner page →</a></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ SCANNER (separate page: exec.ucalgarycss.ca/scanner) ============ -->
+      <section class="view" id="v-scanner">
+        <div class="scan-app">
+          <div class="scan-brand"><div class="mark">CSS</div><div><b>Scanner</b><span>exec.ucalgarycss.ca/scanner</span></div><button class="btn ghost sm" data-go="door" style="margin-left:auto">← Back to mock</button></div>
+          <div class="scan-card" id="sc-login">
+            <h1 style="font-size:26px">Who's scanning?</h1><p class="sub">Type your name so scans are logged to you.</p>
+            <div class="field" style="margin:18px 0 12px"><input class="input big-in" id="sc-name" placeholder="Your name" autocomplete="name"><div class="err">Enter your name to start.</div></div>
+            <button class="btn primary big-btn" id="sc-start">Start scanning</button>
+            <p class="hint" style="text-align:center;margin-top:14px">Scanning only. Everything else is at the help desk.</p>
+          </div>
+          <div class="scan-card" id="sc-live" hidden>
+            <div class="sc-top"><div><div class="eyebrow">Scanning as</div><b id="sc-who">Door 1</b></div><div class="sc-ev">Pearls N' Pearls</div></div>
+            <div class="sc-closed" id="sc-closed" hidden><div class="ill">CLOSED</div><b>Entry is closed</b><p>The help desk opens entry when doors open. This page checks again by itself.</p><button class="btn" id="sc-recheck">Check now</button></div>
+            <div id="sc-open">
+              <div class="sc-count"><span id="sc-n">47</span><small>inside</small></div>
+              <div class="viewfinder" id="vf"><div class="corners"></div><div class="laser"></div><div class="txt">POINT AT THE QR CODE</div>
+                <div class="verdict v-ok" id="vd"><svg><use href="#i-check"/></svg><b id="vd-t"></b><span id="vd-s"></span></div></div>
+              <div class="sim"><span class="hint" style="width:100%">Mock only: simulate a scan result</span>
+                <button class="btn" data-sim="ok">Valid</button><button class="btn" data-sim="dupe">Already in</button><button class="btn" data-sim="unpaid">Unpaid</button><button class="btn" data-sim="bad">Invalid</button></div>
+              <div class="sc-last"><div class="eyebrow" style="margin-bottom:4px">Last scans</div><div id="sc-recent"></div></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+<!-- ============ ACTIVITY ============ -->
+      <section class="view" id="v-activity">
+        <div class="head"><div class="grow"><h1>Activity</h1><p class="sub">Everything that happens in the portal, newest first.</p></div>
+          <select class="input" style="width:auto"><option>Last 50</option><option>Last 100</option><option>Last 200</option></select></div>
+        <div class="seg" id="act-seg"><button class="on" data-c="all">All</button><button data-c="door">Door</button><button data-c="pay">Payments</button><button data-c="reg">Registrations</button><button data-c="event">Events</button></div>
+        <div id="act-list"></div>
+      </section>
+
+      <!-- ============ SETTINGS ============ -->
+      <section class="view" id="v-settings">
+        <div class="head"><div class="grow"><h1>Settings</h1><p class="sub">Organisation-wide options. Admin only.</p></div></div>
+        <div class="set-grid">
+          <nav class="steps"><a href="#s-gen" class="on">General</a><a href="#s-mem">Membership</a><a href="#s-sec">Security</a><a href="#s-sess">Sessions</a><a href="#s-health">System health</a></nav>
+          <div>
+            <div class="card panel" id="s-gen"><header><h2>General</h2><p>Where people send money and get help.</p></header><div class="inner">
+              <div class="row-2"><div><label class="f">E-transfer email</label><input class="input" value="css.uofcalgary@gmail.com"></div><div><label class="f">Contact email</label><input class="input" value="css.uofcalgary@gmail.com"></div></div>
+              <div><label class="f">Instagram link</label><input class="input" value="https://www.instagram.com/ucalgary.css/"></div></div></div>
+            <div class="card panel" id="s-mem"><header><h2>Membership</h2><p>Which sheet decides who is a member.</p></header><div class="inner"><div><label class="f">Membership sheet</label><input class="input mono" value="1AbC…xYz (Membership 2026)"><div class="hint">428 members found · last read 2 min ago</div></div></div></div>
+            <div class="card panel" id="s-sec"><header><h2>Security</h2><p>Change passwords and review sign-in protection.</p></header><div class="inner">
+              <div class="set-row" style="padding-top:0"><div><b>Exec password</b><small>Used by every exec to sign in.</small></div><button class="btn sm">Change</button></div>
+              <div class="set-row"><div><b>Admin password</b><small>Needed for Settings and Activity.</small></div><button class="btn sm">Change</button></div>
+              <div class="set-row"><div><b>Lock out after 30 failed sign-ins</b><small>Then wait 15 minutes.</small></div><input type="checkbox" class="toggle" checked></div></div></div>
+            <div class="card panel" id="s-sess"><header><h2>Sessions</h2><p>Who is signed in right now.</p></header><div class="inner">
+              <div class="set-row" style="padding-top:0"><div><b>Gordon Chen <span class="badge b-ok">This device</span></b><small>Signed in 6:02 PM</small></div></div>
+              <div class="set-row"><div><b>Door 2</b><small>Scanner · signed in 6:30 PM</small></div><button class="btn sm danger">Sign out</button></div></div></div>
+            <div class="card panel" id="s-health"><header><h2>System health</h2><p>For when something feels off.</p></header><div class="inner"><div class="health">
+              <div><small>Version</small><b class="mono">0.4.3</b></div><div><small>Emails left today</small><b>0 / 100</b></div><div><small>Pending emails</small><b>53</b></div><div><small>Last error</small><b>None</b></div></div></div></div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+</div>
+
+<!-- ============ MODALS ============ -->
+<div class="scrim" id="m-add"><form class="modal" onsubmit="return false">
+  <header><div><h2 style="font-size:18px">Add paid registration</h2><p>For someone who paid you directly. They get their QR ticket by email.</p></div><button type="button" class="icon-btn" data-close aria-label="Close"><svg><use href="#i-x"/></svg></button></header>
+  <div class="inner"><div class="row-2"><div class="field"><label class="f">Name</label><input class="input" id="add-name" placeholder="Jane Smith"><div class="err">Enter a name.</div></div><div class="field"><label class="f">Email</label><input class="input" id="add-email" placeholder="jane@ucalgary.ca"><div class="err">That email doesn't look right.</div></div></div>
+    <div class="row-2"><div><label class="f">Ticket</label><select class="input"><option>Member · $5.00</option><option>General · $8.00</option></select></div><div><label class="f">Payment method</label><select class="input"><option>Cash</option><option>E-transfer</option></select></div></div></div>
+  <footer><span class="l">Gordon Chen will be logged.</span><button type="button" class="btn" data-close>Cancel</button><button type="button" class="btn primary" id="add-go">Add registration</button></footer></form></div>
+
+<div class="scrim" id="m-mail"><form class="modal" onsubmit="return false">
+  <header><div><h2 style="font-size:18px">Email attendees</h2><p>Pearls N' Pearls · 47 people</p></div><button type="button" class="icon-btn" data-close aria-label="Close"><svg><use href="#i-x"/></svg></button></header>
+  <div class="inner"><div><label class="f">Send to</label><div class="chips" id="mail-chips"><span class="chip on">Everyone</span><span class="chip">Paid</span><span class="chip">Awaiting payment</span><span class="chip">Overdue</span></div></div>
+    <div><label class="f">Subject</label><input class="input" value="See you Friday!"></div><div><label class="f">Message</label><textarea class="input">Doors open at 5:00 PM. Bring your QR code.</textarea><div class="hint">Replies go to css.uofcalgary@gmail.com.</div></div></div>
+  <footer><span class="l">0 of 100 emails left today</span><button type="button" class="btn" data-close>Cancel</button><button type="button" class="btn primary" id="mail-go">Send to 47 people</button></footer></form></div>
+
+<div class="scrim" id="m-walk"><form class="modal" onsubmit="return false"><header><div><h2 style="font-size:18px">Walk-in</h2><p>Add and check in someone who didn't register.</p></div><button type="button" class="icon-btn" data-close aria-label="Close"><svg><use href="#i-x"/></svg></button></header>
+  <div class="inner"><div class="field"><label class="f">Name</label><input class="input" placeholder="Name"></div><div><label class="f">Ticket</label><select class="input"><option>General · $8.00 (cash)</option></select></div></div>
+  <footer><button type="button" class="btn" data-close>Cancel</button><button type="button" class="btn primary" data-close data-toast="Walk-in checked in">Add and check in</button></footer></form></div>
+
+<div class="scrim" id="m-find"><div class="modal"><header><div><h2 style="font-size:18px">Find person</h2><p>For phones that won't scan.</p></div><button type="button" class="icon-btn" data-close aria-label="Close"><svg><use href="#i-x"/></svg></button></header>
+  <div class="inner"><label class="searchbox"><svg><use href="#i-search"/></svg><input placeholder="Name, email or ticket code" id="find-q"></label><div id="find-res"></div></div><footer><button class="btn" data-close>Close</button></footer></div></div>
+
+<div class="scrim" id="m-edit"><form class="modal" onsubmit="return false"><header><div><h2 style="font-size:18px">Edit person</h2><p>Jane Smith · order PP-0412</p></div><button type="button" class="icon-btn" data-close aria-label="Close"><svg><use href="#i-x"/></svg></button></header>
+  <div class="inner"><div class="row-2"><div><label class="f">Name</label><input class="input" value="Jane Smith"></div><div><label class="f">Email</label><input class="input" value="jane@ucalgary.ca"></div></div><div><label class="f">Note</label><input class="input" placeholder="Visible to execs only"></div></div>
+  <footer><button type="button" class="btn" data-close>Cancel</button><button type="button" class="btn primary" data-close data-toast="Saved">Save</button></footer></form></div>
+
+<div class="toasts" id="toasts"></div>
+<div class="mockbar">Design mock: placeholder data, not connected to the portal</div>
+
+<script>
+/* ===== placeholder data (production would use the real API responses) ===== */
+const $ = (s, r = document) => r.querySelector(s), $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const ic = (n) => `<svg><use href="#i-${n}"/></svg>`;
+const EVENTS = [
+  { id: "p", name: "Pearls N' Pearls", mon: "OCT", d: 10, time: "Fri · 5:00 PM", at: 47, cap: 100, status: "open", hue: "#c8201e,#7a1210" },
+  { id: "k", name: "Karaoke Night", mon: "OCT", d: 18, time: "Sat · 7:00 PM", at: 82, cap: 120, status: "open", hue: "#b9893a,#6e4a14" },
+  { id: "h", name: "Hot Pot Social", mon: "NOV", d: 2, time: "Sun · 6:00 PM", at: 0, cap: 60, status: "draft", hue: "#3a3430,#1d1a17" },
+];
+const MEMBERS = [["Gordon Chen","CSS-000123","gordon@example.com","Sept 2026","Paid","30240660",1],["Jane Smith","CSS-000124","jane@example.com","Sept 2026","Paid","30251122",1],["Wei Zhang","CSS-000090","wei@example.com","Sept 2025","Expired","30199045",0],["Mia Tran","CSS-000131","mia@example.com","Oct 2026","Paid","30260871",1],["Liam Wong","CSS-000077","liam@example.com","Sept 2025","Expired","30188331",0],["Hana Lee","CSS-000140","hana@example.com","Oct 2026","Paid","30277702",1]];
+const ATT = [["Jane Smith","General","paid","PP-0412"],["Wei Zhang","Member","paid","PP-0413"],["Mia Tran","Member","awaiting","PP-0414"],["Liam Wong","General","paid","PP-0415"],["Hana Lee","Member","paid","PP-0416"],["Ravi Patel","General","awaiting","PP-0417"],["Chloe Ng","Member","paid","PP-0418"],["Ben Ko","General","overdue","PP-0419"]];
+const ORDERS = [["PP-0414","Mia Tran","$5.00","awaiting","2 days ago"],["PP-0417","Ravi Patel","$8.00","awaiting","1 day ago"],["PP-0420","Ana Cruz","$10.00","awaiting","5 h ago"],["PP-0421","Tom Reid","$8.00","awaiting","3 h ago"],["PP-0419","Ben Ko","$8.00","overdue","6 days ago"],["PP-0412","Jane Smith","$8.00","paid","8 days ago"],["PP-0413","Wei Zhang","$5.00","paid","8 days ago"],["PP-0401","Sam Ito","$8.00","closed","9 days ago"]];
+const FEED = [["pay","check","Payment marked as paid","Jane Smith · Pearls N' Pearls","2 min ago","ok","6:42 PM","Today"],["door","scan","Member checked in","Wei Zhang · Karaoke Night","5 min ago","ok","6:38 PM","Today"],["reg","user","New registration","Mia Tran · Pearls N' Pearls","8 min ago","info","6:35 PM","Today"],["event","edit","Event updated","Karaoke Night · capacity 120","1 h ago","gold","5:31 PM","Today"],["pay","alert","Order closed (overdue)","Sam Ito · Pearls N' Pearls","3 h ago","bad","3:12 PM","Today"],["reg","user","New registration","Hana Lee · Karaoke Night","Yesterday","info","9:50 PM","Yesterday"],["door","scan","Entry opened","Karaoke Night","Yesterday","ok","7:00 PM","Yesterday"]];
+const COL = { ok: ["var(--ok-soft)","var(--ok)"], info: ["var(--info-soft)","var(--info)"], gold: ["var(--gold-soft)","var(--gold)"], bad: ["var(--bad-soft)","var(--bad)"] };
+const STAT = { paid: ["b-ok","Paid"], awaiting: ["b-warn","Awaiting"], overdue: ["b-bad","Overdue"], closed: ["b-mute","Closed"], in: ["b-info","Checked in"] };
+const initials = (n) => n.split(" ").map((p) => p[0]).join("").slice(0, 2);
+
+/* ===== navigation (hash routed; production keeps the existing data-tab handlers) ===== */
+const TITLES = { overview: "Overview", members: "Members", events: "Events", event: "Events / Pearls N' Pearls", editor: "Events / Edit", payments: "Payments", door: "Door", scanner: "Scanner", activity: "Activity", settings: "Settings" };
+function go(v) {
+  if (!$("#v-" + v)) v = "overview";
+  $$(".view").forEach((e) => e.classList.toggle("on", e.id === "v-" + v));
+  const nav = v === "event" || v === "editor" ? "events" : v;
+  $$(".nav a").forEach((a) => a.classList.toggle("on", a.dataset.go === nav));
+  $("#crumb").textContent = TITLES[v]; document.body.classList.remove("nav-open");
+  const p = $("#page"); p.style.animation = "none"; p.offsetWidth; p.style.animation = "";
+  scrollTo(0, 0); if (location.hash !== "#" + v) history.replaceState(null, "", "#" + v);
+}
+document.addEventListener("click", (e) => {
+  const g = e.target.closest("[data-go]"); if (g) { e.preventDefault(); go(g.dataset.go); }
+  const o = e.target.closest("[data-open]"); if (o) $("#" + o.dataset.open).classList.add("on");
+  if (e.target.closest("[data-close]") || e.target.classList.contains("scrim")) $$(".scrim.on").forEach((s) => s.classList.remove("on"));
+  const t = e.target.closest("[data-toast]"); if (t) toast(t.dataset.toast);
+});
+addEventListener("keydown", (e) => { if (e.key === "Escape") $$(".scrim.on").forEach((s) => s.classList.remove("on")); if (e.key === "/" && !/INPUT|TEXTAREA/.test(document.activeElement.tagName)) { e.preventDefault(); go("members"); $("#m-q").focus(); } });
+$("#skin").onclick = () => { const r = document.documentElement; r.dataset.skin = r.dataset.skin === "ink" ? "" : "ink"; try { localStorage.skin = r.dataset.skin; } catch (e) {} toast(r.dataset.skin === "ink" ? "Theme: Ink" : "Theme: Warm"); };
+try { if (localStorage.skin) document.documentElement.dataset.skin = localStorage.skin; } catch (e) {}
+$("#burger").onclick = () => document.body.classList.toggle("nav-open");
+document.body.addEventListener("click", (e) => { if (document.body.classList.contains("nav-open") && !e.target.closest(".side") && !e.target.closest("#burger")) document.body.classList.remove("nav-open"); });
+$("#theme").onclick = () => { const r = document.documentElement, d = r.dataset.theme === "dark" || (!r.dataset.theme && matchMedia("(prefers-color-scheme: dark)").matches); r.dataset.theme = d ? "light" : "dark"; };
+function toast(msg) { const t = document.createElement("div"); t.className = "toast"; t.innerHTML = ic("check") + `<span>${msg}</span>`; $("#toasts").append(t); setTimeout(() => { t.style.transition = "opacity .3s"; t.style.opacity = 0; setTimeout(() => t.remove(), 300); }, 2600); }
+
+/* ===== greeting ===== */
+const hr = new Date().getHours(); $("#greet").textContent = `Good ${hr < 12 ? "morning" : hr < 18 ? "afternoon" : "evening"}, Gordon`;
+$("#today").textContent = new Date().toLocaleDateString("en-CA", { weekday: "long", month: "long", day: "numeric" });
+
+/* ===== overview ===== */
+const evRow = (e) => `<div class="event-row" data-go="event"><div class="date-chip"><i>${e.mon}</i><b>${e.d}</b></div><div><h3>${e.name}</h3><div class="meta">${e.time} · <span class="num">${e.at} / ${e.cap}</span> attendees</div></div><div class="right"><span class="badge ${e.status === "open" ? "b-ok" : "b-mute"}">${e.status === "open" ? "Registration open" : "Draft"}</span><span style="color:var(--brand-ink);font-size:13px;font-weight:500">Manage →</span></div></div>`;
+$("#ov-events").innerHTML = EVENTS.map(evRow).join("");
+const feedRow = (f) => `<div class="feed-i"><div class="ic" style="background:${COL[f[5]][0]};color:${COL[f[5]][1]}">${ic(f[1])}</div><div><p>${f[2]}</p><small>${f[3]}</small></div><time>${f[4]}</time></div>`;
+$("#ov-feed").innerHTML = FEED.slice(0, 5).map(feedRow).join("");
+
+/* ===== members ===== */
+function memberCard(m, i) { return `<article class="card member" style="animation-delay:${i * 40}ms"><div class="m-top"><div class="avatar">${initials(m[0])}</div><div><h3>${m[0]}</h3><small class="mono">${m[1]}</small></div><span class="badge ${m[6] ? "b-ok" : "b-mute"}">${m[6] ? "Active" : "Expired"}</span></div>
+<div class="kv"><div><span>Member since</span><b>${m[3]}</b></div><div><span>Status</span><b>${m[4]}</b></div><div><span>UCID</span><b class="mono">${m[5]}</b></div></div>
+<div class="m-foot">${ic("mail")}<span>${m[2]}</span><button class="btn sm" data-open="m-edit">View member</button></div></article>`; }
+function renderMembers(q = "") {
+  const k = q.trim().toLowerCase(), list = MEMBERS.filter((m) => !k || m.join(" ").toLowerCase().includes(k));
+  $("#m-list").innerHTML = list.map(memberCard).join("");
+  $("#m-state").innerHTML = list.length ? "" : `<div class="state"><div class="ill">${ic("search")}</div><b>No members found</b><p>Try another name, email, UCID, or member ID.</p></div>`;
+}
+$("#m-q").oninput = (e) => renderMembers(e.target.value); renderMembers();
+$$("#m-chips .chip").forEach((c) => c.onclick = () => { $$("#m-chips .chip").forEach((x) => x.classList.toggle("on", x === c)); });
+$("#m-demo-empty").onclick = () => { $("#m-list").innerHTML = ""; $("#m-state").innerHTML = `<div class="state"><div class="ill">${ic("search")}</div><b>No members found</b><p>Try another name, email, UCID, or member ID.</p></div>`; };
+$("#m-demo-load").onclick = () => { $("#m-list").innerHTML = ""; $("#m-state").innerHTML = `<div class="state"><span class="spin"></span>Loading members…</div><div class="members">${[1,2,3].map(() => `<div class="card member"><div class="skel" style="width:60%;margin-bottom:14px"></div><div class="skel" style="margin-bottom:10px"></div><div class="skel" style="width:80%"></div></div>`).join("")}</div>`; };
+$("#m-demo-err").onclick = () => { $("#m-list").innerHTML = ""; $("#m-state").innerHTML = `<div class="state err"><div class="ill">${ic("alert")}</div><b>Something went wrong</b><p>We couldn't load the member list.</p><button class="btn" id="retry">Try again</button></div>`; $("#retry").onclick = () => renderMembers(); };
+$("#m-demo-reset").onclick = () => renderMembers();
+
+/* ===== events list ===== */
+$("#ev-cards").innerHTML = EVENTS.map((e) => `<article class="card ev ${e.status === "draft" ? "draft" : ""}" data-go="event"><div class="img ${e.status === "draft" ? "empty" : ""}" style="background-color:#000;background-image:linear-gradient(135deg,${e.hue})"><span class="badge ${e.status === "open" ? "b-ok" : "b-mute"}">${e.status === "open" ? "Published" : "Draft"}</span></div>
+<div class="body"><h3>${e.name}</h3><div class="meta">${e.mon[0] + e.mon.slice(1).toLowerCase()} ${e.d} · ${e.time.split("· ")[1]}</div><div class="cap"><span>${e.at} / ${e.cap} attendees</span><span>${Math.round(e.at / e.cap * 100)}%</span></div><div class="bar"><i style="width:${e.at / e.cap * 100}%"></i></div></div></article>`).join("")
+ + `<article class="card ev new" id="new-card"><div>${ic("plus")}<b>Create event</b></div></article>`;
+$("#new-card").onclick = $("#new-event").onclick = () => go("editor"); $("#edit-event").onclick = () => go("editor");
+$$("#ev-seg button").forEach((b) => b.onclick = () => $$("#ev-seg button").forEach((x) => x.classList.toggle("on", x === b)));
+$("#save-event").onclick = () => { toast("Event saved"); go("event"); };
+
+/* ===== event detail attendees ===== */
+function renderAtt() {
+  const f = $("#att-seg .on").dataset.f, q = $("#att-q").value.toLowerCase();
+  const rows = ATT.filter((a) => (f === "all" || a[2] === f) && (!q || a.join(" ").toLowerCase().includes(q)));
+  $("#att-body").innerHTML = rows.length ? rows.map((a) => `<tr><td><div class="who-cell"><div class="avatar">${initials(a[0])}</div><div>${a[0]}<small>${a[0].split(" ")[0].toLowerCase()}@example.com</small></div></div></td><td>${a[1]}</td><td><span class="badge ${STAT[a[2]][0]}">${STAT[a[2]][1]}</span></td><td class="mono">${a[3]}</td><td style="text-align:right"><button class="btn ghost sm" data-open="m-edit">Edit</button></td></tr>`).join("")
+    : `<tr><td colspan="5"><div class="state"><div class="ill">${ic("users")}</div><b>No attendees match</b><p>Try a different filter or search.</p></div></td></tr>`;
+  $("#att-count").textContent = `Showing ${rows.length} of 47`;
+}
+$$("#att-seg button").forEach((b) => b.onclick = () => { $$("#att-seg button").forEach((x) => x.classList.toggle("on", x === b)); renderAtt(); });
+$("#att-q").oninput = renderAtt; renderAtt();
+
+/* ===== editor side steps ===== */
+$$("#steps a, #v-settings .steps a").forEach((a) => a.onclick = (e) => { e.preventDefault(); const par = a.parentElement; $$("a", par).forEach((x) => x.classList.toggle("on", x === a)); $(a.getAttribute("href")).scrollIntoView({ behavior: "smooth", block: "start" }); });
+
+/* ===== payments ===== */
+let payF = "awaiting";
+function renderPay() {
+  const rows = ORDERS.filter((o) => o[3] === payF);
+  $("#pay-body").innerHTML = rows.length ? rows.map((o) => `<tr><td><input type="checkbox" class="cb row-cb" aria-label="Select"></td><td><div class="who-cell"><div class="avatar">${initials(o[1])}</div><div>${o[1]}<small class="mono">${o[0]}</small></div></div></td><td class="num">${o[2]}</td><td><span class="badge ${STAT[o[3]][0]}">${STAT[o[3]][1]}</span></td><td style="color:var(--text-3)">${o[4]}</td><td style="text-align:right">${o[3] === "paid" || o[3] === "closed" ? "" : `<button class="btn sm primary" data-toast="Marked as paid">Mark paid</button>`}</td></tr>`).join("")
+    : `<tr><td colspan="6"><div class="state"><div class="ill">${ic("check")}</div><b>Nothing here</b><p>No ${payF} orders for this event.</p></div></td></tr>`;
+  $("#cb-all").checked = false; bulk();
+}
+function bulk() { const n = $$(".row-cb:checked").length; $("#bulk").classList.toggle("on", n > 0); $("#bulk-n").textContent = n + " selected"; }
+document.addEventListener("change", (e) => { if (e.target.id === "cb-all") { $$(".row-cb").forEach((c) => c.checked = e.target.checked); bulk(); } if (e.target.classList.contains("row-cb")) bulk(); });
+$$("#pay-sum .pay-tile").forEach((t) => t.onclick = () => { payF = t.dataset.pf; $$("#pay-sum .pay-tile").forEach((x) => x.classList.toggle("on", x === t)); renderPay(); });
+$("#bulk-paid").onclick = () => { toast($$(".row-cb:checked").length + " orders marked paid"); renderPay(); }; renderPay();
+
+/* ===== door (help desk) + scanner page. Shared mock state stands in for the server ===== */
+let inside = 47, entryOpen = true;
+const nowT = () => new Date().toLocaleTimeString("en-CA", { hour: "numeric", minute: "2-digit" });
+const RES = { ok: ["ok", "check", "Checked in"], dupe: ["warn", "alert", "Already in"], unpaid: ["info", "card", "Unpaid"], bad: ["bad", "x", "Invalid"] };
+const BG = { ok: ["var(--ok-soft)", "var(--ok)"], warn: ["var(--warn-soft)", "var(--warn)"], info: ["var(--info-soft)", "var(--info)"], bad: ["var(--bad-soft)", "var(--bad)"] };
+const scans = [["Wei Zhang", "ok", "Door 1", "6:42 PM"], ["Jane Smith", "ok", "Door 2", "6:41 PM"], ["Ben Ko", "unpaid", "Door 1", "6:41 PM"], ["Mia Tran", "ok", "Door 1", "6:40 PM"], ["Wei Zhang", "dupe", "Door 2", "6:40 PM"]];
+const rowHtml = (s, fresh) => { const r = RES[s[1]], c = BG[r[0]]; return `<div class="lf ${fresh ? "new" : ""}"><div class="ic" style="background:${c[0]};color:${c[1]}">${ic(r[1])}</div><div><b>${s[0]}</b><small>${r[2]} · ${s[2]}</small></div><time>${s[3]}</time></div>`; };
+const renderRecent = (fresh) => { $("#recent").innerHTML = scans.slice(0, 12).map((s, i) => rowHtml(s, fresh && i === 0)).join(""); $("#sc-recent").innerHTML = scans.slice(0, 4).map((s) => `<div class="r"><div class="ic" style="width:22px;height:22px;border-radius:50%;display:grid;place-items:center;background:${BG[RES[s[1]][0]][0]};color:${BG[RES[s[1]][0]][1]}">${ic(RES[s[1]][1])}</div><span>${s[0]}</span><time>${s[3]}</time></div>`).join(""); };
+function setInside(n) { inside = n; $("#inside").textContent = n; $("#sc-n").textContent = n; $("#inside-bar").style.width = n + "%"; $("#inside").classList.add("bump"); setTimeout(() => $("#inside").classList.remove("bump"), 300); }
+function addScan(name, kind, who) { scans.unshift([name, kind, who, nowT()]); if (kind === "ok") setInside(inside + 1); renderRecent(true); }
+renderRecent();
+
+/* live feed: in production this is the existing door list refresh on a short timer */
+const GUESTS = ["Chloe Ng", "Hana Lee", "Ravi Patel", "Liam Wong", "Ana Cruz", "Tom Reid", "Sam Ito"]; let paused = false, gi = 0;
+setInterval(() => { if (paused || !entryOpen || !$("#v-door").classList.contains("on")) return; addScan(GUESTS[gi++ % GUESTS.length], Math.random() < .12 ? "dupe" : "ok", Math.random() < .5 ? "Door 1" : "Door 2"); }, 4500);
+$("#live-pause").onclick = (e) => { paused = !paused; e.currentTarget.textContent = paused ? "Resume" : "Pause"; $("#live-badge").classList.toggle("paused", paused); $("#live-badge").lastChild.textContent = paused ? "PAUSED" : "LIVE"; };
+
+/* entry switch (the one control the help desk needs most) */
+function setEntry(open) {
+  entryOpen = open; const b = $("#entry"); b.setAttribute("aria-checked", open); $("#entry-card").classList.toggle("closed", !open);
+  $("#entry-state").textContent = open ? "Open" : "Closed"; $("#entry-hint").textContent = open ? "Scanners are accepting tickets right now." : "Scanners will say entry is closed. Turn on when doors open.";
+  $("#sc-closed").hidden = open; $("#sc-open").hidden = !open;
+}
+$("#entry").onclick = () => { setEntry(!entryOpen); toast(entryOpen ? "Entry is open" : "Entry closed"); };
+setEntry(true);
+
+/* find person: inline, instant */
+const FOUND = (k) => ATT.filter((a) => a.join(" ").toLowerCase().includes(k));
+const findRow = (a) => `<div class="fr"><div class="avatar" style="width:32px;height:32px;font-size:12px">${initials(a[0])}</div><div class="grow"><b style="font-weight:500">${a[0]}</b><small class="mono">${a[3]} · ${a[1]}</small></div>${a[2] === "paid" ? `<button class="btn sm primary" data-checkin="${a[0]}">Check in</button>` : `<span class="badge ${STAT[a[2]][0]}">${STAT[a[2]][1]}</span><button class="btn sm" data-checkin="${a[0]}" data-pay="1">Collect & check in</button>`}</div>`;
+$("#find-inline").oninput = (e) => { const k = e.target.value.trim().toLowerCase(); $("#find-inline-res").innerHTML = !k ? "" : (FOUND(k).slice(0, 5).map(findRow).join("") || `<div class="state" style="padding:22px"><b>No match</b><p style="margin:2px 0 0">Try a name, email, UCID or ticket code, or add a walk-in.</p></div>`); };
+document.addEventListener("click", (e) => { const c = e.target.closest("[data-checkin]"); if (!c) return; addScan(c.dataset.checkin, "ok", "Help desk"); toast(c.dataset.checkin + " checked in"); c.closest(".fr, .dq").remove(); });
+
+/* unpaid / flagged queues */
+const QUEUES = { unpaid: [["Ben Ko", "PP-0419", "$8.00 owing"], ["Mia Tran", "PP-0414", "$5.00 owing"], ["Ravi Patel", "PP-0417", "$8.00 owing"], ["Ana Cruz", "PP-0420", "$10.00 owing"]], flag: [["Sam Ito", "PP-0401", "Order closed, ticket still scanned"], ["Chloe Ng", "PP-0418", "Name doesn't match ID"]] };
+function renderQ(q = "unpaid") { $("#dq-list").innerHTML = QUEUES[q].map((p) => `<div class="dq"><div class="grow"><b style="font-weight:500">${p[0]}</b><small>${p[1]} · ${p[2]}</small></div>${q === "unpaid" ? `<button class="btn sm primary" data-checkin="${p[0]}">Collect & check in</button>` : `<button class="btn sm" data-open="m-edit">Review</button>`}</div>`).join(""); }
+$$("#dq-seg button").forEach((b) => b.onclick = () => { $$("#dq-seg button").forEach((x) => x.classList.toggle("on", x === b)); renderQ(b.dataset.q); }); renderQ();
+
+/* scanner page */
+const VERDICT = { ok: ["v-ok", "check", "Welcome in", "Jane Smith · General"], dupe: ["v-dupe", "alert", "Already checked in", "Wei Zhang · in at 6:42 PM"], unpaid: ["v-unpaid", "card", "Not paid yet", "Ben Ko · send to the help desk"], bad: ["v-bad", "x", "Invalid ticket", "This code isn't for this event"] };
+const NAMES = { ok: "Jane Smith", dupe: "Wei Zhang", unpaid: "Ben Ko" }; let vt;
+$$("[data-sim]").forEach((b) => b.onclick = () => {
+  const k = b.dataset.sim, v = VERDICT[k], el = $("#vd"); el.className = "verdict on " + v[0]; el.querySelector("svg").innerHTML = `<use href="#i-${v[1]}"/>`; $("#vd-t").textContent = v[2]; $("#vd-s").textContent = v[3];
+  if (navigator.vibrate) navigator.vibrate(k === "ok" ? 40 : [60, 40, 60]);
+  if (NAMES[k]) addScan(NAMES[k], k, $("#sc-who").textContent); else renderRecent();
+  clearTimeout(vt); vt = setTimeout(() => el.classList.remove("on"), 1800);
+});
+$("#vd").onclick = () => $("#vd").classList.remove("on");
+$("#sc-start").onclick = () => { const n = $("#sc-name"); n.parentElement.classList.toggle("bad", !n.value.trim()); if (!n.value.trim()) return; $("#sc-who").textContent = n.value.trim(); $("#sc-login").hidden = true; $("#sc-live").hidden = false; };
+$("#sc-name").onkeydown = (e) => { if (e.key === "Enter") $("#sc-start").click(); };
+$("#sc-recheck").onclick = (e) => { e.currentTarget.textContent = "Still closed"; setTimeout(() => e.currentTarget.textContent = "Check now", 1200); };
+const _go = go; go = function (v) { document.body.classList.toggle("bare", v === "scanner"); _go(v); };
+
+/* ===== activity ===== */
+function renderAct(c = "all") {
+  const rows = FEED.filter((f) => c === "all" || f[0] === c); let day = "", out = "";
+  rows.forEach((f) => { if (f[7] !== day) { day = f[7]; out += `${out ? "</div>" : ""}<div class="day">${day}</div><div class="tl">`; } out += `<div class="tl-i" style="--c:${COL[f[5]][1]}"><time>${f[6]}</time><p>${f[2]}</p><small>${f[3]}</small></div>`; });
+  $("#act-list").innerHTML = out ? out + "</div>" : `<div class="state"><b>No activity</b></div>`;
+}
+$$("#act-seg button").forEach((b) => b.onclick = () => { $$("#act-seg button").forEach((x) => x.classList.toggle("on", x === b)); renderAct(b.dataset.c); }); renderAct();
+
+/* ===== modals ===== */
+$$("#mail-chips .chip").forEach((c) => c.onclick = () => { $$("#mail-chips .chip").forEach((x) => x.classList.toggle("on", x === c)); });
+function loading(btn, label, done) { btn.disabled = true; btn.innerHTML = `<span class="spin" style="width:14px;height:14px;margin:0;border-top-color:#fff;border-color:rgba(255,255,255,.4)"></span>Working…`; setTimeout(() => { btn.disabled = false; btn.textContent = label; done(); }, 900); }
+$("#add-go").onclick = (e) => {
+  const n = $("#add-name"), m = $("#add-email"); n.parentElement.classList.toggle("bad", !n.value.trim()); m.parentElement.classList.toggle("bad", !/^\S+@\S+\.\S+$/.test(m.value));
+  if ($$("#m-add .bad").length) return;
+  loading(e.currentTarget, "Add registration", () => { $("#m-add").classList.remove("on"); toast("Registration added. Ticket emailed."); n.value = m.value = ""; });
+};
+$("#mail-go").onclick = (e) => loading(e.currentTarget, "Send to 47 people", () => { $("#m-mail").classList.remove("on"); toast("Emails queued"); });
+go(location.hash.slice(1) || "overview");
+</script>
+</body>
+</html>
