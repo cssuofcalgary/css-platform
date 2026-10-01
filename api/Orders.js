@@ -296,3 +296,25 @@ function registrationCounts_() {
   });
   return counts;
 }
+
+/**
+ * Admin only (checked by the caller): removes ONE order and all of its tickets for good. For clearing test purchases
+ * and dummy data without touching the rest of the event. Cannot be undone (the backups still hold the old rows).
+ */
+function deleteOrder_(session, orderId) {
+  return withIntakeLock_(function () {
+    return withLock_(function () {
+      const order = readRows_("Orders").filter(function (o) { return o.id === orderId; })[0];
+      if (!order) throw new ApiError_("NOT_FOUND", "Order not found.");
+      const tickets = readRows_("Tickets").filter(function (t) { return t.orderId === orderId; });
+
+      deleteTabRows_({ sheet: table_("Tickets"), header: headerFor_("Tickets") }, idSet_(tickets));
+      deleteTabRows_({ sheet: table_("Orders"), header: headerFor_("Orders") }, { [String(order.id)]: true });
+      forgetLiveRows_();   // forgets the cached Orders and Tickets, and where each ticket sat in the sheet
+      delete DB_.rows["Orders"]; delete DB_.rows["Tickets"];
+
+      log_(session.name, "order.delete", order.code, { payerName: order.payerName, total: order.total, tickets: tickets.length });
+      return { ok: true, deleted: true };
+    });
+  });
+}

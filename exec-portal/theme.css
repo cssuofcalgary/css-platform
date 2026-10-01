@@ -513,3 +513,6 @@ input[type="checkbox"].toggle { appearance: none; -webkit-appearance: none; widt
 
 /* ---------- v0.9.4: the help desk on a computer has no camera button (scanning is for the scanner phones) ---------- */
 body:not(.scanner-mode):not(.phone) .door-buttons { display: none; }
+
+/* Delete order (admin only, inside the edit dialog) */
+.button-row #ed-delete { grid-column: 1 / -1; justify-self: center; color: var(--bad-text); }

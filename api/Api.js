@@ -137,6 +137,9 @@ function route_(req) {
     case "refundOrder":
       return refundOrder_(requireSession_(req.token), req.orderId, req.reason);
 
+    case "deleteOrder":
+      return deleteOrder_(requireAdmin_(req.token), req.orderId);
+
     case "resendTickets":
       return resendTickets_(requireSession_(req.token), req.orderId, req.siteUrl);
 

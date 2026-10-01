@@ -20,6 +20,7 @@ function openEditDialog(ctx, onSaved) {
   $("ed-email").value = ticket.email || "";
   $("edit-admin").hidden = !isAdmin;
   $("edit-locked").hidden = isAdmin;
+  $("ed-delete").hidden = !isAdmin;
 
   if (isAdmin) {
     $("ed-ucid").value = ticket.ucid || "";
@@ -103,7 +104,22 @@ async function onEditSubmit(event) {
   if (editState.onSaved) editState.onSaved(message);
 }
 
+async function onEditDelete() {
+  const { ticket, order } = editState.ctx;
+  if (!confirm(T.editDeleteConfirm(order.code || "", ticket.name || ""))) return;
+  setEditBusy(true);
+  const reply = await api("deleteOrder", { orderId: order.id });
+  if (!reply.ok) {
+    setEditBusy(false);
+    if (reply.error === "NOT_LOGGED_IN") { $("edit-dialog").close(); return handleEventError(reply, $("edit-error")); }
+    return setEditError(errorText(reply));
+  }
+  $("edit-dialog").close();
+  if (editState.onSaved) editState.onSaved(T.orderDeleted);   // shows the toast and reloads the list
+}
+
 function setEditBusy(busy) {
+  $("ed-delete").disabled = busy;
   $("edit-save").disabled = busy;
   $("edit-save").textContent = busy ? T.editSaving : T.editSave;
 }
@@ -114,4 +130,5 @@ function setEditError(text) {
 }
 
 $("edit-form").addEventListener("submit", onEditSubmit);
+$("ed-delete").addEventListener("click", onEditDelete);
 $("edit-cancel").addEventListener("click", () => $("edit-dialog").close());

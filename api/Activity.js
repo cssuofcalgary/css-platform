@@ -10,7 +10,7 @@ const ACTIVITY_LIMITS = [50, 100, 200];   // what the "show" dropdown offers
 
 /** Groups the filter chips use. */
 const ACTIVITY_GROUPS = {
-  payments: ["order.paid", "order.refunded", "order.cancelled", "order.create", "order.manual", "tickets.resend", "reminders.send"],
+  payments: ["order.paid", "order.refunded", "order.cancelled", "order.create", "order.manual", "order.delete", "tickets.resend", "reminders.send"],
   door: ["checkin", "checkin.desk", "checkin.undo", "walkin", "entry.open", "entry.close", "entry.autoclose"],
   system: ["backup"],
   edits: ["ticket.edit"],
@@ -68,6 +68,7 @@ function activitySummary_(r, events) {
     case "tickets.lookup": return "a member used Find my tickets (" + (d.by === "ucid" ? "UCID" : "email") + ", " + (d.emails || 0) + " email" + (d.emails === 1 ? "" : "s") + " sent)";
     case "access.open": return "a " + (d.as === "member" ? "member" : "ticket holder") + " opened their page with UCID and last name";
     case "pass.lookup": return "a member used Find my pass (" + (d.by === "ucid" ? "UCID" : "email") + ", " + (d.sent ? "email sent" : "nothing sent") + ")";
+    case "order.delete": return "DELETED order " + r.target + " (" + (d.payerName || "") + ", " + (d.tickets || 0) + " ticket" + (d.tickets === 1 ? "" : "s") + ", $" + (d.total || 0) + ")";
     case "tickets.resend": return "resent tickets for order " + r.target;
     case "reminders.send": return "sent " + (d.sent || 0) + " payment reminder" + (d.sent === 1 ? "" : "s");
     case "checkin": return "checked in " + d.name;
