@@ -83,8 +83,8 @@ function renderEvents() {
     const pct = e.capacity ? Math.min(100, Math.round((c.paid / e.capacity) * 100)) : 0;
     const cover = e.imageUrl ? `<img class="ev-cover" src="${escapeHtml(e.imageUrl)}" alt="" loading="lazy">` : "";
     return `
-    <li class="card event-row event-card">
-      <div class="ev-banner">${cover}${statusPill(e.status)}</div>
+    <li class="card event-row event-card" data-id="${e.id}">
+      <div class="ev-banner">${cover}${statusPill(e.status)}${e.entryOpen ? `<span class="live-pill">🟢 ${T.doorsOpen}</span>` : ""}</div>
       <div class="ev-info">
         <div class="name">${escapeHtml(e.name)}</div>
         <div class="sub">${escapeHtml(formatEventDate(e))}${e.location ? " · " + escapeHtml(e.location) : ""}</div>
@@ -111,7 +111,15 @@ function renderEvents() {
 
 async function onEventsListClick(event) {
   const button = event.target.closest("button[data-action]");
-  if (!button) return;
+  if (!button) {
+    // Clicking anywhere else on the card opens its attendees (links such as "Public page" keep doing their own thing).
+    const card = event.target.closest(".event-card");
+    if (!card || event.target.closest("a, button")) return;
+    const opened = eventsState.events.find((e) => e.id === card.dataset.id);
+    if (opened) openAttendees(opened);
+    return;
+  }
+  event.stopPropagation();
   const target = eventsState.events.find((e) => e.id === button.dataset.id);
   if (!target) return;
   if (button.dataset.action === "edit") return openEditor(target);

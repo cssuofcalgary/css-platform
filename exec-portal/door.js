@@ -296,10 +296,30 @@ async function toggleEntry() {
   const open = !doorState.data.event.entryOpen;
   if (!open && !confirm(T.confirmCloseEntry)) return;
   $("entry-toggle").disabled = true;
+
+  // Only one event takes check-ins at a time: turning entry on closes any other event that still has its doors open.
+  if (open) {
+    const fresh = await api("listEvents");   // a fresh look, in case another exec opened a different event
+    if (fresh.ok) { eventsState.events = fresh.events; eventsState.counts = fresh.counts || {}; }
+    const others = eventsState.events.filter((e) => e.entryOpen && e.id !== doorState.eventId && e.status !== "archived");
+    if (others.length) {
+      const names = others.map((e) => e.name).join(" and ");
+      if (!confirm(T.confirmSwitchDoors(names, doorState.data.event.name))) { $("entry-toggle").disabled = false; return; }
+      for (const other of others) {
+        const closed = await api("setEntryOpen", { eventId: other.id, open: false });
+        if (!closed.ok) { $("entry-toggle").disabled = false; return showResult({ color: "red", message: errorText(closed) }); }
+        other.entryOpen = false;
+      }
+    }
+  }
+
   const reply = await api("setEntryOpen", { eventId: doorState.eventId, open });
   $("entry-toggle").disabled = false;
   if (!reply.ok) return showResult({ color: "red", message: errorText(reply) });
   doorState.data.event.entryOpen = open;
+  const mine = eventsState.events.find((e) => e.id === doorState.eventId);
+  if (mine) mine.entryOpen = open;   // so the Events tab shows the right DOORS OPEN pill
+  renderEvents();
   renderDoor();
 }
 
