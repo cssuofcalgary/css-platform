@@ -54,6 +54,9 @@ $("admin-gear").addEventListener("click", openAdminDialog);
 $("admin-cancel").addEventListener("click", () => $("admin-dialog").close());
 $("admin-form").addEventListener("submit", onAdminSubmit);
 
+// ---- Tap the logo to refresh the page (handy on a phone at the door) ----
+document.addEventListener("click", (ev) => { if (ev.target.closest(".logo, .login-logo")) window.location.reload(); });
+
 // ---- Event pickers: only Door and Payments have one. Picking an event in either follows into the other. ----
 ["pay-event", "door-event"].forEach((id) => $(id).addEventListener("change", () => {
   globalEventId = $(id).value;

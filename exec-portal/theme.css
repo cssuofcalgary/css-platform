@@ -139,7 +139,6 @@ body.nav-open::after { content: ""; position: fixed; inset: 0; background: rgba(
 .global-event { margin-left: auto; }
 .content { max-width: 1180px; margin: 0 auto; padding: 22px 16px 56px; animation: rise .35s var(--ease); }
 @keyframes rise { from { opacity: 0; transform: translateY(6px); } }
-.site-footer { margin: 0 16px 24px; color: var(--muted); }
 
 @media (min-width: 960px) {
   body:not(.scanner-mode) #app-view { display: grid; grid-template-columns: var(--side) minmax(0, 1fr); grid-template-rows: none; min-height: 100vh; }
@@ -153,8 +152,7 @@ body.nav-open::after { content: ""; position: fixed; inset: 0; background: rgba(
   .global-event:not([hidden]) { min-width: 240px; max-width: 420px; padding: 6px 10px; font-weight: 500; background: var(--surface); }
   #tab-door { max-width: none; }
   .tiles { grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); }
-  .site-footer { margin-left: calc(var(--side) + 32px); text-align: left; }
-}
+  }
 
 /* ---------- overview ---------- */
 .attention, .attn-list { display: grid; gap: 8px; }
@@ -460,3 +458,18 @@ body.scanner-mode .brand-text, body.scanner-mode #admin-gear { display: none; }
 .event-card .event-actions { cursor: default; }
 .ev-banner .live-pill { position: absolute; top: 12px; right: 12px; z-index: 2; background: #17794a; color: #fff; font: 600 11px/1 var(--font); letter-spacing: 1px; padding: 6px 10px; border-radius: 99px; box-shadow: 0 2px 8px rgba(0, 0, 0, .3); animation: livepulse 2.2s infinite; }
 @keyframes livepulse { 0% { box-shadow: 0 0 0 0 rgba(23, 121, 74, .55), 0 2px 8px rgba(0, 0, 0, .3); } 70% { box-shadow: 0 0 0 9px rgba(23, 121, 74, 0), 0 2px 8px rgba(0, 0, 0, .3); } 100% { box-shadow: 0 0 0 0 rgba(23, 121, 74, 0), 0 2px 8px rgba(0, 0, 0, .3); } }
+
+/* ---------- v0.8.4: compact entry card, event name, tappable logo ---------- */
+.logo, .login-logo { cursor: pointer; }
+.entry-card { padding: 10px 16px; gap: 14px; margin-bottom: 12px; }
+.entry-main { gap: 6px; }
+.door-scanning { font-weight: 600; font-size: 14px; color: var(--text); }
+.entry-toggle { height: 36px; width: 170px; font-size: 13px; padding-left: 6px; }
+.entry-toggle::before { width: 22px; height: 22px; }
+.door-live-num { font-size: 26px; letter-spacing: -.5px; }
+.door-live-label { font-size: 10px; letter-spacing: 2px; }
+.door-live-sub { font-size: 12px; }
+.door-live { gap: 6px; }
+body.scanner-mode .entry-card { padding: 8px 12px; margin-bottom: 8px; }
+body.scanner-mode .door-live-num { font-size: 26px; }
+body.scanner-mode .entry-toggle { height: auto; width: auto; padding: 4px 12px; }

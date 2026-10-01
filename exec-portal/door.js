@@ -39,6 +39,7 @@ function renderDoor() {
   $("live-sub").textContent = d.counts.awaiting ? T.liveNotPaid(d.counts.awaiting) : "";
   $("entry-toggle").textContent = SCANNER_MODE ? (d.event.entryOpen ? T.entryOpenPlain : T.entryClosedPlain)
     : d.event.entryOpen ? T.entryOpen : T.entryClosed;
+  $("door-event-name").textContent = T.scanningInto(d.event.name);
   $("entry-toggle").classList.toggle("on", !!d.event.entryOpen);
   $("entry-toggle").setAttribute("aria-pressed", d.event.entryOpen ? "true" : "false");
   $("entry-card").classList.toggle("closed", !d.event.entryOpen);
@@ -97,7 +98,7 @@ async function toggleCamera() {
   try {
     doorState.scanner = new Html5Qrcode("camera");
     await doorState.scanner.start({ facingMode: "environment" }, { fps: 10, qrbox: { width: 240, height: 240 } }, onCode, () => {});
-    $("camera-toggle").textContent = T.stopCamera;
+    $("camera-toggle").hidden = true;   // no stop button: the camera runs until you leave the Door tab
     showIdle(T.readyToScan);
   } catch (err) {
     doorState.scanner = null;
@@ -112,6 +113,7 @@ async function stopCamera() {
   $("camera").hidden = true;
   $("camera").innerHTML = "";
   $("camera-toggle").textContent = T.startCamera;
+  $("camera-toggle").hidden = false;
 }
 
 const PAUSE_AFTER_RESULT_MS = 2500;   // breather after each result (tap the result to skip it)
