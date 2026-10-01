@@ -23,7 +23,7 @@ const REQUEST_TIMEOUT_MS = 35000;
 const RETRY_PAUSE_MS = 1200;
 
 async function api(action, details = {}) {
-  const body = { action, token: state.token, ...details };
+  const body = { action, token: state.token, ...(SCANNER_MODE ? { scanner: true } : {}), ...details };   // "scanner" lets the server count this page as a scanner phone
   if (!API_URL) return MockApi.handle(body);   // demo mode
   // "Busy" means the server never started the action, so EVERY action can safely be tried again. Other hiccups are only
   // retried for lookups; something that changes data is never repeated on a guess.

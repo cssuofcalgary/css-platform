@@ -37,9 +37,12 @@ function doPost(e) {
 
 /** The action being handled right now; requireSession_ uses it to keep door-only sessions to door actions. */
 let ROUTE_ACTION_ = "";
+/** True when the request came from the scanner page (so an exec using a scanner phone still counts as a scanner). */
+let REQ_SCANNER_ = false;
 
 function route_(req) {
   ROUTE_ACTION_ = String(req.action || "");
+  REQ_SCANNER_ = req.scanner === true;
   switch (req.action) {
     // ---- Public (no login) ----
     case "publicEvents":
@@ -75,6 +78,10 @@ function route_(req) {
 
     case "logout":
       endSession_(req.token);
+      return { ok: true };
+
+    case "ping":   // a signed-in page says "still here" every 30 s; requireSession_ records it
+      requireSession_(req.token);
       return { ok: true };
 
     case "searchMembers": {
@@ -159,7 +166,10 @@ function route_(req) {
 
     case "getSettings":
       requireAdmin_(req.token);
-      return getSettings_();
+      return getSettings_(req.token);
+
+    case "kickSession":
+      return kickSession_(requireAdmin_(req.token), req.token, req.tokenToKick);
 
     case "saveSettings":
       return saveSettings_(requireAdmin_(req.token), req.token, req.settings);
@@ -251,6 +261,7 @@ function requireSession_(token) {
   if (!raw) throw new ApiError_("NOT_LOGGED_IN", "Please log in again.");
   const session = JSON.parse(raw);
   if ((session.epoch || "0") !== currentEpoch_()) throw new ApiError_("NOT_LOGGED_IN", "Please log in again.");   // everyone was signed out
+  touchSession_(token, session);
   if (session.role === "door") checkDoorSession_(ROUTE_ACTION_);
   return session;
 }
@@ -263,7 +274,77 @@ function requireAdmin_(token) {
 }
 
 function endSession_(token) {
-  if (token) CacheService.getScriptCache().remove("session_" + token);
+  if (!token) return;
+  CacheService.getScriptCache().remove("session_" + token);
+  forgetSession_(token);
+}
+
+// ---- Who is online -------------------------------------------------------------
+// A small registry in the cache: token -> { id, name, role, lastSeen, isScanner }. Every signed-in request (and the 30 s ping)
+// refreshes its entry; anything not seen for 45 s is treated as closed or locked. The public `id` is what the portal sees and
+// uses to sign a device out: the token itself never leaves the server.
+
+const ACTIVE_SESSIONS_KEY = "ACTIVE_SESSIONS_INDEX";
+const SESSION_ONLINE_MS = 45000;
+const SESSION_TOUCH_MS = 10000;   // a session seen in the last 10 s isn't written again
+
+function readSessionIndex_() {
+  try { return JSON.parse(CacheService.getScriptCache().get(ACTIVE_SESSIONS_KEY) || "{}") || {}; } catch (e) { return {}; }
+}
+
+function writeSessionIndex_(index) {
+  const now = Date.now();
+  Object.keys(index).forEach(function (t) { if (now - index[t].lastSeen > SESSION_ONLINE_MS) delete index[t]; });
+  try { CacheService.getScriptCache().put(ACTIVE_SESSIONS_KEY, JSON.stringify(index), SESSION_SECONDS); } catch (e) { /* the list is a bonus: never fail a request over it */ }
+}
+
+function touchSession_(token, session) {
+  try {
+    const now = Date.now();
+    const index = readSessionIndex_();
+    const prev = index[token];
+    const scanner = session.role === "door" || REQ_SCANNER_;
+    if (prev && now - prev.lastSeen < SESSION_TOUCH_MS && prev.isScanner === scanner) return;
+    index[token] = { id: prev ? prev.id : Utilities.getUuid().slice(0, 8), token: token, name: session.name, role: session.role, lastSeen: now, isScanner: scanner };
+    writeSessionIndex_(index);
+  } catch (e) { /* see above */ }
+}
+
+function forgetSession_(token) {
+  try {
+    const index = readSessionIndex_();
+    if (index[token]) { delete index[token]; writeSessionIndex_(index); }
+  } catch (e) { /* see above */ }
+}
+
+/** How many scanner phones were seen in the last 45 s. */
+function countActiveScanners_() {
+  const now = Date.now(), index = readSessionIndex_();
+  return Object.keys(index).filter(function (t) { return index[t].isScanner && now - index[t].lastSeen <= SESSION_ONLINE_MS; }).length;
+}
+
+/** The online list for Settings. No tokens: just a public id, name, role, when last seen, and which one is the caller's. */
+function activeSessions_(ownToken) {
+  const now = Date.now(), index = readSessionIndex_();
+  return Object.keys(index).filter(function (t) { return now - index[t].lastSeen <= SESSION_ONLINE_MS; }).map(function (t) {
+    const s = index[t];
+    return { id: s.id, name: s.name, role: s.isScanner ? "scanner" : s.role, lastSeen: s.lastSeen, thisDevice: t === ownToken };
+  }).sort(function (a, b) { return a.name.localeCompare(b.name); });
+}
+
+/** Admin: sign one device out. It is logged out on its very next call. `tokenToKick` is the public id from the list. */
+function kickSession_(session, ownToken, tokenToKick) {
+  const index = readSessionIndex_();
+  const wanted = String(tokenToKick || "");
+  const key = Object.keys(index).filter(function (t) { return wanted && (index[t].id === wanted || t === wanted); })[0];
+  if (!key) throw new ApiError_("NOT_FOUND", "That device is already offline.");
+  if (key === ownToken) throw new ApiError_("BAD_REQUEST", "That is this device. Use Sign out instead.");
+  const gone = index[key];
+  CacheService.getScriptCache().remove("session_" + key);
+  delete index[key];
+  writeSessionIndex_(index);
+  log_(session.name, "session.kick", "", { name: gone.name, role: gone.isScanner ? "scanner" : gone.role });
+  return { ok: true };
 }
 
 function json_(obj) {

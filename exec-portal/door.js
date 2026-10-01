@@ -98,6 +98,11 @@ function renderDoor() {
   document.body.classList.toggle("entry-closed", !d.event.entryOpen);
   $("door-nav-live").hidden = !d.event.entryOpen;
   setText($("door-counts"), T.doorCounts(d.counts.checkedIn, d.counts.paid, d.counts.awaiting));
+  // How many scanner phones are online (help desk only; the phones themselves don't need it)
+  const online = Number(d.activeScanners || 0);
+  $("door-scanners-online").hidden = SCANNER_MODE || d.activeScanners === undefined;
+  setText($("scanners-count"), String(online));
+  setText($("scanners-word"), T.scannersOnline(online));
 
   // The server sends only the small lists (not paid / needs checking / latest check-ins), plus the real totals.
   const nobody = `<li class="muted small">${T.nobody}</li>`;

@@ -16,7 +16,7 @@ function siteInfo_() {
 }
 
 /** What the Settings tab shows. Never includes a password. */
-function getSettings_() {
+function getSettings_(token) {
   const config = getConfig_();
   const props = PropertiesService.getScriptProperties();
   return {
@@ -31,7 +31,8 @@ function getSettings_() {
       adminPasswordSet: !!config.adminPassword,
       doorPasswordSet: !!props.getProperty("SCANNER_PASSWORD"),
       publicSiteUrl: props.getProperty("PUBLIC_SITE_URL") || ""
-    }
+    },
+    activeSessions: activeSessions_(token)   // who is online right now (no tokens)
   };
 }
 
@@ -146,6 +147,7 @@ function testMembershipSheet_(id, tab) {
 
 /** Signs everyone out (all sessions carry the epoch they were made in). */
 function signOutEveryone_() {
+  CacheService.getScriptCache().remove("ACTIVE_SESSIONS_INDEX");
   PropertiesService.getScriptProperties().setProperty("SESSION_EPOCH", Utilities.getUuid().slice(0, 8));
 }
 

@@ -54,6 +54,13 @@ $("admin-gear").addEventListener("click", openAdminDialog);
 $("admin-cancel").addEventListener("click", () => $("admin-dialog").close());
 $("admin-form").addEventListener("submit", onAdminSubmit);
 
+// ---- "Still here" ping every 30 s while a page is open and visible, so the Online list is accurate. A kicked device finds out here. ----
+setInterval(async () => {
+  if (!state.token || $("app-view").hidden || document.hidden) return;
+  const reply = await api("ping");
+  if (!reply.ok && reply.error === "NOT_LOGGED_IN") { signOutLocally(); showLogin(errorText(reply)); }
+}, 30000);
+
 // ---- Tap the logo to refresh the page (handy on a phone at the door) ----
 document.addEventListener("click", (ev) => { if (ev.target.closest(".logo, .login-logo")) window.location.reload(); });
 

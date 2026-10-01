@@ -177,7 +177,8 @@ function doorList_(eventId, session, opts) {
       checkedIn: inside.length,
       awaiting: unpaid.length,
       flagged: flagged.length
-    }
+    },
+    activeScanners: countActiveScanners_()   // scanner phones seen in the last 45 s
   };
 
   const q = String(opts.q || "").trim().toLowerCase();
@@ -196,7 +197,7 @@ function doorList_(eventId, session, opts) {
 // can only scan, undo a check-in, and see the open events. Closing entry locks it out again.
 
 const DOOR_CLOSED_TEXT = "Door scanning is closed right now. An exec has to open entry first.";
-const DOOR_ACTIONS = ["listEvents", "doorList", "scan", "undoCheckIn", "logout"];
+const DOOR_ACTIONS = ["listEvents", "doorList", "scan", "undoCheckIn", "logout", "ping"];
 
 function entryOpenEvents_() {
   return allEvents_().filter(function (e) { return e.entryOpen && e.status !== "archived" && e.status !== "draft"; });

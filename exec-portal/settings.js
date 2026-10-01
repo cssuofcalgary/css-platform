@@ -100,6 +100,7 @@ function showSettingsPane(name) {
   document.querySelectorAll("#tab-settings [data-pane]").forEach((p) => { p.hidden = p.dataset.pane !== name; });
   try { sessionStorage.setItem("css_set_pane", name); } catch (e) { /* fine */ }
   if (name === "health") loadHealthHistory();
+  if (name === "sessions") loadSessions();
 }
 $("set-nav").addEventListener("click", (ev) => {
   const b = ev.target.closest("[data-sub]");
@@ -140,3 +141,34 @@ $("set-health-button").addEventListener("click", async () => {
     </div>`;
   loadHealthHistory();
 });
+
+// ---- Online now: who is signed in, and a way to sign one device out ----
+
+function ago(ms) {
+  const sec = Math.max(0, Math.round((Date.now() - ms) / 1000));
+  return sec < 5 ? T.justNow : T.secondsAgo(sec);
+}
+
+async function loadSessions() {
+  const reply = await api("getSettings");
+  if (!reply.ok) return handleEventError(reply, $("set-sessions-result"));
+  const roleName = { admin: T.roleAdminName, exec: T.roleExecName, door: T.roleScannerName, scanner: T.roleScannerName };
+  const list = reply.activeSessions || [];
+  $("set-sessions-list").innerHTML = list.length ? list.map((x) => `
+    <li class="sess">
+      <div><strong>${escapeHtml(x.name)}</strong> ${x.thisDevice ? `<span class="pill good">${T.thisDevice}</span>` : ""}
+        <small>${escapeHtml(roleName[x.role] || x.role)} · ${ago(x.lastSeen)}</small></div>
+      ${x.thisDevice ? "" : `<button class="secondary small-button" type="button" data-kick="${escapeHtml(x.id)}" data-name="${escapeHtml(x.name)}">${T.kickSignOut}</button>`}
+    </li>`).join("") : `<li class="muted small">${T.setNobodyOnline}</li>`;
+}
+
+$("set-sessions-list").addEventListener("click", async (ev) => {
+  const b = ev.target.closest("[data-kick]");
+  if (!b) return;
+  b.disabled = true;
+  const reply = await api("kickSession", { tokenToKick: b.dataset.kick });   // the public id from the list, never a real token
+  if (!reply.ok && reply.error !== "NOT_FOUND") { b.disabled = false; return handleEventError(reply, $("set-sessions-result")); }
+  $("set-sessions-result").textContent = reply.ok ? T.kickedDone(b.dataset.name) : "";
+  loadSessions();
+});
+$("set-sessions-refresh").addEventListener("click", loadSessions);
