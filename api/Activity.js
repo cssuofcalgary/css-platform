@@ -15,7 +15,7 @@ const ACTIVITY_GROUPS = {
   system: ["backup"],
   edits: ["ticket.edit"],
   events: ["event.create", "event.update", "event.status", "image.upload", "event.email", "event.archive", "event.restore", "event.delete"],
-  settings: ["settings.save", "sessions.clear"]
+  settings: ["settings.save", "sessions.clear", "health.check"]
 };
 
 function activityGroup_(action) {
@@ -96,6 +96,7 @@ function activitySummary_(r, events) {
     case "image.upload": return "uploaded an event image";
     case "settings.save": return "changed settings: " + (d.changed || []).join(", ");
     case "sessions.clear": return "signed everyone out";
+    case "health.check": return "ran a health check" + (d.problems ? " (" + d.problems + " problem" + (d.problems === 1 ? "" : "s") + " found)" : " (all good)");
     default: return r.action + (r.target ? " " + r.target : "");
   }
 }

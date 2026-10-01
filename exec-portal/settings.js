@@ -3,6 +3,7 @@
 
 async function openSettingsTab() {
   $("set-status").textContent = T.setLoading;
+  showSettingsPane((function () { try { return sessionStorage.getItem("css_set_pane"); } catch (e) { return ""; } })() || "general");
   const reply = await api("getSettings");
   if (!reply.ok) return handleEventError(reply, $("set-status"));
   const s = reply.settings;
@@ -92,19 +93,50 @@ $("set-signout-all").addEventListener("click", async () => {
   $("set-signout-result").textContent = T.setEveryoneOut;
 });
 
+// ---- Sections (General / Membership / Security / Emails / Sessions / System health) ----
+
+function showSettingsPane(name) {
+  document.querySelectorAll("#set-nav [data-sub]").forEach((b) => b.classList.toggle("on", b.dataset.sub === name));
+  document.querySelectorAll("#tab-settings [data-pane]").forEach((p) => { p.hidden = p.dataset.pane !== name; });
+  try { sessionStorage.setItem("css_set_pane", name); } catch (e) { /* fine */ }
+  if (name === "health") loadHealthHistory();
+}
+$("set-nav").addEventListener("click", (ev) => {
+  const b = ev.target.closest("[data-sub]");
+  if (b) showSettingsPane(b.dataset.sub);
+});
+
+// ---- System health: run it by hand; every run is written to Activity ----
+
+function healthTile(ok, name, detail) {
+  return `<div class="hc ${ok ? "ok" : "bad"}"><span class="pill ${ok ? "good" : "warn"}">${ok ? T.setOk : T.setProblem}</span><b>${escapeHtml(name)}</b><small>${escapeHtml(detail)}</small></div>`;
+}
+
+async function loadHealthHistory() {
+  const list = $("set-health-history");
+  const reply = await api("activityLog", { filters: { eventId: "", who: "", group: "settings", query: "health", limit: 8 } });
+  if (!reply.ok) return handleEventError(reply, list);
+  list.innerHTML = reply.entries.length ? reply.entries.map((e) => {
+    const when = new Date(e.time);
+    const clock = isNaN(when) ? escapeHtml(e.time) : when.toLocaleString("en-CA", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+    return `<li><span class="muted">${clock}</span> · <strong>${escapeHtml(e.who)}</strong> ${escapeHtml(e.summary)}</li>`;
+  }).join("") : `<li class="muted small">${T.setHealthNone}</li>`;
+}
+
 $("set-health-button").addEventListener("click", async () => {
   const box = $("set-health-result");
-  $("set-health-button").disabled = true;
-  box.innerHTML = `<p class="muted small">${T.setChecking}</p>`;
+  const button = $("set-health-button");
+  button.disabled = true;
+  box.innerHTML = `<div class="state"><span class="spin"></span>${T.setChecking}</div>`;
   const reply = await api("healthCheck");
-  $("set-health-button").disabled = false;
-  if (!reply.ok) return handleEventError(reply, box);
+  button.disabled = false;
+  if (!reply.ok) { box.innerHTML = ""; return handleEventError(reply, box); }
   const err = reply.lastError;
-  box.innerHTML = `
-    <ul class="plain-list">
-      <li><span class="pill good">${T.setOk}</span> ${T.setVersion(escapeHtml(reply.version))}</li>
-      ${reply.checks.map((c) => `<li><span class="pill ${c.ok ? "good" : "warn"}">${c.ok ? T.setOk : T.setProblem}</span> <strong>${escapeHtml(c.name)}</strong> <span class="muted">${escapeHtml(c.detail)}</span></li>`).join("")}
-      <li><span class="pill ${reply.setup.publicSiteUrl ? "good" : "warn"}">${reply.setup.publicSiteUrl ? T.setOk : T.setProblem}</span> ${reply.setup.publicSiteUrl ? T.setSiteUrl(escapeHtml(reply.setup.publicSiteUrl)) : T.setNoSiteUrl}</li>
-      <li>${err ? `<span class="pill neutral">${T.setLastError}</span> ${escapeHtml(shortTime(err.time))} · ${escapeHtml(err.action)} · <span class="muted">${escapeHtml(err.message)}</span>` : `<span class="pill good">${T.setOk}</span> ${T.setNoError}`}</li>
-    </ul>`;
+  box.innerHTML = `<div class="health-grid">
+      <div class="hc"><small>${T.healthVersion}</small><b class="mono">${escapeHtml(reply.version)}</b></div>
+      ${reply.checks.map((c) => healthTile(c.ok, c.name, c.detail)).join("")}
+      ${healthTile(!!reply.setup.publicSiteUrl, T.healthSite, reply.setup.publicSiteUrl || T.setNoSiteUrl)}
+      ${healthTile(!err, T.healthLastError, err ? `${shortTime(err.time)} · ${err.action} · ${err.message}` : T.setNoError)}
+    </div>`;
+  loadHealthHistory();
 });

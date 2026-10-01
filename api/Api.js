@@ -168,8 +168,7 @@ function route_(req) {
       return signOutAll_(requireAdmin_(req.token));
 
     case "healthCheck":
-      requireAdmin_(req.token);
-      return healthCheck_();
+      return healthCheck_(requireAdmin_(req.token));
 
     case "getEmailTemplates":
       requireAdmin_(req.token);

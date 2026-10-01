@@ -5,10 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex">
   <title>CSS Exec Portal</title>
+  <script>try { var t = localStorage.getItem("css_theme"); if (t) document.documentElement.dataset.theme = t; } catch (e) {}</script>
+  <link rel="icon" href="assets/css-logo.png" type="image/png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Fraunces:opsz,wght@9..144,500;9..144,600&family=JetBrains+Mono:wght@400;500&display=swap">
   <link rel="stylesheet" href="styles.css?v=0.5.1">
-  <link rel="stylesheet" href="theme.css?v=0.7.0">
+  <link rel="stylesheet" href="theme.css?v=0.8.0">
 </head>
 <body>
   <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
@@ -23,6 +25,7 @@
     <symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 4l9 16H3L12 4zM12 10v4M12 17.2v.1"/></symbol>
     <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></symbol>
     <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
+    <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 019.5 4 8 8 0 1020 14.5z"/></symbol>
     <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></symbol>
   </defs></svg>
   <div id="demo-banner" class="demo-banner" hidden></div>
@@ -32,6 +35,7 @@
   <!-- Sign-in -->
   <main id="login-view" class="login" hidden>
     <form id="login-form" class="card login-card" autocomplete="off">
+      <img class="login-logo" src="assets/css-logo.png" alt="Chinese Students' Society">
       <h1 data-t="appTitle"></h1>
       <p class="muted" data-t="appSubtitle"></p>
 
@@ -53,7 +57,7 @@
     <!-- Left sidebar: brand, navigation, who is signed in -->
     <aside class="sidebar" id="sidebar">
       <div class="brand-block">
-        <div class="mark" aria-hidden="true">CSS</div>
+        <img class="logo" src="assets/css-logo.png" alt="Chinese Students' Society">
         <div class="brand-text"><div class="brand" id="brand" data-t="appTitle"></div><span class="tagline">CONNECT ~ CULTURE ~ SOCIAL</span></div>
       </div>
       <nav class="tabs" aria-label="Main">
@@ -73,6 +77,8 @@
           <span class="who-role"><span class="muted" data-t="signedInAs"></span> <span id="admin-badge" class="pill good" data-t="roleAdmin" hidden></span></span>
           <span class="who-links"><a id="full-portal-link" class="link" href="?full=1" data-t="fullPortal" hidden></a><button id="logout-button" class="link" data-t="signOut"></button></span>
         </div>
+        <button id="admin-gear" class="icon-btn" type="button" title="Admin mode" aria-label="Admin mode"><svg><use href="#i-gear"/></svg></button>
+        <button id="theme-toggle" class="icon-btn" type="button" title="Light / dark" aria-label="Switch between light and dark"><svg><use href="#i-moon"/></svg></button>
       </div>
     </aside>
 
@@ -166,10 +172,19 @@
 
       <section id="event-editor-view" hidden>
         <button id="editor-back-button" class="link" data-t="backToEvents"></button>
+        <div class="editor-layout">
+        <nav class="steps" id="ed-steps" aria-label="Event sections">
+          <button type="button" class="on" data-step="p-basics" data-t="edBasics"></button>
+          <button type="button" data-step="p-when" data-t="edSchedule"></button>
+          <button type="button" data-step="p-cap" data-t="edCapacity"></button>
+          <button type="button" data-step="p-tix" data-t="evTickets"></button>
+          <button type="button" data-step="p-reg" data-t="edRegistration"></button>
+          <button type="button" data-step="p-pub" data-t="edPublishing"></button>
+        </nav>
         <form id="event-form" class="editor-form" novalidate>
           <div class="head tight"><div class="grow"><h2 id="editor-title" class="page-title"></h2><p id="editor-hint" class="muted small" hidden></p></div></div>
 
-          <section class="card panel">
+          <section class="card panel" id="p-basics">
             <header><h3 data-t="edBasics"></h3><p data-t="edBasicsHint"></p></header>
             <div class="inner">
               <div><label for="ev-name" data-t="evName"></label>
@@ -185,7 +200,7 @@
             </div>
           </section>
 
-          <section class="card panel">
+          <section class="card panel" id="p-when">
             <header><h3 data-t="edSchedule"></h3><p data-t="edScheduleHint"></p></header>
             <div class="inner">
               <div class="grid-3">
@@ -198,7 +213,7 @@
             </div>
           </section>
 
-          <section class="card panel">
+          <section class="card panel" id="p-cap">
             <header><h3 data-t="edCapacity"></h3><p data-t="edCapacityHint"></p></header>
             <div class="inner">
               <div class="grid-2">
@@ -213,7 +228,7 @@
             </div>
           </section>
 
-          <section class="card panel">
+          <section class="card panel" id="p-tix">
             <header><h3 data-t="evTickets"></h3><p data-t="edTicketsHint"></p></header>
             <div class="inner">
               <div id="ev-ticket-types"></div>
@@ -221,7 +236,7 @@
             </div>
           </section>
 
-          <section class="card panel">
+          <section class="card panel" id="p-reg">
             <header><h3 data-t="edRegistration"></h3><p data-t="evQuestionsHint"></p></header>
             <div class="inner">
               <div id="ev-questions"></div>
@@ -232,7 +247,7 @@
             </div>
           </section>
 
-          <section class="card panel">
+          <section class="card panel" id="p-pub">
             <header><h3 data-t="edPublishing"></h3><p data-t="edPublishingHint"></p></header>
             <div class="inner">
               <div><label for="ev-code-prefix" data-t="evCodePrefix"></label>
@@ -248,6 +263,7 @@
             <button type="button" id="save-publish-button" class="primary" data-t="savePublish"></button>
           </div>
         </form>
+        </div>
       </section>
      </div>
      <div id="tab-payments" hidden>
@@ -385,8 +401,17 @@
      <div id="tab-settings" hidden>
       <div class="head"><div class="grow"><h1 data-t="tabSettings"></h1><p class="sub" data-t="setSub"></p></div></div>
       <p id="set-status" class="muted small"></p>
-
-      <form id="set-general-form" class="card editor" novalidate>
+      <div class="set-layout">
+      <nav class="steps set-nav" id="set-nav" aria-label="Settings sections">
+        <button type="button" class="on" data-sub="general" data-t="setNavGeneral"></button>
+        <button type="button" data-sub="membership" data-t="setNavMembership"></button>
+        <button type="button" data-sub="security" data-t="setNavSecurity"></button>
+        <button type="button" data-sub="emails" data-t="setNavEmails"></button>
+        <button type="button" data-sub="sessions" data-t="setNavSessions"></button>
+        <button type="button" data-sub="health" data-t="setNavHealth"></button>
+      </nav>
+      <div class="set-panes">
+      <form id="set-general-form" data-pane="general" class="card editor" novalidate>
         <h3 class="sub-title" data-t="setGeneralTitle"></h3>
         <label for="set-etransfer" data-t="setEtransfer"></label>
         <input id="set-etransfer" type="email" maxlength="120" autocomplete="off">
@@ -400,7 +425,7 @@
         <button type="submit" id="set-general-save" class="primary" data-t="setSave"></button>
       </form>
 
-      <form id="set-membership-form" class="card editor" novalidate>
+      <form id="set-membership-form" data-pane="membership" class="card editor" novalidate>
         <h3 class="sub-title" data-t="setMembershipTitle"></h3>
         <p class="muted small" data-t="setMembershipHint"></p>
         <label for="set-sheet" data-t="setSheet"></label>
@@ -411,7 +436,7 @@
         <button type="submit" id="set-membership-save" class="primary" data-t="setTestSave"></button>
       </form>
 
-      <form id="set-password-form" class="card editor" novalidate autocomplete="off">
+      <form id="set-password-form" data-pane="security" class="card editor" novalidate autocomplete="off">
         <h3 class="sub-title" data-t="setPasswordsTitle"></h3>
         <p id="set-pw-note" class="muted small"></p>
         <label for="set-exec-pw" data-t="setExecPw"></label>
@@ -429,7 +454,7 @@
         <button type="submit" id="set-password-save" class="primary" data-t="setPwSave"></button>
       </form>
 
-      <div class="card editor" id="set-emails-card">
+      <div class="card editor" id="set-emails-card" data-pane="emails">
         <h3 class="sub-title" data-t="emTitle"></h3>
         <p class="muted small" data-t="emHint"></p>
         <label for="em-kind" data-t="emPick"></label>
@@ -472,22 +497,45 @@
         </div>
       </div>
 
-      <div class="card editor">
+      <div class="card editor" id="set-sessions-card" data-pane="sessions">
         <h3 class="sub-title" data-t="setSessionsTitle"></h3>
         <p class="muted small" data-t="setSessionsHint"></p>
         <button id="set-signout-all" class="secondary" data-t="setSignOutAll"></button>
         <p id="set-signout-result" class="muted small"></p>
       </div>
 
-      <div class="card editor">
-        <h3 class="sub-title" data-t="setHealthTitle"></h3>
-        <button id="set-health-button" class="secondary" data-t="setHealthRun"></button>
+      <div class="card editor" id="set-health-card" data-pane="health">
+        <div class="row-between">
+          <div><h3 class="sub-title" data-t="setHealthTitle"></h3><p class="muted small" data-t="setHealthHint"></p></div>
+          <button id="set-health-button" class="primary small-button" type="button" data-t="setHealthRun"></button>
+        </div>
         <div id="set-health-result"></div>
+        <h3 class="sub-title" data-t="setHealthHistory"></h3>
+        <ul id="set-health-history" class="plain-list"></ul>
+      </div>
+      </div>
       </div>
      </div>
     </main>
     </div>
   </div>
+
+  <!-- Admin mode -->
+  <dialog id="admin-dialog" class="edit-dialog">
+    <form id="admin-form" class="editor" novalidate>
+      <h2 id="admin-title"></h2>
+      <p id="admin-hint" class="muted small"></p>
+      <div id="admin-pw-wrap">
+        <label for="admin-pw" data-t="adminPwLabel"></label>
+        <input id="admin-pw" type="password" autocomplete="current-password">
+      </div>
+      <p id="admin-error" class="error" role="alert" hidden></p>
+      <div class="button-row">
+        <button type="button" id="admin-cancel" class="secondary" data-t="cancel"></button>
+        <button type="submit" id="admin-submit" class="primary"></button>
+      </div>
+    </form>
+  </dialog>
 
   <!-- Email everyone registered -->
   <dialog id="mail-dialog" class="edit-dialog">
@@ -600,20 +648,21 @@
   </footer>
 
   <script src="config.js?v=0.3.7"></script>
-  <script src="strings.js?v=0.7.0"></script>
+  <script src="strings.js?v=0.8.0"></script>
   <script src="mock.js?v=0.3.7"></script>
-  <script src="app.js?v=0.7.0"></script>
+  <script src="app.js?v=0.8.0"></script>
   <script src="events.js?v=0.7.0"></script>
   <script src="payments.js?v=0.5.0"></script>
   <script src="edit.js?v=0.3.7"></script>
   <script src="finance.js?v=0.5.0"></script>
   <script src="activity.js?v=0.5.0"></script>
-  <script src="settings.js?v=0.3.7"></script>
+  <script src="settings.js?v=0.8.0"></script>
   <script src="emails.js?v=0.3.7"></script>
   <script src="mailall.js?v=0.3.7"></script>
   <script src="attendees.js?v=0.6.0"></script>
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
   <script src="door.js?v=0.7.0"></script>
-  <script src="overview.js?v=0.7.0"></script>
+  <script src="overview.js?v=0.7.1"></script>
+  <script src="shell.js?v=0.8.0"></script>
 </body>
 </html>

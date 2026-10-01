@@ -162,7 +162,7 @@ function signOutAll_(session) {
 
 // ---- Health check ------------------------------------------------------------
 
-function healthCheck_() {
+function healthCheck_(session) {
   const checks = [];
   const time = function (fn) { const t = Date.now(); const out = fn(); return { out: out, ms: Date.now() - t }; };
   const run = function (name, fn) {
@@ -192,6 +192,8 @@ function healthCheck_() {
   let lastError = null;
   try { lastError = JSON.parse(PropertiesService.getScriptProperties().getProperty("LAST_ERROR") || "null"); } catch (e) { /* none */ }
   const config = getConfig_();
+  // A manual run (from the portal) is written to the Log, so Activity shows who checked and what they found. The nightly job passes no session and logs nothing.
+  if (session) log_(session.name, "health.check", "", { problems: checks.filter(function (c) { return !c.ok; }).length + (lastError ? 1 : 0) });
   return {
     ok: true,
     version: API_VERSION,

@@ -13,13 +13,20 @@
   --ease: cubic-bezier(.2, .7, .2, 1);
 }
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --bg: #141210; --surface: #1c1916; --raised: #211e1a; --sunken: #100e0c;
     --text: #f2eee8; --text-2: #b3aba1; --muted: #9a9288; --border: #2c2823; --border-2: #3a352e;
     --accent: #ef4a44; --accent-ink: #ff6b66; --accent-soft: #3a1816; --accent-text: #1c1917; --gold: #d9a95a; --gold-soft: #33291a;
     --good-bg: #14301f; --good-text: #4cc88a; --warn-bg: #352610; --warn-text: #e8ae4d; --bad-bg: #3b1917; --bad-text: #ff7d77; --info-bg: #18233f; --info-text: #7fa6ff; --error: #ff7d77;
     --shadow-1: none; --shadow-2: 0 12px 32px -8px rgba(0, 0, 0, .6);
   }
+}
+:root[data-theme="dark"] {
+    --bg: #141210; --surface: #1c1916; --raised: #211e1a; --sunken: #100e0c;
+    --text: #f2eee8; --text-2: #b3aba1; --muted: #9a9288; --border: #2c2823; --border-2: #3a352e;
+    --accent: #ef4a44; --accent-ink: #ff6b66; --accent-soft: #3a1816; --accent-text: #1c1917; --gold: #d9a95a; --gold-soft: #33291a;
+    --good-bg: #14301f; --good-text: #4cc88a; --warn-bg: #352610; --warn-text: #e8ae4d; --bad-bg: #3b1917; --bad-text: #ff7d77; --info-bg: #18233f; --info-text: #7fa6ff; --error: #ff7d77;
+    --shadow-1: none; --shadow-2: 0 12px 32px -8px rgba(0, 0, 0, .6);
 }
 
 html { -webkit-text-size-adjust: 100%; }
@@ -380,3 +387,64 @@ body.scanner-mode .scan-result { position: sticky; top: 0; z-index: 5; min-heigh
   .toast { bottom: 14px; }
 }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+
+/* ---------- light / dark switch ---------- */
+.icon-btn { margin-left: auto; width: 32px; height: 32px; padding: 0; border: 0; border-radius: var(--radius-sm); background: none; display: grid; place-items: center; color: var(--muted); cursor: pointer; flex: none; }
+.icon-btn:hover { background: var(--sunken); color: var(--text); }
+.who .icon-btn { margin-left: auto; }
+
+/* ---------- v0.8: logo, settings sections, editor layout, health, member cards ---------- */
+.logo { height: 54px; width: auto; max-width: 100%; object-fit: contain; display: block; mix-blend-mode: multiply; }
+.brand-block { flex-direction: column; align-items: flex-start; gap: 8px; padding: 2px 8px 16px; }
+.brand-text { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.brand-text .brand { font: 600 12px var(--font); letter-spacing: 2px; text-transform: uppercase; color: var(--text-2); }
+.tagline { margin-top: 0; font-size: 9px; }
+.login-card h1::before { content: none; }
+.login-logo { height: 64px; width: auto; max-width: 100%; object-fit: contain; mix-blend-mode: multiply; margin: 0 0 6px; }
+.login-card h1 { font-size: 22px; }
+:root[data-theme="dark"] .logo, :root[data-theme="dark"] .login-logo { filter: invert(1); mix-blend-mode: screen; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .logo, :root:not([data-theme="light"]) .login-logo { filter: invert(1); mix-blend-mode: screen; } }
+body.scanner-mode .brand-block { flex-direction: row; align-items: center; padding: 0; }
+body.scanner-mode .logo { height: 34px; }
+body.scanner-mode .brand-text, body.scanner-mode #admin-gear { display: none; }
+
+/* settings: a section list on the left, one section at a time */
+.set-layout { display: grid; grid-template-columns: 190px minmax(0, 1fr); gap: 28px; align-items: start; max-width: 980px; }
+.set-panes { min-width: 0; max-width: 760px; }
+.set-panes > .card:first-child, #tab-settings .set-panes .card { margin-top: 0; }
+#tab-settings { max-width: none; }
+.steps { position: sticky; top: 76px; align-self: start; display: grid; gap: 2px; }
+.steps button { text-align: left; padding: 7px 11px; border: 0; border-left: 2px solid transparent; border-radius: var(--radius-sm); background: none; color: var(--text-2); font-weight: 500; cursor: pointer; transition: background .15s, color .15s; }
+.steps button:hover { background: var(--sunken); color: var(--text); }
+.steps button.on { color: var(--accent-ink); border-left-color: var(--accent); background: var(--accent-soft); }
+
+/* event editor: section list + panels, like the mock */
+.editor-layout { display: grid; grid-template-columns: 190px minmax(0, 1fr); gap: 28px; align-items: start; max-width: 980px; }
+.editor-layout .editor-form { max-width: none; }
+.panel { scroll-margin-top: 80px; }
+
+/* health */
+.health-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 10px; margin: 10px 0 18px; }
+.hc { display: grid; gap: 3px; align-content: start; padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--raised); min-width: 0; }
+.hc small { color: var(--muted); overflow-wrap: anywhere; }
+.hc b { font-weight: 600; }
+.hc .pill { justify-self: start; margin-bottom: 4px; }
+.hc.bad { border-color: color-mix(in srgb, var(--warn-text) 40%, transparent); }
+#set-health-history { margin-top: 6px; gap: 8px; }
+
+/* member cards (search results) */
+.result.member-result { display: block; padding: 16px 18px; }
+.member-result .m-top { display: flex; align-items: center; gap: 12px; }
+.member-result .m-id { display: grid; min-width: 0; margin-right: auto; text-align: left; }
+.member-result .name { font-size: 15px; font-weight: 600; line-height: 1.2; }
+.member-result .sub { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+.member-result .kv { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-top: 14px; padding-top: 12px; border-top: 1px dashed var(--border-2); text-align: left; }
+.member-result .kv i { display: block; font-style: normal; font-size: 10.5px; letter-spacing: .5px; text-transform: uppercase; color: var(--muted); }
+.member-result .kv b { display: block; font-weight: 500; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+@media (max-width: 900px) {
+  .set-layout, .editor-layout { grid-template-columns: 1fr; gap: 14px; }
+  .steps { position: static; display: flex; overflow-x: auto; gap: 4px; padding-bottom: 4px; }
+  .steps button { white-space: nowrap; border-left: 0; border-bottom: 2px solid transparent; border-radius: 0; }
+  .steps button.on { border-bottom-color: var(--accent); background: none; }
+}

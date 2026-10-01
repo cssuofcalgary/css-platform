@@ -199,12 +199,17 @@ async function runSearch(query) {
 function renderResults() {
   $("results").innerHTML = state.results.map((m, i) => `
     <li>
-      <button class="result" data-index="${i}">
-        <span>
-          <span class="name">${escapeHtml(m.name)}</span><br>
-          <span class="sub">${escapeHtml(m.memberId || T.noId)}${m.ucid ? " · " + escapeHtml(m.ucid) : ""}</span>
+      <button class="result member-result" data-index="${i}" style="animation-delay:${Math.min(i, 12) * 30}ms">
+        <span class="m-top">
+          <span class="avatar" aria-hidden="true">${escapeHtml(String(m.name || "?").trim().split(/\s+/).map((p) => p[0]).join("").slice(0, 2).toUpperCase())}</span>
+          <span class="m-id"><span class="name">${escapeHtml(m.name)}</span><span class="sub">${escapeHtml(m.memberId || T.noId)}</span></span>
+          ${paidPill(m)}
         </span>
-        ${paidPill(m)}
+        <span class="kv">
+          <span><i>${T.memberSince}</i><b>${escapeHtml(formatDate(m.signedUp) || "—")}</b></span>
+          <span><i>${T.memberUcid}</i><b class="mono">${escapeHtml(m.ucid || "—")}</b></span>
+          <span><i>${T.fieldEmail}</i><b>${escapeHtml(m.email || "—")}</b></span>
+        </span>
       </button>
     </li>`).join("");
 }

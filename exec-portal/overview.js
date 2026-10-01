@@ -168,3 +168,11 @@ $("ov-add").addEventListener("click", () => {
     }
   }, 150);
 });
+
+// Light / dark switch: remembers the choice on this device; without a choice it follows the device setting.
+$("theme-toggle").addEventListener("click", () => {
+  const root = document.documentElement;
+  const dark = root.dataset.theme === "dark" || (!root.dataset.theme && matchMedia("(prefers-color-scheme: dark)").matches);
+  root.dataset.theme = dark ? "light" : "dark";
+  try { localStorage.setItem("css_theme", root.dataset.theme); } catch (e) { /* private mode: fine */ }
+});
