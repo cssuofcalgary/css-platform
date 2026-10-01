@@ -429,3 +429,7 @@ body.scanner-mode .content { max-width: 520px; }
   #orders .o-tickets li:first-child { border-top: 0; padding-top: 0; }
   #orders .o-tickets li:last-child { padding-bottom: 0; }
 }
+
+.site-footer { margin: 32px 16px 24px; text-align: center; font-size: 13px; color: var(--muted, #6b6b6b); }
+.site-footer p { margin: 4px 0; }
+.site-footer a { color: inherit; font-weight: 600; }
