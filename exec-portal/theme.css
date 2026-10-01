@@ -510,3 +510,6 @@ input[type="checkbox"].toggle { appearance: none; -webkit-appearance: none; widt
 #all-checkins-list:empty { display: none; }
 .button-row.single { grid-template-columns: 1fr; }
 #door-view-all { justify-self: start; }
+
+/* ---------- v0.9.4: the help desk on a computer has no camera button (scanning is for the scanner phones) ---------- */
+body:not(.scanner-mode):not(.phone) .door-buttons { display: none; }
