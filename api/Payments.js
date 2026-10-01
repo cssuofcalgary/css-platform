@@ -29,10 +29,10 @@ function listOrders_(eventId, opts) {
   opts = opts || {};
   const event = findEvent_(function (e) { return e.id === eventId; });
   if (!event) throw new ApiError_("NOT_FOUND", "Event not found.");
-  const tickets = readRows_("Tickets").filter(function (t) { return t.eventId === eventId; });
+  const tickets = eventRows_("Tickets", event);
   const byOrder = {};
   tickets.forEach(function (t) { (byOrder[t.orderId] = byOrder[t.orderId] || []).push(t); });
-  const all = readRows_("Orders").filter(function (o) { return o.eventId === eventId; });
+  const all = eventRows_("Orders", event);
 
   const counts = { all: all.length, awaiting: 0, overdue: 0, paid: 0, closed: 0 };
   const money = { received: 0, awaiting: 0 };

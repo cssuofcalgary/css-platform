@@ -19,8 +19,8 @@ function eventSummary_(eventId, opts) {
   if (!event) throw new ApiError_("NOT_FOUND", "Event not found.");
 
   const orders = {};
-  readRows_("Orders").forEach(function (o) { if (o.eventId === eventId) orders[o.id] = o; });
-  const all = readRows_("Tickets").filter(function (t) { return t.eventId === eventId; });
+  eventRows_("Orders", event).forEach(function (o) { orders[o.id] = o; });   // an archived event reads from its yearly archive
+  const all = eventRows_("Tickets", event);
   const isActive = function (t) { return t.status === "paid" || t.status === "awaiting"; };
   const active = all.filter(isActive);
   const paid = active.filter(function (t) { return t.status === "paid"; });
@@ -106,7 +106,7 @@ function eventSummary_(eventId, opts) {
     ok: true,
     event: {
       id: event.id, name: event.name, date: event.date, capacity: event.capacity, capacityRule: event.capacityRule,
-      ticketTypes: event.ticketTypes, questions: event.questions
+      ticketTypes: event.ticketTypes, questions: event.questions, archived: !!event.archivedAt, archiveYear: event.archiveYear
     },
     totals: {
       registered: active.length,

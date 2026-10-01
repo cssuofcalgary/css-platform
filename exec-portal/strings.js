@@ -343,7 +343,17 @@ Reason (optional):`,
     evClosesHint: "Leave blank to close automatically when the event starts.",
     archive: "Archive",
     restore: "Restore",
-    confirmArchive: (name) => `Archive "${name}"? It disappears from the portal and the public site. Nothing is deleted, and it can be restored.`,
+    confirmArchive: (name) => `Archive "${name}"?
+
+Its tickets and orders move out of the everyday sheet into this school year's archive spreadsheet, so the system stays fast. It disappears from the public site and the Payments and Door tabs. You can still open its attendees list and download it. Nothing is deleted, and Restore brings it all back.
+
+This can take up to a minute for a big event.`,
+    confirmRestore: (name) => `Restore "${name}"? Its tickets and orders move back into the everyday sheet and it shows as Closed.`,
+    archiving: "Archiving…",
+    restoring: "Restoring…",
+    archivedBanner: (year) => `Archived (${year}). Read only: nothing here can be changed. Press Restore on the Events list to change it.`,
+    archivedDone: (tickets, orders) => `Archived: ${tickets} tickets and ${orders} orders moved to the archive.`,
+    restoredDone: (tickets, orders) => `Restored: ${tickets} tickets and ${orders} orders are back.`,
     showArchived: (n) => `Show archived events (${n})`,
     hideArchived: "Hide archived events",
     statusArchived: "Archived",

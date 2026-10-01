@@ -74,6 +74,12 @@ Easiest: sign in with the admin password → **Settings** → Passwords. Everyon
 ## Something feels off / errors
 "That's N emails but only M are left today" when emailing everyone: the daily limit (about 100). Pick a smaller group (paid only), or send the rest tomorrow.
 
+Health check **Archive** says an old event hasn't been archived: the nightly timer isn't running (Apps Script → Triggers → `nightlyJob`). Fix the timer, or press **Archive** on that event as admin.
+
+Archiving failed or stopped halfway ("Archiving old events failed" in the alert email): nothing is lost. The event's rows are copied to the archive before anything is deleted. Run `nightlyJob` again in Apps Script; it finishes the job. If it keeps failing, the message says why (usually a Google Drive/Sheets hiccup: run it again later).
+
+Need an old event's raw rows: Drive → **CSS Platform Archive** → the school year's spreadsheet → tabs Tickets and Orders (filter by the event's id from the Events tab of "CSS Platform Data"). To put an event back: Events list → show archived → **Restore** (admin).
+
 A door volunteer can't sign in ("Door scanning is closed"): an exec has to open entry for the event (Door tab → entry toggle). Forgot the door password: Settings → Passwords → set a new one, or remove it.
 
 An email says something odd after a wording change: Settings → Email wording → pick it → **Use standard wording**.

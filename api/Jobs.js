@@ -38,6 +38,14 @@ function nightlyJob() {
     problems.push("The nightly backup failed: " + String(err && err.message || err));
   }
 
+  // Move events that finished more than 30 days ago into the yearly archive (after the backup, so the backup still has them)
+  try {
+    const moved = archiveOldEvents_();
+    if (moved.length) log_("system", "archive.done", "", { events: moved });
+  } catch (err) {
+    problems.push("Archiving old events failed: " + String(err && err.message || err));
+  }
+
   try {
     healthCheck_().checks.forEach(function (c) { if (!c.ok) problems.push(c.name + ": " + c.detail); });
   } catch (err) {

@@ -44,6 +44,8 @@ async function loadAttendees(append) {
 function renderSummary() {
   const d = attState.data;
   const t = d.totals;
+  $("detail-archived").hidden = !d.event.archived;
+  $("detail-archived").textContent = d.event.archived ? T.archivedBanner(d.event.archiveYear) : "";
   const tile = statTile;
   const cap = d.event.capacity ? ` / ${d.event.capacity}` : "";
   $("detail-tiles").innerHTML = [
@@ -81,7 +83,7 @@ function attendeeCard(a) {
   const statusText = { awaiting: T.statusAwaiting, paid: T.statusPaid, refunded: T.statusRefunded, cancelled: T.statusCancelled }[a.status] || a.status;
   const statusClass = { awaiting: "warn", paid: "good" }[a.status] || "neutral";
   const answers = Object.entries(a.answers || {}).map(([k, v]) => `${escapeHtml(k)}: ${escapeHtml(v)}`).join(" · ");
-  const editable = a.status === "paid" || a.status === "awaiting";
+  const editable = (a.status === "paid" || a.status === "awaiting") && !(attState.data && attState.data.event.archived);
   return `
     <li class="card att">
       <div class="att-main">

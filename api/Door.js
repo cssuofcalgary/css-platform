@@ -89,6 +89,7 @@ function walkIn_(session, eventId, input) {
   return withIntakeLock_(function () {
     const event = findEvent_(function (e) { return e.id === eventId; });
     if (!event) throw new ApiError_("NOT_FOUND", "Event not found.");
+    assertNotArchived_(event);
     const type = event.ticketTypes.filter(function (t) { return t.id === input.ticketTypeId; })[0];
     if (!type) throw new ApiError_("BAD_REQUEST", "Pick a ticket type.");
 
@@ -133,6 +134,7 @@ function doorList_(eventId, session, opts) {
   opts = opts || {};
   const event = findEvent_(function (e) { return e.id === eventId; });
   if (!event) throw new ApiError_("NOT_FOUND", "Event not found.");
+  assertNotArchived_(event);
   const doorOnly = !!session && session.role === "door";
   if (doorOnly && !event.entryOpen) throw new ApiError_("DOOR_CLOSED", DOOR_CLOSED_TEXT);
   const orders = {};

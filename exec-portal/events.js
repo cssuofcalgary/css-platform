@@ -108,9 +108,17 @@ async function onEventsListClick(event) {
   const status = { publish: "published", close: "closed", reopen: "published", archive: "archived", restore: "closed" }[button.dataset.action];
   if (status === "published" && target.status === "draft" && !confirm(T.confirmPublish)) return;
   if (status === "archived" && !confirm(T.confirmArchive(target.name))) return;
+  const restoring = status === "closed" && target.status === "archived";
+  if (restoring && !confirm(T.confirmRestore(target.name))) return;
+  const label = button.textContent;
   button.disabled = true;
+  if (status === "archived") button.textContent = T.archiving;
+  if (restoring) button.textContent = T.restoring;
   const reply = await api("setEventStatus", { eventId: target.id, status });
-  if (!reply.ok) { button.disabled = false; return handleEventError(reply, $("events-status")); }
+  if (!reply.ok) { button.disabled = false; button.textContent = label; return handleEventError(reply, $("events-status")); }
+  if (status === "archived") showToast(T.archivedDone(reply.tickets || 0, reply.orders || 0));
+  if (restoring) showToast(T.restoredDone(reply.tickets || 0, reply.orders || 0));
+  if (status === "archived" || restoring) { eventsState.loaded = false; await loadEvents(); return; }   // counts and dates changed
   target.status = status;
   renderEvents();
 }

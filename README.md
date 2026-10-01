@@ -58,6 +58,7 @@ The old system (`../CSS Ticketing System/`) keeps running until this one is prov
 | `api/MyTickets.js` | "Find my tickets / pass" lookups (email or UCID + last name) and the private-link tickets for the member portal |
 | `api/Payments.js` | Finance: list orders, mark paid (capacity check, `force` to override), refund/cancel (never deletes), resend tickets, send waiting emails. Public ticket lookup by secret. Remembers the public site address for email links (`PUBLIC_SITE_URL` property) |
 | `api/EmailTemplates.js` | The standard wording of each email (`EMAIL_KINDS`), fill-ins like `{name} {event} {code} {amount} {when} {where}`, saved custom wording, preview and test send. To add a new kind of email: add it to `EMAIL_KINDS` and write its `build…Email_` in `Mail.js` |
+| `api/Archive.js` | Moves finished events to the yearly archive and back. `archiveEvent_` (stop sign-ups → copy rows → check the copy → mark the event archived → delete the live rows; a crash in the middle is finished by the next nightly run), `restoreEvent_`, `archiveOldEvents_` (called by `nightlyJob`, 2 events per run), `eventRows_(table, event)` (reads an event's rows from the live sheet or its archive; used by Attendees and Payments), `assertNotArchived_` (blocks walk-ins, added registrations and the door list on archived events), `archiveStatus_` (health check line; Problem when live tickets pass 3,000 or an old event hasn't moved). `setEventStatus_` calls it when an admin presses Archive / Restore |
 | `api/Jobs.js` | Background timers. `installJobs` (run once in the editor) takes a backup now; the timers are added by hand under Apps Script → Triggers: `nightlyJob` (about 3 am: backup copy of the data sheet into the Drive folder "CSS Platform Backups", keeps 14, older ones go to the Drive bin; then a health check; emails the CSS Gmail only if something is wrong, at most once a day) and `hourlyJob` (closes entry 4 hours after an event's end time if someone forgot). Both log as "system". Uses no extra permission (a script adding its own timers needs `script.scriptapp`, which broke the web app's authorization once, so the timers are added by hand) |
 | `api/Settings.js` | Admin only: read/save settings (validated; a new Membership sheet is really read before it's accepted), passwords, "sign everyone out" (a session *epoch*: every session remembers the epoch it was made in, changing it invalidates them all), health check, last-error memory |
 | `api/Activity.js` | Turns the Log tab into readable sentences, with filters (event, exec, group, text) |
@@ -86,7 +87,9 @@ The API address (Apps Script) is the same from every site; nothing to change the
 
 ## 4. Data tables ("CSS Platform Data")
 Row 1 = column names. **Don't rename tabs or row-1 names.** Rows are matched by `id`, so sorting or filtering by hand is safe.
-Lists (`ticketTypes`, `questions`, `answers`) are stored as JSON text.
+Lists (`ticketTypes`, `questions`, `answers`, `summary`) are stored as JSON text.
+
+**Only current events live here.** Thirty days after an event, the nightly job moves that event's Tickets and Orders rows into a yearly archive spreadsheet (`CSS Platform Archive 2026-27`, September to August, in the Drive folder `CSS Platform Archive`; same tabs and columns) and writes the event's final numbers into the Events row: `archivedAt`, `archiveYear`, `summary` (totals, money, per ticket type, answer counts, spots taken) and `status = archived`. The Events tab always keeps every event. An admin can do the same by hand with **Archive** on the Events list, and **Restore** brings the rows back (status `closed`). Why: every request reads the whole Tickets and Orders tabs; with old events gone, those stay small and the shared table cache (limit about 4,800 tickets) keeps working. Nothing is deleted. Code: `api/Archive.js`.
 
 | Tab | Columns |
 |---|---|
@@ -155,6 +158,7 @@ Lists (`ticketTypes`, `questions`, `answers`) are stored as JSON text.
 | `SCANNER_PASSWORD` | Optional door password. Set/removed in Settings → Passwords. Blank = door volunteers sign in with just a name (only while entry is open) |
 | `EMAIL_SIGNER_ROLE`, `EMAIL_BUTTON_COLOR` | Optional. Role line under the name and the button colour (like `#824a24`) in every email. Set from Settings → Email wording; blank = standard |
 | `PRESIDENT_NAME` | Optional. Name in the signature of every email. Default "Gordon Chen". Change it when the President changes |
+| `ARCHIVE_SHEETS`, `ARCHIVE_FOLDER_ID` | Set **by the system** the first time an event is archived: the archive spreadsheet of each school year (JSON, `{"2026-27": "sheetId"}`) and the Drive folder holding them. Don't edit; losing `ARCHIVE_SHEETS` just means the system can't find old rows until it's put back (the files are still in the folder `CSS Platform Archive`) |
 | `BACKUP_FOLDER_ID`, `LAST_BACKUP`, `LAST_GOOD_BACKUP`, `ALERT_SENT_DAY` | Set **by the system** by the nightly job (backup folder, when the last backup ran, the once-a-day alert limit) |
 | `SESSION_EPOCH`, `LAST_ERROR` | Set **by the system**. Changing `SESSION_EPOCH` signs everyone out. `LAST_ERROR` = the last unexpected error, shown in the health check |
 

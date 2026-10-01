@@ -28,6 +28,9 @@ function eventFromRow_(row) {
     questions: row.questions || [],
     codePrefix: row.codePrefix,
     registrationCloses: row.registrationCloses || "",
+    archivedAt: row.archivedAt || "",       // set once the event's tickets and orders have moved to the yearly archive (Archive.js)
+    archiveYear: row.archiveYear || "",
+    summary: row.summary || {},            // frozen numbers of an archived event
     createdBy: row.createdBy,
     createdAt: row.createdAt,
     updatedBy: row.updatedBy,
@@ -49,6 +52,7 @@ function findEvent_(test) {
 
 /** Tickets that take up a spot: paid ones, or every active one if the event counts all sign-ups. */
 function spotsTaken_(event) {
+  if (event.archivedAt) return Number((event.summary || {}).spotsTaken) || 0;
   return readRows_("Tickets").filter(function (t) {
     if (t.eventId !== event.id) return false;
     if (t.status === "paid") return true;
@@ -97,6 +101,12 @@ function setEventStatus_(session, eventId, status) {
   if (!current) throw new ApiError_("NOT_FOUND", "Event not found.");
   if ((status === "archived" || current.status === "archived") && session.role !== "admin") {
     throw new ApiError_("ADMIN_ONLY", "Only the admin password can archive or restore events.");
+  }
+  // Archiving moves the event's tickets and orders to the yearly archive spreadsheet; restoring brings them back (Archive.js)
+  if (status === "archived") return archiveEvent_(session, eventId, true);
+  if (current.status === "archived") {
+    const restored = restoreEvent_(session, eventId);
+    if (status === "closed") return restored;
   }
   return withLock_(function () {
     updateRow_("Events", eventId, { status: status, updatedBy: session.name, updatedAt: new Date().toISOString() });

@@ -11,7 +11,7 @@ const TABLES = {
   Events: ["id", "slug", "name", "description", "date", "startTime", "endTime", "location",
            "capacity", "capacityRule", "status", "entryOpen", "imageFileId", "imageUrl",
            "ticketTypes", "questions", "codePrefix", "createdBy", "createdAt", "updatedBy", "updatedAt",
-           "registrationCloses"],
+           "registrationCloses", "archivedAt", "archiveYear", "summary"],
   Orders: ["id", "code", "eventId", "payerName", "payerEmail", "etransferName", "total", "status",
            "createdAt", "paidAt", "paidBy", "notes", "remindedAt"],
   Tickets: ["id", "secret", "orderId", "eventId", "name", "email", "ucid", "memberId", "ticketType",
@@ -21,7 +21,7 @@ const TABLES = {
 };
 
 /** Columns holding lists/objects; stored as JSON text. */
-const JSON_COLUMNS = { ticketTypes: true, questions: true, answers: true };
+const JSON_COLUMNS = { ticketTypes: true, questions: true, answers: true, summary: true };
 
 /**
  * Remembered for the rest of this one request only (each request starts fresh),
@@ -140,8 +140,9 @@ function fromCell_(column, value) {
     text = String(value === null ? "" : value);
   }
   if (JSON_COLUMNS[column]) {
-    if (!text) return column === "answers" ? {} : [];
-    try { return JSON.parse(text); } catch (e) { return column === "answers" ? {} : []; }
+    const empty = (column === "answers" || column === "summary") ? {} : [];
+    if (!text) return empty;
+    try { return JSON.parse(text); } catch (e) { return empty; }
   }
   return text;
 }

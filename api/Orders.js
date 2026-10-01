@@ -140,6 +140,7 @@ function addOrder_(session, eventId, input, force, siteUrl) {
   input = input || {};
   const event = findEvent_(function (e) { return e.id === eventId; });
   if (!event) throw new ApiError_("NOT_FOUND", "Event not found.");
+  assertNotArchived_(event);
   const person = cleanPerson_(input.person, event, 0, true);
   person.flag = membershipFlag_(person, loadMembers_());
   const etransferName = String(input.etransferName || "").trim().slice(0, 80);
@@ -283,6 +284,10 @@ function newTicketId_() {
 
 function registrationCounts_() {
   const counts = {};
+  // Archived events no longer have live rows: their frozen numbers stand in
+  allEvents_().forEach(function (e) {
+    if (e.archivedAt && e.summary && e.summary.totals) counts[e.id] = { awaiting: e.summary.totals.awaiting || 0, paid: e.summary.totals.paid || 0, checkedIn: e.summary.totals.checkedIn || 0 };
+  });
   readRows_("Tickets").forEach(function (t) {
     const c = counts[t.eventId] = counts[t.eventId] || { awaiting: 0, paid: 0, checkedIn: 0 };
     if (t.status === "awaiting") c.awaiting++;
