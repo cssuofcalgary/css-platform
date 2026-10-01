@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Fraunces:opsz,wght@9..144,500;9..144,600&family=JetBrains+Mono:wght@400;500&display=swap">
   <link rel="stylesheet" href="styles.css?v=0.5.1">
-  <link rel="stylesheet" href="theme.css?v=0.9.6">
+  <link rel="stylesheet" href="theme.css?v=0.9.8">
 </head>
 <body>
   <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
@@ -102,7 +102,8 @@
      </div>
 
      <div id="tab-members" hidden>
-      <div class="head"><div class="grow"><h1 data-t="tabMembers"></h1><p class="sub" data-t="membersSub"></p></div></div>
+      <div class="head"><div class="grow"><h1 data-t="tabMembers"></h1><p class="sub" data-t="membersSub"></p></div>
+        <button id="add-member-button" class="primary small-button" type="button" data-t="addMember"></button></div>
       <section id="search-view">
         <label for="search-input" class="visually-hidden" data-t="searchLabel"></label>
         <input id="search-input" class="search" type="search" autocomplete="off" enterkeyhint="search">
@@ -116,6 +117,11 @@
           <h2 id="member-name"></h2>
           <div id="member-badges" class="badges"></div>
           <dl id="member-fields" class="fields"></dl>
+          <div id="member-pay" class="member-pay" hidden>
+            <p class="muted small" data-t="markPayNote"></p>
+            <button id="member-mark-paid" class="primary" type="button" data-t="markPaid"></button>
+            <p id="member-pay-error" class="error" role="alert" hidden></p>
+          </div>
         </article>
         <p class="muted small" data-t="readOnlyNote"></p>
       </section>
@@ -573,6 +579,38 @@
     </div>
   </dialog>
 
+  <!-- Add a member by hand -->
+  <dialog id="member-add-dialog" class="edit-dialog">
+    <form id="member-add-form" class="editor" novalidate>
+      <h2 data-t="addMember"></h2>
+      <p class="muted small" data-t="addMemberHint"></p>
+      <label for="ma-name" data-t="maName"></label>
+      <input id="ma-name" maxlength="80" autocomplete="off">
+      <div class="grid-2">
+        <div><label for="ma-ucid" data-t="maUcid"></label><input id="ma-ucid" inputmode="numeric" maxlength="8" autocomplete="off"></div>
+        <div><label for="ma-method" data-t="maMethod"></label>
+          <select id="ma-method"><option value="cash" data-t="maCash"></option><option value="etransfer" data-t="maEtransfer"></option></select></div>
+      </div>
+      <label for="ma-email" data-t="maEmail"></label>
+      <input id="ma-email" type="email" maxlength="120" autocomplete="off">
+      <div id="ma-cash">
+        <div class="grid-2">
+          <div><label for="ma-when" data-t="maWhen"></label><input id="ma-when" type="date"></div>
+          <div><label for="ma-who" data-t="maWho"></label><input id="ma-who" maxlength="80" autocomplete="off"></div>
+        </div>
+        <label for="ma-where" data-t="maWhere"></label>
+        <input id="ma-where" maxlength="120" autocomplete="off">
+      </div>
+      <label class="check-row"><input id="ma-paid" type="checkbox" checked> <span data-t="maPaidNow"></span></label>
+      <p class="muted small" data-t="maPaidHint"></p>
+      <p id="ma-error" class="error" role="alert" hidden></p>
+      <div class="button-row">
+        <button type="button" id="ma-cancel" class="secondary" data-t="cancel"></button>
+        <button type="submit" id="ma-submit" class="primary" data-t="maSubmit"></button>
+      </div>
+    </form>
+  </dialog>
+
   <!-- Admin mode -->
   <dialog id="admin-dialog" class="edit-dialog">
     <form id="admin-form" class="editor" novalidate>
@@ -698,9 +736,9 @@
   </dialog>
 
   <script src="config.js?v=0.3.7"></script>
-  <script src="strings.js?v=0.9.6"></script>
+  <script src="strings.js?v=0.9.8"></script>
   <script src="mock.js?v=0.3.7"></script>
-  <script src="app.js?v=0.9.0"></script>
+  <script src="app.js?v=0.9.2"></script>
   <script src="events.js?v=0.8.2"></script>
   <script src="payments.js?v=0.5.0"></script>
   <script src="edit.js?v=0.9.6"></script>

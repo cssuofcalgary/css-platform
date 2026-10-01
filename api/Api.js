@@ -60,6 +60,9 @@ function route_(req) {
     case "findMyTickets":
       return findMyTickets_(req);
 
+    case "registerMember":
+      return publicRegisterMember_(req);
+
     case "findMyPass":
       return findMyPass_(req);
 
@@ -89,6 +92,12 @@ function route_(req) {
       const matches = searchMembers_(loadMembers_(), req.query, 100000);
       return { ok: true, name: session.name, results: matches.slice(0, 25), total: matches.length };
     }
+
+    case "addMember":
+      return addMember_(requireSession_(req.token), req.member, !!req.paidNow);
+
+    case "markMemberPaid":
+      return markMemberPaid_(requireSession_(req.token), req.memberId);
 
     case "getMember": {
       requireSession_(req.token);

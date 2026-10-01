@@ -516,3 +516,12 @@ body:not(.scanner-mode):not(.phone) .door-buttons { display: none; }
 
 /* Delete order (admin only, inside the edit dialog) */
 .button-row #ed-delete { grid-column: 1 / -1; justify-self: center; color: var(--bad-text); }
+
+/* Mark paid (Members tab, someone who signed up on the website) */
+.member-pay { margin-top: 16px; padding-top: 14px; border-top: 1px dashed var(--line, #d8cdb6); display: grid; gap: 10px; }
+.member-pay button { justify-self: stretch; }
+
+/* Add member dialog */
+.check-row { display: flex; align-items: center; gap: 10px; margin: 14px 0 2px; font-weight: 600; cursor: pointer; }
+.check-row input { width: 20px; height: 20px; accent-color: var(--accent, #c8202f); }
+#ma-cash[hidden] { display: none; }

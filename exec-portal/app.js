@@ -242,7 +242,80 @@ function showMember(m) {
   $("member-fields").innerHTML = rows
     .map(([label, value]) => `<dt>${label}</dt><dd>${escapeHtml(value)}</dd>`)
     .join("");
+  // Someone who signed up on the website and hasn't been confirmed yet: one tap to mark the payment received.
+  state.member = m;
+  $("member-pay").hidden = m.paid || !m.memberId;
+  $("member-pay-error").hidden = true;
+  $("member-mark-paid").disabled = false;
+  $("member-mark-paid").textContent = T.markPaid;
   window.scrollTo(0, 0);
+}
+
+// ---- Add a member by hand ---------------------------------------------------
+
+function openAddMember() {
+  ["ma-name", "ma-ucid", "ma-email", "ma-where"].forEach((id) => { $(id).value = ""; });
+  $("ma-method").value = "cash";
+  $("ma-when").value = todayMountain();
+  $("ma-when").max = todayMountain();
+  $("ma-who").value = state.name || "";
+  $("ma-paid").checked = true;
+  $("ma-error").hidden = true;
+  $("ma-submit").disabled = false;
+  $("ma-submit").textContent = T.maSubmit;
+  syncAddMemberMethod();
+  $("member-add-dialog").showModal();
+  $("ma-name").focus();
+}
+
+function syncAddMemberMethod() {
+  $("ma-cash").hidden = $("ma-method").value !== "cash";
+}
+
+async function onAddMemberSubmit(event) {
+  event.preventDefault();
+  const cash = $("ma-method").value === "cash";
+  const member = { name: $("ma-name").value, ucid: $("ma-ucid").value, email: $("ma-email").value, method: $("ma-method").value };
+  if (cash) Object.assign(member, { when: $("ma-when").value, where: $("ma-where").value, who: $("ma-who").value });
+  const paidNow = $("ma-paid").checked;
+
+  $("ma-error").hidden = true;
+  $("ma-submit").disabled = true;
+  $("ma-submit").textContent = T.maSaving;
+  const reply = await api("addMember", { member, paidNow });
+  if (!reply.ok) {
+    if (reply.error === "NOT_LOGGED_IN") { $("member-add-dialog").close(); signOutLocally(); return showLogin(errorText(reply)); }
+    $("ma-submit").disabled = false;
+    $("ma-submit").textContent = T.maSubmit;
+    $("ma-error").textContent = errorText(reply);
+    $("ma-error").hidden = false;
+    return;
+  }
+  $("member-add-dialog").close();
+  showToast(T.maAdded(member.name.trim(), reply.emailed, reply.paid));
+  const fresh = await api("getMember", { memberId: reply.memberId });   // open the new member's page
+  if (fresh.ok) showMember(fresh.member);
+}
+
+async function markMemberPaid() {
+  const m = state.member;
+  if (!m || m.paid) return;
+  const button = $("member-mark-paid");
+  button.disabled = true;
+  button.textContent = T.markPaying;
+  $("member-pay-error").hidden = true;
+  const reply = await api("markMemberPaid", { memberId: m.memberId });
+  if (!reply.ok) {
+    if (reply.error === "NOT_LOGGED_IN") { signOutLocally(); return showLogin(errorText(reply)); }
+    button.disabled = false;
+    button.textContent = T.markPaid;
+    $("member-pay-error").textContent = errorText(reply);
+    $("member-pay-error").hidden = false;
+    return;
+  }
+  Object.assign(m, reply.member || {}, { paid: true });   // the open page and the search results show the new state
+  showMember(m);
+  showToast(reply.already ? T.markedAlready : reply.emailed ? T.markedPaid(m.name) : T.markedPaidNoEmail(m.name));
 }
 
 function showSearch() {
@@ -253,7 +326,8 @@ function showSearch() {
 // ---- Helpers ----------------------------------------------------------------
 
 function paidPill(m) {
-  return `<span class="pill ${m.paid ? "good" : "warn"}">${m.paid ? T.paid : T.unpaid}</span>`;
+  const waiting = !m.paid && /^awaiting/i.test(m.status || "");   // "Awaiting Cash" / "Awaiting E-transfer" from the website sign-up
+  return `<span class="pill ${m.paid ? "good" : "warn"}">${escapeHtml(m.paid ? T.paid : waiting ? m.status : T.unpaid)}</span>`;
 }
 
 function formatDate(value) {
@@ -312,6 +386,11 @@ function start() {
   $("search-input").addEventListener("input", onSearchInput);
   $("results").addEventListener("click", onResultClick);
   $("back-button").addEventListener("click", showSearch);
+  $("member-mark-paid").addEventListener("click", markMemberPaid);
+  $("add-member-button").addEventListener("click", openAddMember);
+  $("ma-method").addEventListener("change", syncAddMemberMethod);
+  $("ma-cancel").addEventListener("click", () => $("member-add-dialog").close());
+  $("member-add-form").addEventListener("submit", onAddMemberSubmit);
 
   if (state.token) showApp(); else showLogin();
 }

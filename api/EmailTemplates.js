@@ -73,6 +73,18 @@ const EMAIL_KINDS = {
       closing: ""
     }
   },
+  memberWelcome: {
+    label: "Membership confirmed",
+    when: "Sent when an exec confirms a member's payment: their member pass link.",
+    placeholders: ["name", "year"],
+    defaults: {
+      subject: "Welcome to CSS: your membership is confirmed",
+      title: "You're a CSS member!",
+      subtitle: "{year} membership",
+      intro: "Hi {name}, we've received your membership payment, thank you for joining the Chinese Students' Society! Your digital member pass is below. Show it for **free entry to all on-campus events** and **discounts at off-campus events** this year.",
+      closing: "Questions? Just reply to this email."
+    }
+  },
   findPass: {
     label: "Find my member pass",
     when: "Sent when a member asks for their pass link on the member portal.",
