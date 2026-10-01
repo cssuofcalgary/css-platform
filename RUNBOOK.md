@@ -43,6 +43,11 @@ Open the **web app URL** (README section 2) in a browser.
 | Everyone flagged gets orange "go to the help desk" | On purpose | Help desk: Door tab → "Please check" list → **Check in** after checking |
 | Can't find the Archive button | Signed in with the exec password | Sign out, sign in with the **admin** password (`ADMIN_PASSWORD` in Script Properties) |
 | Registration closed too early/late | The event's "Registration closes" time | Events → Edit → change or clear it |
+| Health check says **Email allowance: only 0 emails left today** | The CSS Gmail used its daily sending limit (about 100 a day, resets in about a day). It is the account's limit, not a fault | Wait. **Mark paid** still works; the pass or ticket email waits (**Send now** on Payments for tickets; members can use Find my pass). Test with @example.com addresses, which never use the allowance. For a busy launch, ask about a Google Workspace / nonprofit account (about 1,500 a day) |
+| Someone says they joined on the website but isn't in **Pending** | They are already on the sheet as paid, or the sign-up was refused (bad UCID or email) | Search their UCID or email on the Members tab. A repeat sign-up adds nothing |
+| Members list is missing someone who just signed up | The list is cached up to 5 minutes (a write refreshes it) | Press **Refresh** on Pending, or wait 5 minutes |
+| A new member row appears far down the Membership sheet | The sheet has empty rows below the data (pre-filled checkboxes) so the new row goes to the very bottom | Harmless: search ignores blank rows |
+| Marked a member paid by mistake | Human mistake | Open the Membership sheet and change that row's **Paid Status** back to `Awaiting Cash` or `Awaiting E-transfer` (and Mail Status to `Pending`) |
 | Marked the wrong order paid | Human mistake | **Refund / cancel** it (no money to return if none was received), and ask the person to register again. Everything stays in the Log |
 
 ## Authorization (Google permission prompt)

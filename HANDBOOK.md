@@ -8,11 +8,23 @@ For execs. No tech knowledge needed.
 3. You stay signed in for about 6 hours. **Sign out** on shared computers.
 
 Wrong password 30 times → sign-in pauses for 10 minutes.
+The **sun/moon button** (bottom of the menu) switches light and dark. Tap the **CSS logo** to refresh the page.
 
-## Members tab: find a member
-- Type part of a **name**, a **UCID**, a **member ID** (CSS…), or an **email**.
-- Tap a person to see their details: paid or not, membership card sent or not, when they signed up.
-- This tab is **view only** for now.
+## Members tab: sign-ups, payments and search
+Membership is **$12 for the school year**. People join on their own at **member.ucalgarycss.ca/create** (this replaces the Google Form), or an exec adds them here. Both end up as one row on the Membership sheet.
+
+**Pending** (opens first when someone is waiting): everyone who signed up and hasn't been confirmed yet. A red number on **Members** in the left menu, and a line on the Overview, show how many.
+- Each card shows how they said they'd pay. **Cash:** when, where, and who took it. **E-transfer:** when they signed up, their email and UCID.
+- Check the payment (the CSS Gmail for an e-transfer, or the exec who took the cash), then tap **Mark paid ($12)**. They get their member pass by email and the card slides away. **Details** opens their full page.
+- Only sign-ups from the website and **Add member** show here. Older members who are not marked paid are under **Search**.
+
+**Add member** (top right): for someone joining at the table. Enter name, UCID (8 digits), email, and cash or e-transfer. Leave **Payment received ($12)** ticked if you have the money: they're marked paid and emailed their pass in one step. Untick it to add them as unpaid and confirm later from Pending. Someone already on the sheet is refused, and it tells you who they are.
+
+**Search:** type part of a **name**, a **UCID**, a **member ID** (CSS…) or an **email**, then tap a person to see their details. Anyone not marked paid also has a **Mark paid ($12)** button on their page.
+
+If the pass email can't be sent (the daily email limit), the person is still marked paid and the message tells you the email did not go. They can get their pass later from **member.ucalgarycss.ca → Find my pass**. See **RUNBOOK.md**.
+
+Every sign-up, add and Mark paid is written to the **Activity** tab (admin) with your name.
 
 ## Events tab: make an event
 1. **+ New event.**
@@ -59,6 +71,7 @@ The Events list shows how many people have **paid** and how many are **awaiting 
 **Refund / cancel:** opens the spot again. For a paid order, send the money back by e-transfer yourself; the system only records it. Nothing is ever deleted.
 **Resend tickets:** someone lost their email, or it went to spam.
 **Ticket ↗:** opens that person's ticket (handy at the help desk).
+**Delete order** *(admin only, inside Edit)*: removes ONE order and its tickets for good. For test purchases and dummy data. It asks first and **can't be undone** (the nightly backup still has a copy). For a real payment, use **Refund / cancel** instead so there is a record.
 **Edit** (next to a person, here and in Attendees): opens a form.
 - **Any exec:** name and email. A new email gets their ticket sent again automatically.
 - **Admin password only:** UCID, member ID (the membership is checked again), **ticket type** (the price and the order total change; the message tells you whether to collect or refund the difference), answers to the event's questions, the help-desk warning (clear it if it was sorted out), and the order's payer name/email, e-transfer name and notes. Everything is saved in the change log with the old and new values.
@@ -66,7 +79,7 @@ If you see "ticket emails waiting (daily email limit)", press **Send now** later
 
 ## The portal on a laptop vs a phone
 - **Laptop or tablet (help desk, Finance):** the full portal with a menu on the left. Pick the event once at the top and Payments and Door both follow it.
-- **Phone (door volunteers):** opens the **door scanner** by itself: just the camera, how many are inside, a name search and Undo. It has no payments, walk-ins or other tabs. Anyone unpaid or flagged shows **Send to help desk**. The help desk person on a laptop deals with everything else. Address for volunteers: `…/css-platform/scanner/` (later `exec.ucalgary.ca/scanner`). A help-desk person on a phone can tap **Full portal** at the top.
+- **Phone (door volunteers):** opens the **door scanner** by itself (see "The scanner page" below). A help-desk person on a phone can tap **Full portal** at the top.
 
 ## What the emails look like
 All system emails (registration, payment reminder, ticket, find-my-tickets, find-my-pass) share one look: the same paper-ticket design as the member pass email, with a sage header, the CSS banner, pandas and a signature. It lives in `emailShell_()` in `api/Mail.js`. The signature name is the Script Property `PRESIDENT_NAME` (default "Gordon Chen"); change it when the President changes.
@@ -86,9 +99,6 @@ Events list → **Delete** (admin only, on every event). You type the event's ex
 ### Old events are archived by themselves
 Thirty days after an event, the system moves its tickets and orders out of the everyday sheet into a yearly archive spreadsheet (Drive → **CSS Platform Archive** → "CSS Platform Archive 2026-27", one per school year, September to August). This keeps the system fast. You don't need to do anything. On the Events list the event shows **Archived**; its numbers stay on the list, and **Attendees** still opens its full list (read only) and **Download list (CSV)** still works. Admins can archive early with **Archive**, or bring an event back with **Restore** (everything moves back and it shows as Closed). Old tickets stop working at the door and on the ticket page once archived, which is fine because the event is over. Settings → Health check has an **Archive** line: how many tickets are in the everyday sheet and how many events are archived. It says Problem if an old event wasn't moved (check the timers in Apps Script).
 
-### Door volunteers
-On the scanner page (`exec.ucalgarycss.ca/scanner/`, or any phone) there is a second button, **Door sign-in (name only)**. A volunteer types their name and presses it. It only works while an exec has **entry open** for an event, and it can only scan tickets, undo a check-in and see who's inside (no payments, no member search, no help-desk override). When entry closes, their session stops working. To add a password for door volunteers: Settings → Passwords → Door password (optional). Execs still sign in with the exec password as before.
-
 ### Changing the words in emails
 Settings (admin) → **Email wording**. Pick an email, change the subject, heading, or the text at the top and bottom, then press **Preview** to see it, **Send test email** to get it in your own inbox, and **Save**. Leave a box empty to use the standard wording; type just a dash (-) to show nothing there. You can put `{name}` `{event}` `{code}` `{amount}` `{when}` `{where}` in the text (the box tells you which ones work) and they fill in for each person. The same change applies to every event. The same card sets the name and role in the signature and the button colour. The look of the email (banner, pandas, layout) isn't editable.
 
@@ -96,35 +106,51 @@ Settings (admin) → **Email wording**. Pick an email, change the subject, headi
 People who lost their ticket email don't need the help desk: the footer of every events page has **My tickets** (`events.ucalgarycss.ca/tickets.html`). They enter their email, or their UCID and last name, and the ticket links are emailed to the address on the ticket. Nothing is shown on screen. The Activity tab records each use (admin only). Walk-ins without an email can't use it; look them up in Payments or Door.
 The **member portal** works the same way now: members enter their email (or tap "I forgot which email I used" and enter UCID + last name) and get their pass link by email. Their pass page links back to Upcoming events and My tickets.
 
-## Door tab (event night)
-1. Pick the event (tonight's is picked automatically). The big number at the top is **how many are inside / how many have paid**.
-2. Tap **Entry CLOSED** to **open entry** when doors open. Scanners only let people in while it's open.
-3. **📷 Start scanning** and allow the camera. Point it at the QR on the person's phone (a screenshot is fine).
-   - 🟢 **Green:** let them in. Their answers (e.g. drink) show underneath.
-   - 🟠 **Orange:** already checked in, **not paid yet**, entry closed, or **"Please go to the help desk"** (something to check, e.g. membership not found). Send them to the help desk.
-   - 🔴 **Red:** not a valid ticket for this event. Send them to the help desk.
-   After each result the scanner pauses for a moment. **Tap the result** to scan the next person straight away.
-   Two people can scan at once on two phones. The same ticket can never get in twice.
-   **On a phone, the portal opens straight to the Door tab.**
-4. **QR won't scan?** Type their name or ticket ID (on their ticket, TKT…) in the box → **Find** → **Check in**.
-5. **+ Walk-in:** name, UCID if they have one, ticket type, cash or e-transfer → **Add & check in**. Walk-ins are always allowed, even when sold out.
-6. **Help desk lists** at the bottom:
+## Door tab = the help desk (event night)
+The **Door** tab is for whoever runs the help desk on a laptop. The people scanning use the separate scanner page (below), and the Door tab shows who is inside as it happens.
+
+1. **Entry switch** (top): **Entry CLOSED / OPEN** for the event shown, with its name next to it. **Only one event can be open at a time.** Opening a second one closes the first, and scanners switch to the new one by themselves. Every event starts closed; you open it when doors open.
+2. **Counts and scanners online:** "47 / 92 inside", and how many scanner phones are signed in right now.
+3. **Find person:** type a name or ticket ID (TKT…) → **Find** → **Check in**. Use it when a QR won't scan.
+4. **Walk-in:** name, UCID if they have one, ticket type, cash or e-transfer → **Add & check in**. Walk-ins are always allowed, even when sold out.
+5. **Lists** (they update by themselves, newest scan slides in at the top):
    - **Not paid yet:** check their e-transfer, then **Mark paid** → **Check in**.
-   - **Please check:** people flagged at registration (membership not found, duplicate email). The scanner won't let them in. Check it with them, then tap **Check in** here.
-   - **Recent check-ins:** the last people let in. **Undo** if someone was scanned by mistake.
+   - **Please check:** people flagged at registration (membership not found, duplicate email). The scanner won't let them in. Sort it out with them, then **Check in**.
+   - **Recent check-ins:** the latest people let in, **Undo** if someone was scanned by mistake. **View all check-ins** opens the full list, 10 at a time, with Undo.
+6. On a laptop the camera button is hidden. A help-desk person on a phone still gets it.
+
+## The scanner page (volunteers' phones)
+`exec.ucalgarycss.ca/scanner` shows only the camera, the "inside" counter, a name search and Undo. Nothing else.
+- **Execs** sign in with the exec password and their name. **Volunteers** use **Door sign-in (name only)**. It only works while entry is open, and it only scans, undoes and sees who is inside (no payments, no member search). When entry closes their session stops. A door password is optional (Settings → Security).
+- Point the camera at the QR on the person's phone (a screenshot is fine).
+  - 🟢 **Green:** let them in. Their answers (e.g. drink) show underneath.
+  - 🟠 **Orange:** already checked in, **not paid yet**, entry closed, or **"Please go to the help desk"** (something to check). Send them to the help desk.
+  - 🔴 **Red:** not a valid ticket for this event. Send them to the help desk.
+- After each result it pauses a moment. **Tap the result** to scan the next person straight away.
+- Two phones can scan at once. The same ticket can never get in twice.
+- Tap the **CSS logo** to refresh the page.
 
 No signal? Things get slow, not broken. Before the event, keep the Payments tab open or print the list.
 
 ## Activity tab (admin password only)
 A plain list of what happened, newest first: "Kevin marked TNM-4408 paid · 6:02 pm". Filter by **event**, by **person**, by kind (Payments, Door, Edits, Events, Settings), or search a code or name. Use it to settle "I paid!" or "who checked them in?".
 
-## Settings tab (admin password only)
-- **Payments and contact:** the e-transfer email, the contact email and the Instagram link shown on the public pages.
-- **Membership sheet:** each year, paste the new sheet's link and press **Test and save**. It reads the sheet first and tells you how many members it found, so a wrong link can't break anything.
-- **Passwords:** type the new one twice. Everyone else is signed out and needs the new password. Never write a password in a document or chat.
-- **Sign everyone else out:** if a phone or laptop was left signed in.
-- **Backups and alerts:** every night the system copies the data sheet into a Drive folder called "CSS Platform Backups" (in the CSS Gmail's Drive) and keeps the last 14. If a check fails, it emails the CSS Gmail (once a day at most). Health check shows the time of the last backup. To restore, open the newest backup, copy the tabs you need back into "CSS Platform Data". Entry also closes by itself 4 hours after an event ends.
-- **Health check:** shows whether the data sheet and Membership sheet are reachable, how many emails are left today, and the last error the system saw. Run it if something feels off.
+## Settings tab (admin only)
+**Admin mode:** sign in with the exec password as usual. To get admin tools, tap the **gear** next to the light/dark switch at the bottom of the left menu and enter the admin password. The Activity and Settings tabs then appear. To leave, tap the gear and press **Leave admin mode**; that also signs you out.
+
+Settings has six sections down the left. Pick one to open it:
+- **General:** the e-transfer email, the contact email and the Instagram link shown on the public pages.
+- **Membership:** each year, paste the new sheet's link and press **Test and save**. It reads the sheet first and tells you how many members it found, so a wrong link can't break anything.
+- **Security:** the exec password, the admin password and the optional door password, each on its own row. Press **Change**, type the new one twice, save. Everyone else is signed out and needs the new password. Never write a password in a document or chat.
+- **Emails:** change the wording of each email (see "Changing the words in emails" below).
+- **Sessions:** **Online now** lists everyone signed in (name, role, scanner or not, last seen; yours says "This device"). **Sign out** next to a name signs just that person out, handy for a lost phone. **Sign everyone else out** does it for all.
+- **Health:** press **Run health check**. It checks the data sheet, the Membership sheet, the nightly backup, the archive, **how many emails are left today**, and the last error the system saw. Each run is listed with its time and written to Activity.
+  - **Email allowance:** the CSS Gmail can send about **100 emails a day**. At 0, nothing sends until Google resets it (about a day). Mark paid still works, but the pass email waits. Tickets sit as "waiting" until someone presses **Send now**.
+  - **Last error** stays until a newer one replaces it. An old one is not a current problem if everything else says OK.
+
+**Backups and alerts:** every night the system copies the data sheet into the Drive folder "CSS Platform Backups" (in the CSS Gmail's Drive) and keeps the last 14. If a check fails, it emails the CSS Gmail (once a day at most). To restore, open the newest backup and copy the tabs you need back into "CSS Platform Data". Entry also closes by itself 4 hours after an event ends.
+
+The **light/dark switch** is next to the gear. It remembers your choice on that device.
 
 ## Good to know
 - Everything you do is saved in a change log with your name.
