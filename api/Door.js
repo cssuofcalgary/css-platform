@@ -21,9 +21,19 @@ function setEntryOpen_(session, eventId, open) {
  * `code` can be a ticket link (…ticket.html?t=SECRET), a bare secret, or a ticket ID (TKT…).
  */
 function scan_(session, eventId, code, atDesk) {
-  const key = ticketKey_(code);
+  let key = ticketKey_(code);
   if (!key) return scanResult_("red", "Couldn't read that code.");
-  if (key.kind === "member") return scanResult_("red", "That's a membership card, not a ticket for this event.");
+
+  // A member pass: find that member's ticket for this event and check THAT ticket in through the normal pipeline below.
+  let matchedViaMember = "";
+  if (key.kind === "member") {
+    const member = key.value ? findMemberById_(loadMembers_(), key.value) : null;
+    if (!member) return scanResult_("red", "Member ID not found. Send to help desk.");
+    const ticket = memberTicketForEvent_(member, eventId);
+    if (!ticket) return scanResult_("orange", member.name + " is a CSS Member, but has no ticket for this event. Send to help desk / walk-in.");
+    key = { kind: "id", value: ticket.id };
+    matchedViaMember = member.name;
+  }
 
   table_("Tickets");   // open the spreadsheet BEFORE taking the lock, where other requests can do the same in parallel
   let logEntry = null;
@@ -61,6 +71,7 @@ function scan_(session, eventId, code, atDesk) {
     const now = new Date().toISOString();
     updateRow_("Tickets", ticket.id, { checkedInAt: now, checkedInBy: session.name }, ticket._row, true);   // row was just read fresh
     logEntry = [session.name, atDesk ? "checkin.desk" : "checkin", ticket.id, { name: ticket.name, flag: ticket.flag || "" }];   // written after the lock is released
+    if (matchedViaMember) return scanResult_("green", "Checked in! (Matched via Member Pass: " + matchedViaMember + "). Welcome!", person);
     return scanResult_("green", ticket.flag ? "Checked in at the help desk." : "Checked in. Welcome!", person);
   });
   if (logEntry) log_.apply(null, logEntry);
@@ -261,8 +272,30 @@ function ticketKey_(code) {
   if (/^[a-f0-9]{32}$/i.test(raw)) return { kind: "secret", value: raw.toLowerCase() };
   const id = raw.toUpperCase().replace(/[^A-Z0-9]/g, "");
   if (/^TKT[A-Z0-9]{6,}$/.test(id)) return { kind: "id", value: id };
-  if (/^CSS/.test(id) || /member\.ucalgarycss\.ca/i.test(raw)) return { kind: "member" };
+  // A member pass: the pass link (?member=CSS0011234 or ?m=...), or the card's QR text (CSS0011234, or CSS-0011234). The ID is returned without hyphens, as the sheet stores it.
+  const fromPass = /[?&](?:member|m)=([A-Za-z0-9-]+)/i.exec(raw);
+  if (fromPass) return { kind: "member", value: fromPass[1].toUpperCase().replace(/[^A-Z0-9]/g, "") };
+  if (/^CSS[0-9]{4,12}$/.test(id)) return { kind: "member", value: id };
+  if (/^CSS/.test(id) || /member\.ucalgarycss\.ca/i.test(raw)) return { kind: "member", value: "" };
   return null;
+}
+
+/**
+ * The ticket a member holds for this event (matched by member ID, email or UCID; blanks never match), from the cached copy:
+ * the real check happens again on a fresh read inside the lock. A paid ticket not yet checked in wins over the rest.
+ */
+function memberTicketForEvent_(member, eventId) {
+  const email = String(member.email || "").toLowerCase();
+  const ucid = String(member.ucid || "").replace(/\D/g, "");
+  const found = readRows_("Tickets").filter(function (t) {
+    if (t.eventId !== eventId || t.status === "cancelled" || t.status === "refunded") return false;
+    return (member.memberId && t.memberId === member.memberId) ||
+      (email && String(t.email || "").toLowerCase() === email) ||
+      (ucid && String(t.ucid || "").replace(/\D/g, "") === ucid);
+  });
+  const rank = function (t) { return (t.status === "paid" ? 0 : 2) + (t.checkedInAt ? 1 : 0); };
+  found.sort(function (a, b) { return rank(a) - rank(b); });
+  return found[0] || null;
 }
 
 function personView_(ticket) {

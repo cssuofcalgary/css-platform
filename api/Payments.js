@@ -51,7 +51,13 @@ function listOrders_(eventId, opts) {
     if (filter === "paid" && o.status !== "paid") return false;
     if (filter === "closed" && o.status !== "refunded" && o.status !== "cancelled") return false;
     if (!q) return true;
-    return [o.code, o.payerName, o.payerEmail, o.etransferName].concat((byOrder[o.id] || []).map(function (t) { return t.name; }))
+    // "$25" / "$25.00" = orders totalling that amount. A bare "25" matches that amount OR the text. Parents often e-transfer under another name with no memo.
+    const amountOnly = q.charAt(0) === "$";
+    const target = parseFloat(amountOnly ? q.slice(1).replace(/,/g, "") : q);
+    const numeric = amountOnly ? !isNaN(target) : /^\d+(\.\d+)?$/.test(q);
+    const sameAmount = numeric && Math.abs((Number(o.total) || 0) - target) < 0.01;
+    if (amountOnly && numeric) return sameAmount;
+    return sameAmount || [o.code, o.payerName, o.payerEmail, o.etransferName].concat((byOrder[o.id] || []).map(function (t) { return t.name; }))
       .some(function (v) { return String(v || "").toLowerCase().indexOf(q) !== -1; });
   }).sort(function (a, b) { return String(b.createdAt).localeCompare(String(a.createdAt)); });
 
