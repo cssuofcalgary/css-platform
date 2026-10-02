@@ -251,7 +251,7 @@ function showMember(m) {
   $("member-resend-pass").textContent = T.resendPass;
   $("member-pay-error").hidden = true;
   $("member-mark-paid").disabled = false;
-  $("member-mark-paid").textContent = T.markPaid;
+  $("member-mark-paid").textContent = T.memberMarkPaid;
   window.scrollTo(0, 0);
 }
 
@@ -313,7 +313,7 @@ async function markMemberPaid() {
   if (!reply.ok) {
     if (reply.error === "NOT_LOGGED_IN") { signOutLocally(); return showLogin(errorText(reply)); }
     button.disabled = false;
-    button.textContent = T.markPaid;
+    button.textContent = T.memberMarkPaid;
     $("member-pay-error").textContent = errorText(reply);
     $("member-pay-error").hidden = false;
     return;
@@ -321,7 +321,7 @@ async function markMemberPaid() {
   Object.assign(m, reply.member || {}, { paid: true });   // the open page and the search results show the new state
   memberPaidHook(m);   // and Pending drops them
   showMember(m);
-  showToast(reply.already ? T.markedAlready : reply.emailed ? T.markedPaid(m.name) : T.markedPaidNoEmail(m.name));
+  showToast(reply.already ? T.markedAlready : reply.emailed ? T.memberMarkedPaid(m.name) : T.markedPaidNoEmail(m.name));
 }
 
 async function resendMemberPass() {
@@ -469,4 +469,5 @@ function start() {
   if (state.token) showApp(); else showLogin();
 }
 
-start();
+// Run once every script has loaded (members.js and the tab files come after this one, and a saved sign-in calls into them straight away)
+document.addEventListener("DOMContentLoaded", start);

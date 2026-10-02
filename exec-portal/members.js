@@ -77,7 +77,7 @@ function renderPending() {
         <div class="kv">${cells.map(([label, value]) => `<span><i>${escapeHtml(label)}</i><b>${escapeHtml(value || "—")}</b></span>`).join("")}</div>
         <div class="pending-actions">
           <button type="button" class="secondary small-button" data-pending-open="${escapeHtml(m.memberId)}">${T.pendingDetails}</button>
-          <button type="button" class="primary small-button" data-pending-pay="${escapeHtml(m.memberId)}">${T.markPaid}</button>
+          <button type="button" class="primary small-button" data-pending-pay="${escapeHtml(m.memberId)}">${T.memberMarkPaid}</button>
         </div>
       </div>
     </li>`;
@@ -109,10 +109,10 @@ async function onPendingClick(event) {
   if (!reply.ok) {
     if (reply.error === "NOT_LOGGED_IN") { signOutLocally(); return showLogin(errorText(reply)); }
     pay.disabled = false;
-    pay.textContent = T.markPaid;
+    pay.textContent = T.memberMarkPaid;
     return showToast(errorText(reply));
   }
-  showToast(reply.already ? T.markedAlready : reply.emailed ? T.markedPaid(m.name) : T.markedPaidNoEmail(m.name));
+  showToast(reply.already ? T.markedAlready : reply.emailed ? T.memberMarkedPaid(m.name) : T.markedPaidNoEmail(m.name));
   const item = pay.closest(".pending-item");
   if (item) { item.classList.add("leaving"); await new Promise((r) => setTimeout(r, 220)); }
   memberPaidHook(m);
