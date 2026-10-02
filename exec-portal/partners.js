@@ -1,20 +1,50 @@
 // CSS Exec Portal — partner deals (member perks), on the Members tab. Any exec can add, edit and switch partners on or off;
 // only the admin sees Delete. Members see the active ones on their pass page.
 
-const partnerState = { list: [], editing: null };
+const partnerState = { list: [], editing: null, counts: {} };
 
 async function loadPartners() {
   const reply = await api("listPartners");
   if (!reply.ok) return;
   partnerState.list = reply.partners;
   renderPartners();
+  loadRedemptions();
 }
+
+async function loadRedemptions() {
+  const reply = await api("listRedemptions", { limit: 25 });
+  if (!reply.ok) return;
+  partnerState.counts = reply.byPartner || {};
+  renderPartners();   // the "N redeemed" counts
+  $("redeem-status").textContent = reply.total ? (reply.total > reply.redemptions.length ? T.redeemShowing(reply.redemptions.length, reply.total) : "") : T.redeemNone;
+  $("redeem-list").innerHTML = reply.redemptions.map((r) =>
+    `<li>${escapeHtml(T.redeemLine(r.memberName || r.memberId, r.partnerName, shortTime(r.time)))}</li>`).join("");
+}
+
+async function downloadRedemptions() {
+  const reply = await api("listRedemptions", { full: true });
+  if (!reply.ok) return showToast(errorText(reply));
+  if (!reply.redemptions.length) return showToast(T.redeemCsvNone);
+  const head = ["Time", "Member ID", "Member", "Partner", "Offer"];
+  const rows = reply.redemptions.map((r) => [r.time, r.memberId, r.memberName, r.partnerName, r.offer]);
+  const csv = "﻿" + [head, ...rows].map((row) => row.map(csvCell).join(",")).join("\r\n");
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+  link.download = "partner-redemptions.csv";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(link.href), 2000);
+}
+
+$("redeem-csv").addEventListener("click", downloadRedemptions);
 
 function renderPartners() {
   $("partners-list").innerHTML = partnerState.list.length
     ? partnerState.list.map((p) => `
       <li data-partner="${escapeHtml(p.id)}" class="${p.active ? "" : "p-off"}">
         <div class="p-main"><strong>${escapeHtml(p.name)}</strong><br>${escapeHtml(p.offer)}${p.address ? `<br><span class="muted small">${escapeHtml(p.address)}</span>` : ""}</div>
+        ${partnerState.counts[p.name] ? `<span class="muted small">${T.redeemCount(partnerState.counts[p.name])}</span>` : ""}
         <span class="pill ${p.active ? "good" : "neutral"}">${p.active ? T.partnerOn : T.partnerOff}</span>
         <button class="link" type="button" data-partner-act="edit">${T.partnerEdit}</button>
         <button class="link" type="button" data-partner-act="toggle">${p.active ? T.partnerTurnOff : T.partnerTurnOn}</button>

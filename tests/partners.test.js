@@ -38,6 +38,28 @@ ok(J(`memberPartners_({ memberId: "CSS0011234" })`).err === "NOT_FOUND", "no key
 const k2 = run(`linkKey_("pass", "CSS0022222")`);
 ok(J(`memberPartners_({ memberId: "CSS0022222", k: "${k2}" })`).err === "NOT_FOUND", "unpaid member: not found");
 
+// ---- redemptions
+run("TBL.Redemptions = [];");
+const kk = run('linkKey_("pass", "CSS0011234")');
+const first = run('listPartners_().partners[0].name');
+r = J('memberRedeem_({ memberId: "CSS0011234", k: "' + kk + '", partner: ' + JSON.stringify(first) + ', rid: "abc-12345678" })');
+ok(r.v && r.v.ok && r.v.already === false && run('TBL.Redemptions.length') === 1, 'a redemption is logged');
+const row = run('TBL.Redemptions[0]');
+ok(row.memberId === 'CSS0011234' && row.memberName === 'Mem Ber' && row.partnerName === first && row.offer === '15% OFF', 'the log row has member, partner and offer');
+r = J('memberRedeem_({ memberId: "CSS0011234", k: "' + kk + '", partner: ' + JSON.stringify(first) + ', rid: "abc-12345678" })');
+ok(r.v && r.v.already === true && run('TBL.Redemptions.length') === 1, 'sending the same redemption twice (a retry) counts once');
+const old = new Date(Date.now() - 3 * 3600 * 1000).toISOString();
+J('memberRedeem_({ memberId: "CSS0011234", k: "' + kk + '", partner: ' + JSON.stringify(first) + ', rid: "def-12345678", at: "' + old + '" })');
+ok(run('TBL.Redemptions[1].time') === old, 'a plausible phone time (saved while offline) is kept');
+J('memberRedeem_({ memberId: "CSS0011234", k: "' + kk + '", partner: ' + JSON.stringify(first) + ', rid: "ghi-12345678", at: "2001-01-01T00:00:00Z" })');
+ok(Date.now() - new Date(run('TBL.Redemptions[2].time')).getTime() < 60000, 'an absurd phone time is replaced by the real time');
+ok(J('memberRedeem_({ memberId: "CSS0011234", k: "bad", partner: ' + JSON.stringify(first) + ' })').err === 'NOT_FOUND', 'redeeming needs a valid pass key');
+ok(J('memberRedeem_({ memberId: "CSS0022222", k: "' + k2 + '", partner: ' + JSON.stringify(first) + ' })').err === 'NOT_FOUND', 'an unpaid member cannot redeem');
+ok(J('memberRedeem_({ memberId: "CSS0011234", k: "' + kk + '", partner: "Not A Partner" })').err === 'BAD_REQUEST', 'unknown partner refused');
+const lr = J('listRedemptions_({ limit: 2 })').v;
+ok(lr.total === 3 && lr.redemptions.length === 2 && lr.byPartner[first] === 3, 'exec list: newest first, page size, counts per partner');
+ok(J('listRedemptions_({ full: true })').v.redemptions.length === 3, 'full list for the CSV');
+
 r = J(`deletePartner_(${JSON.stringify(S)}, "${id}")`);
 ok(r.v && r.v.ok && J(`listPartners_()`).v.partners.every((p) => p.id !== id), "admin delete removes it");
 run(`TBL.Partners = [];`);

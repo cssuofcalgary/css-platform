@@ -63,6 +63,9 @@ function route_(req) {
     case "memberPartners":
       return memberPartners_(req);
 
+    case "memberRedeem":
+      return memberRedeem_(req);
+
     case "joinWaitlist":
       return joinWaitlist_(req);
 
@@ -246,6 +249,10 @@ function route_(req) {
     case "listPartners":
       requireSession_(req.token);
       return listPartners_();
+
+    case "listRedemptions":
+      requireSession_(req.token);
+      return listRedemptions_(req);
 
     case "savePartner":
       return savePartner_(requireSession_(req.token), req.partner);

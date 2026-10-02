@@ -95,20 +95,74 @@ function deletePartner_(session, id) {
   });
 }
 
+/** The paid member behind a pass link (memberId + key). Anything wrong looks the same: "Pass not found". */
+function passMember_(req) {
+  const memberId = String(req.memberId || "").trim().toUpperCase();
+  if (!memberId || !linkKeyOk_("pass", memberId, req.k)) throw new ApiError_("NOT_FOUND", "Pass not found.");
+  const member = findMemberById_(loadMembers_(), memberId);
+  if (!member || !member.paid) throw new ApiError_("NOT_FOUND", "Pass not found.");
+  return member;
+}
+
 /**
  * Public, for a member's pass page: the ACTIVE partners, but only with a valid pass link (memberId + key) of a paid member.
  * Opening the list is written to the Log (who looked), like the old "visits".
  */
 function memberPartners_(req) {
-  const memberId = String(req.memberId || "").trim().toUpperCase();
-  if (!memberId || !linkKeyOk_("pass", memberId, req.k)) throw new ApiError_("NOT_FOUND", "Pass not found.");
-  const member = findMemberById_(loadMembers_(), memberId);
-  if (!member || !member.paid) throw new ApiError_("NOT_FOUND", "Pass not found.");
+  const member = passMember_(req);
   ensurePartnersSeeded_();
   log_("Member: " + member.name, "partners.open", member.memberId, {});
   return {
     ok: true,
     partners: sortedPartners_().filter(function (p) { return p.active; })
       .map(function (p) { return { name: p.name, offer: p.offer, address: p.address }; })
+  };
+}
+
+// ---- Redemptions (the log of who used which deal) --------------------------------------------
+
+/**
+ * Public, from a member's pass page: "this member just showed this partner's deal". Needs the same pass link key as the partner list.
+ * The page gives every redemption its own id (rid), so sending one twice (a retry after a bad connection) is counted once.
+ * The page also sends the time it happened on the phone, which is used when it is plausible (up to 7 days old), so one that was
+ * saved on the phone while offline still shows when it really happened.
+ */
+function memberRedeem_(req) {
+  const member = passMember_(req);
+  const rid = /^[A-Za-z0-9-]{8,60}$/.test(String(req.rid || "")) ? "RD" + String(req.rid) : "";
+  const name = memberText_(req.partner, 120);
+  ensurePartnersSeeded_();
+  const partner = sortedPartners_().filter(function (p) { return p.active && p.name === name; })[0];
+  if (!partner) throw new ApiError_("BAD_REQUEST", "That partner isn't available.");
+
+  const nowMs = Date.now();
+  let whenMs = nowMs;
+  const at = new Date(String(req.at || "")).getTime();
+  if (!isNaN(at) && at <= nowMs + 5 * 60 * 1000 && at >= nowMs - 7 * 24 * 3600 * 1000) whenMs = at;
+
+  const done = withLock_(function () {
+    const id = rid || newId_("RD");
+    if (readRows_("Redemptions").some(function (r) { return r.id === id; })) return { already: true };
+    insertRow_("Redemptions", {
+      id: id, time: new Date(whenMs).toISOString(), receivedAt: new Date(nowMs).toISOString(), memberId: member.memberId,
+      memberName: member.name, partnerId: partner.id, partnerName: partner.name, offer: partner.offer
+    });
+    return { already: false };
+  });
+  if (!done.already) log_("Member: " + member.name, "partner.redeem", member.memberId, { partner: partner.name });
+  return { ok: true, already: !!done.already };
+}
+
+/** Exec: the redemption log, newest first (a page, or everything with full: true), and the all-time count per partner. */
+function listRedemptions_(req) {
+  const rows = readRows_("Redemptions").slice().sort(function (a, b) { return String(b.time).localeCompare(String(a.time)); });
+  const byPartner = {};
+  rows.forEach(function (r) { byPartner[r.partnerName] = (byPartner[r.partnerName] || 0) + 1; });
+  const limit = req.full ? 5000 : Math.min(200, Math.max(1, parseInt(req.limit, 10) || 25));
+  return {
+    ok: true, total: rows.length, byPartner: byPartner,
+    redemptions: rows.slice(0, limit).map(function (r) {
+      return { time: r.time, memberId: r.memberId, memberName: r.memberName, partnerName: r.partnerName, offer: r.offer };
+    })
   };
 }
