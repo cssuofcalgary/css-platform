@@ -63,6 +63,8 @@ const STRINGS = {
     confirmNote: "Your spot is confirmed once we receive your payment. Each person then gets their own ticket by email.",
     registeredFree: "You're registered!",
     freeNote: "This event is free. Each person gets their own ticket by email.",
+    reviewTitle: "Registration received!",
+    reviewNote: "Because your ticket requires membership verification, your QR code will be issued once an executive reviews your member status.",
     emailedCopy: "We've also emailed you these details.",
     ticketsHeading: "Tickets in this registration",
     flagNote: (name) => `${name}: we couldn't confirm a paid CSS membership. You can still come; the help desk will check at the door.`,

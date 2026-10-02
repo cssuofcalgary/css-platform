@@ -230,12 +230,18 @@ function route_(req) {
 
 // ---- Login & sessions -------------------------------------------------------
 
+/** Wrong-password counter per person, so one person's typos (or a stranger's guesses) can't lock everyone else out. */
+function loginFailKey_(name) {
+  return "failed_login_" + String(name || "anon").toLowerCase().trim().replace(/[^a-z0-9]/g, "");
+}
+
 function login_(password, name) {
   const config = getConfig_();
   if (!config.password) throw new ApiError_("SETUP_NEEDED", "EXEC_PASSWORD is missing from Script Properties.");
 
   const cache = CacheService.getScriptCache();
-  const failed = parseInt(cache.get("failed_logins") || "0", 10);
+  const userKey = loginFailKey_(name);
+  const failed = parseInt(cache.get(userKey) || "0", 10);
   if (failed >= MAX_FAILED_LOGINS) {
     throw new ApiError_("TOO_MANY_TRIES", "Too many wrong passwords. Try again in 10 minutes.");
   }
@@ -245,12 +251,13 @@ function login_(password, name) {
     : (typed === config.password) ? "exec"
     : "";
   if (!role) {
-    cache.put("failed_logins", String(failed + 1), 600);
+    cache.put(userKey, String(failed + 1), 600);
     throw new ApiError_("WRONG_PASSWORD", "Wrong password.");
   }
 
   const who = String(name || "").trim().slice(0, 60);
   if (!who) throw new ApiError_("NAME_NEEDED", "Pick your name.");
+  cache.remove(userKey);
 
   warmCaches_(false);   // sign-in may take a moment longer; every screen after it is quick
   return { ok: true, token: startSession_(who, role), name: who, role: role };

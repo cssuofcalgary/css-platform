@@ -183,7 +183,7 @@ function healthCheck_(session) {
     const members = loadMembers_();
     return members.length + " members (" + members.filter(function (m) { return m.paid; }).length + " paid)";
   });
-  run("Nightly backup", backupStatus_);
+  run("Weekly backup (data + membership)", backupStatus_);
   run("Archive", archiveStatus_);
   run("Email allowance", function () {
     const left = MailApp.getRemainingDailyQuota();

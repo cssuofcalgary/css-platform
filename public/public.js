@@ -307,11 +307,12 @@ async function onSubmit(ev) {
 
 function showPaymentScreen(reply) {
   const free = reply.order.status === "paid";
+  const review = !!reply.needsReview;   // $0 order held until an exec checks membership
   const flagged = reply.tickets.filter((t) => t.flag && t.flag.indexOf("Member price") === 0);
   $("page").innerHTML = `
     <article class="done">
-      <h1 class="page-title">${free ? T.registeredFree : T.almostDone}</h1>
-      ${free ? `<p>${T.freeNote}</p>` : `
+      <h1 class="page-title">${review ? T.reviewTitle : free ? T.registeredFree : T.almostDone}</h1>
+      ${review ? `<p class="lead">${T.reviewNote}</p>` : free ? `<p>${T.freeNote}</p>` : `
         <p class="lead">${T.sendEtransfer}</p>
         <div class="pay-box">
           <div class="pay-row"><span>${T.amount}</span><div><strong class="big">${money(reply.order.total)}</strong> <small class="muted">${T.exactly}</small></div></div>
@@ -327,7 +328,7 @@ function showPaymentScreen(reply) {
       <ul class="ticket-list">${reply.tickets.map((t) => `
         <li><span>${escapeHtml(t.name)} · ${escapeHtml(t.ticketType)}</span><strong>${money(t.price)}</strong></li>`).join("")}
       </ul>
-      ${flagged.map((t) => `<p class="flag-note">${escapeHtml(T.flagNote(t.name))}</p>`).join("")}
+      ${review ? "" : flagged.map((t) => `<p class="flag-note">${escapeHtml(T.flagNote(t.name))}</p>`).join("")}
       ${reply.emailSent ? `<p class="muted small">${T.emailedCopy}</p>` : ""}
       <p class="muted small">${T.screenshotTip}</p>
     </article>`;

@@ -138,6 +138,7 @@ async function onOrdersClick(event) {
   }
 
   if (button.dataset.act === "refund") {
+    if (!confirm(T.confirmRefund(order.code, order.payerName))) return;
     const reason = prompt(T.refundPrompt(order.code, order.status));
     if (reason === null) return;
     button.disabled = true;

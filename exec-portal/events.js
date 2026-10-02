@@ -129,6 +129,7 @@ async function onEventsListClick(event) {
 
   const status = { publish: "published", close: "closed", reopen: "published", archive: "archived", restore: "closed" }[button.dataset.action];
   if (status === "published" && target.status === "draft" && !confirm(T.confirmPublish)) return;
+  if (button.dataset.action === "close" && !confirm(T.confirmClose(target.name))) return;
   if (status === "archived" && !confirm(T.confirmArchive(target.name))) return;
   const restoring = status === "closed" && target.status === "archived";
   if (restoring && !confirm(T.confirmRestore(target.name))) return;

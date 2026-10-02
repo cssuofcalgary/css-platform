@@ -217,7 +217,8 @@ function loginDoor_(password, name) {
   const who = String(name || "").trim().slice(0, 60);
   if (!who) throw new ApiError_("NAME_NEEDED", "Type your name.");
   const cache = CacheService.getScriptCache();
-  const failed = parseInt(cache.get("failed_logins") || "0", 10);
+  const userKey = loginFailKey_(who);
+  const failed = parseInt(cache.get(userKey) || "0", 10);
   if (failed >= MAX_FAILED_LOGINS) throw new ApiError_("TOO_MANY_TRIES", "Too many wrong passwords. Try again in 10 minutes.");
 
   const required = String(PropertiesService.getScriptProperties().getProperty("SCANNER_PASSWORD") || "");
@@ -225,10 +226,11 @@ function loginDoor_(password, name) {
     const typed = String(password || "");
     if (!typed) throw new ApiError_("DOOR_PASSWORD_NEEDED", "Ask an exec for the door password.");
     if (typed !== required) {
-      cache.put("failed_logins", String(failed + 1), 600);
+      cache.put(userKey, String(failed + 1), 600);
       throw new ApiError_("WRONG_PASSWORD", "Wrong password.");
     }
   }
+  cache.remove(userKey);
   if (!entryOpenEvents_().length) throw new ApiError_("DOOR_CLOSED", DOOR_CLOSED_TEXT);
   warmCaches_(true);
   return { ok: true, token: startSession_(who, "door"), name: who, role: "door" };

@@ -282,6 +282,7 @@ Everyone in this order will be emailed their ticket.`,
 Mark it paid anyway?`,
     markedPaid: (sent, waiting) => `Paid ✓ ${sent} ticket email${sent === 1 ? "" : "s"} sent${waiting ? `, ${waiting} waiting (daily limit)` : ""}.`,
     refund: "Refund / cancel",
+    confirmRefund: (code, name) => `Refund / cancel order ${code} (${name})? This voids the order and opens the spot again.`,
     refundPrompt: (code, status) => status === "paid"
       ? `Refund ${code}? Their spot opens up again. Send the money back by e-transfer yourself.
 
@@ -372,6 +373,7 @@ Reason (optional):`,
     publish: "Publish",
     unpublish: "Back to draft",
     closeRegistration: "Close registration",
+    confirmClose: (name) => `Are you sure you want to close registration for ${name}? Public sign-ups will stop immediately.`,
     reopen: "Reopen",
     viewPublicPage: "Public page ↗",
     backToEvents: "Back to events",

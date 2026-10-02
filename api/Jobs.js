@@ -3,17 +3,19 @@
  *
  * Two timers, added once by hand in Apps Script → Triggers (clock icon) → Add Trigger (a script can't
  * add its own without an extra permission that broke the web app once):
- *   nightlyJob  every night around 3 am: copies the data sheet (backup), checks that everything
- *               is healthy, and emails the CSS Gmail only if something is wrong.
+ *   nightlyJob  every night around 3 am: checks that everything is healthy and emails the CSS Gmail
+ *               only if something is wrong. On Sundays it also backs up the Platform Data sheet and the
+ *               Membership sheet (keeps the last 4 of each; older ones go to the Drive bin).
  *   hourlyJob   every hour: closes entry for events that ended a few hours ago, so a forgotten
  *               "Entry open" switch can't stay on.
  * Both write to the Log as "system". Nothing here emails members.
  */
 
 const BACKUP_FOLDER_NAME = "CSS Platform Backups";
-const BACKUPS_KEPT = 14;
+const BACKUPS_KEPT = 4;            // weekly copies kept of each sheet; older ones go to the Drive bin
+const BACKUP_DAY = "7";            // the backup runs on this weekday during the nightly job (ISO: 7 = Sunday, about 3 am)
 const ENTRY_AUTOCLOSE_HOURS = 4;   // entry closes this long after an event's end time (after its start time if there is no end time)
-const BACKUP_STALE_HOURS = 36;     // the health check complains when the last good backup is older than this
+const BACKUP_STALE_HOURS = 216;    // the health check complains when the last good backup is older than this (9 days: one weekly miss is tolerated)
 
 /**
  * Run from the editor to take a backup and run the health check right now (also a good test).
@@ -22,20 +24,24 @@ const BACKUP_STALE_HOURS = 36;     // the health check complains when the last g
  *   hourlyJob:  Head deployment, Time-driven, Hour timer, Every hour
  */
 function installJobs() {
-  nightlyJob();
+  nightlyJob(true);
   console.log("Backup and check done. Now add the two timers: Triggers (clock icon) → Add Trigger → nightlyJob (Day timer, 3am-4am) and hourlyJob (Hour timer, every hour).");
 }
 
 // ---- Nightly: backup + health alert --------------------------------------------
 
-function nightlyJob() {
+/** The timer stays nightly (health check + archive); the backup itself only runs on BACKUP_DAY, or when forced (run by hand). */
+function nightlyJob(forceBackup) {
   const problems = [];
-  try {
-    const result = backupNow_();
-    log_("system", "backup", "", { file: result.name, kept: result.kept });
-  } catch (err) {
-    rememberBackup_(false, String(err && err.message || err));
-    problems.push("The nightly backup failed: " + String(err && err.message || err));
+  const weekday = Utilities.formatDate(new Date(), "America/Edmonton", "u");
+  if (forceBackup === true || weekday === BACKUP_DAY) {
+    try {
+      const result = backupNow_();
+      log_("system", "backup", "", { file: result.name, kept: result.kept });
+    } catch (err) {
+      rememberBackup_(false, String(err && err.message || err));
+      problems.push("The weekly backup failed: " + String(err && err.message || err));
+    }
   }
 
   // Move events that finished more than 30 days ago into the yearly archive (after the backup, so the backup still has them)
@@ -59,27 +65,49 @@ function nightlyJob() {
   }
 }
 
-/** Copies the data sheet into the backup folder and deletes the oldest copies beyond BACKUPS_KEPT. */
+/**
+ * Copies the Platform Data sheet and the Membership sheet into the backup folder, and bins the oldest
+ * copies of each beyond BACKUPS_KEPT. The data sheet is copied first; if the Membership copy fails
+ * (e.g. the script can't open that file), the failure is reported but the data backup stays.
+ */
 function backupNow_() {
-  const source = DriveApp.getFileById(dataSpreadsheet_().getId());
   const folder = backupFolder_();
   const today = Utilities.formatDate(new Date(), "America/Edmonton", "yyyy-MM-dd");
-  const name = "CSS Platform Data backup " + today;
 
-  // One backup per day: running the job twice replaces that day's copy
+  const data = copyAndPrune_(dataSpreadsheet_().getId(), folder, "CSS Backup ", today);
+  let membership = null, membershipError = "";
+  try {
+    membership = copyAndPrune_(getConfig_().membershipSheetId, folder, "CSS Membership Backup ", today);
+  } catch (err) {
+    membershipError = String(err && err.message || err);
+  }
+
+  if (membershipError) {
+    rememberBackup_(false, data.name + " saved, but the Membership backup failed: " + membershipError);
+    throw new Error("Platform Data was backed up, but the Membership sheet was not: " + membershipError);
+  }
+  rememberBackup_(true, data.name + " + " + membership.name + " (" + data.kept + " kept each)");
+  return { name: data.name + " + " + membership.name, kept: data.kept };
+}
+
+/** One copy per day per sheet (running twice replaces that day's copy); older copies with the same prefix beyond BACKUPS_KEPT go to the Drive bin. */
+function copyAndPrune_(sourceId, folder, prefix, today) {
+  const name = prefix + today;
+  const source = DriveApp.getFileById(sourceId);
+
   const same = folder.getFilesByName(name);
   while (same.hasNext()) same.next().setTrashed(true);
   source.makeCopy(name, folder);
 
   const files = [];
   const all = folder.getFiles();
-  while (all.hasNext()) { const f = all.next(); files.push({ file: f, time: f.getDateCreated().getTime() }); }
+  while (all.hasNext()) {
+    const f = all.next();
+    if (f.getName().indexOf(prefix) === 0) files.push({ file: f, time: f.getDateCreated().getTime() });
+  }
   files.sort(function (a, b) { return b.time - a.time; });
   files.slice(BACKUPS_KEPT).forEach(function (x) { x.file.setTrashed(true); });   // goes to the Drive bin, not gone for good
-
-  const kept = Math.min(files.length, BACKUPS_KEPT);
-  rememberBackup_(true, name + " (" + kept + " kept)");
-  return { name: name, kept: kept };
+  return { name: name, kept: Math.min(files.length, BACKUPS_KEPT) };
 }
 
 function backupFolder_() {
@@ -108,7 +136,11 @@ function backupStatus_() {
   const hours = (Date.now() - new Date(good).getTime()) / 3600000;
   if (hours > BACKUP_STALE_HOURS) throw new Error("Last good backup was " + Math.round(hours) + " hours ago. Check the timers in Apps Script (Triggers).");
   let detail = "";
-  try { detail = JSON.parse(props.getProperty("LAST_BACKUP") || "{}").detail || ""; } catch (e) { /* none */ }
+  try {
+    const last = JSON.parse(props.getProperty("LAST_BACKUP") || "{}");
+    detail = last.detail || "";
+    if (last.ok === false) throw new Error("The last backup had a problem: " + detail);   // e.g. the Membership sheet couldn't be copied
+  } catch (e) { if (/last backup had a problem/.test(e.message)) throw e; }
   return "last backup " + Utilities.formatDate(new Date(good), "America/Edmonton", "MMM d, h:mm a") + (detail ? " · " + detail : "");
 }
 

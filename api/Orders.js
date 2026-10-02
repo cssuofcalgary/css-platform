@@ -34,6 +34,7 @@ function register_(req) {
 
   const members = loadMembers_();
   everyone.forEach(function (p) { p.flag = membershipFlag_(p, members); });
+  const needsReview = everyone.some(function (p) { return !!p.flag; });   // SEC-01: taken before the duplicate-email note below, which is only a warning
 
   // Everything slow happens BEFORE the lock, where many requests can run side by side: open the tabs, and read
   // who is already registered (a duplicate email is only a warning, so a snapshot a moment old is fine).
@@ -49,6 +50,21 @@ function register_(req) {
       if (seen) return { repeat: JSON.parse(seen) };
     }
     const tickets = snapshotTickets;
+    if (event.capacity && event.capacityRule === "paid") {
+      // SEC-02: "paid" counts only confirmed tickets, but sign-ups must not pile up without limit.
+      // Hard stop once paid tickets reach capacity; ceiling of 125% on paid + awaiting.
+      delete DB_.rows["Tickets"];   // counted on fresh data, inside the lock
+      let paid = 0, awaiting = 0;
+      readRows_("Tickets").forEach(function (t) {
+        if (t.eventId !== event.id) return;
+        if (t.status === "paid") paid++;
+        else if (t.status === "awaiting") awaiting++;
+      });
+      if (paid >= event.capacity) throw new ApiError_("SOLD_OUT", "Sorry, this event is full.");
+      if (paid + awaiting + everyone.length > Math.floor(event.capacity * 1.25)) {
+        throw new ApiError_("SOLD_OUT", "Registration queue is full. Please check back later.");
+      }
+    }
     if (event.capacity && event.capacityRule === "all") {
       delete DB_.rows["Tickets"];   // a hard limit must be counted on fresh data, inside the lock
       const taken = spotsTaken_(event);
@@ -67,7 +83,7 @@ function register_(req) {
 
     const now = new Date().toISOString();
     const total = everyone.reduce(function (sum, p) { return sum + p.price; }, 0);
-    const isFree = total === 0;
+    const isFree = total === 0 && !needsReview;   // a $0 order with a membership flag stays "awaiting" until an exec checks it
     const order = {
       id: newId_("OR"),
       code: issueOrderCode_(event, snapshotOrders),
@@ -80,7 +96,7 @@ function register_(req) {
       createdAt: now,
       paidAt: isFree ? now : "",
       paidBy: isFree ? "Free event" : "",
-      notes: ""
+      notes: total === 0 && needsReview ? "Requires exec verification of member status" : ""
     };
     insertRow_("Orders", order);
 
@@ -111,6 +127,7 @@ function register_(req) {
     const reply = {
       ok: true,
       order: { code: order.code, total: total, status: order.status },
+      needsReview: total === 0 && needsReview,
       etransferEmail: etransferEmailNow,
       tickets: created.map(function (t) { return { name: t.name, ticketType: t.ticketType, price: t.price, flag: t.flag }; })
     };
@@ -125,6 +142,8 @@ function register_(req) {
     // Free event (RSVP): everyone gets their QR ticket straight away, instead of a "payment needed" style email.
     const sent = sendPendingTicketEmails_(done.order.id);
     done.reply.emailSent = sent.sent > 0;
+  } else if (done.reply.needsReview) {
+    done.reply.emailSent = false;   // $0 and waiting for an exec to check membership: no ticket and no payment email yet
   } else {
     done.reply.emailSent = sendRegistrationEmail_(event, done.order, done.created);
   }
