@@ -22,7 +22,27 @@ const READ_ACTIONS = ["listEvents", "listOrders", "doorList", "eventSummary", "s
 const REQUEST_TIMEOUT_MS = 35000;
 const RETRY_PAUSE_MS = 1200;
 
+// The rolling panda shows in the middle when a request takes longer than a moment. Door scans, searches-as-you-type and
+// the keep-alive stay quiet, and so does the scanner phone page.
+const QUIET_ACTIONS = ["ping", "scan", "doorList", "searchMembers", "getMember"];
+const PANDA_DELAY_MS = 700;
+let pandaBusyCount = 0, pandaBusyTimer = null;
+
+function pandaBusy(on) {
+  pandaBusyCount = Math.max(0, pandaBusyCount + (on ? 1 : -1));
+  const box = $("panda-busy");
+  if (!box) return;
+  if (on && pandaBusyCount === 1) pandaBusyTimer = setTimeout(() => { box.hidden = false; }, PANDA_DELAY_MS);
+  if (pandaBusyCount === 0) { clearTimeout(pandaBusyTimer); box.hidden = true; }
+}
+
 async function api(action, details = {}) {
+  const quiet = SCANNER_MODE || QUIET_ACTIONS.includes(action);
+  if (!quiet) pandaBusy(true);
+  try { return await apiRequest(action, details); } finally { if (!quiet) pandaBusy(false); }
+}
+
+async function apiRequest(action, details = {}) {
   const body = { action, token: state.token, ...(SCANNER_MODE ? { scanner: true } : {}), ...details };   // "scanner" lets the server count this page as a scanner phone
   if (!API_URL) return MockApi.handle(body);   // demo mode
   // "Busy" means the server never started the action, so EVERY action can safely be tried again. Other hiccups are only
