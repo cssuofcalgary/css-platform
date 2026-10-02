@@ -58,6 +58,15 @@ run(`CacheService.getScriptCache().remove("deskalerts_EV1"); TBL.Events[0].entry
 scan("door", true, "TKTFRESH01");
 ok(alerts().length === 0, "'entry is closed' makes no alert");
 
+// The scanner phone is told only "go to the help desk"; the desk's alert and the desk's own scan keep the reason
+run(`CacheService.getScriptCache().remove("deskalerts_EV1"); REQ_SCANNER_ = true;`);
+const phone = scan("door", true, "TKTUNPD001").result;
+ok(phone.message === "Go to the help desk." && phone.color === "orange" && phone.person.name === "Unpaid Guest" && phone.desk === undefined, "scanner phone: short message, name kept: " + JSON.stringify(phone.message));
+ok(/Not paid yet/.test(alerts()[0].reason), "the desk alert still carries the full reason");
+const deskScan = scan("exec", false, "TKTUNPD001").result;
+ok(/Not paid yet/.test(deskScan.message), "the help desk's own scan keeps the full message");
+ok(scan("door", true, "TKTGOOD001").result.message.indexOf("Already checked in") === 0, "'already checked in' stays as it was");
+
 // Only the last few are kept
 run(`TBL.Events[0].entryOpen = "TRUE"; for (var i = 0; i < 12; i++) { tk("TKTXTRA0" + i, "Extra " + i, "awaiting", "", "O2"); scan_(S("door", "V"), "EV1", "TKTXTRA0" + i, false); }`.replace("scan_(", "REQ_SCANNER_ = true; scan_("));
 ok(alerts().length === 8, "only the last 8 are kept: " + alerts().length);

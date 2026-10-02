@@ -111,7 +111,12 @@ async function followLiveEvent() {
 
 /** `quiet` = the background refresh: if it fails, keep showing what we have instead of covering the scan result. */
 async function loadDoor(quiet) {
+  const roller = $("desk-roller");
+  clearTimeout(doorState.rollerTimer);
+  doorState.rollerTimer = setTimeout(() => roller.classList.add("on"), 500);   // a small panda rolls only if the refresh takes a moment
   const reply = await api("doorList", { eventId: doorState.eventId });
+  clearTimeout(doorState.rollerTimer);
+  roller.classList.remove("on");
   if (!reply.ok) {
     if (quiet && reply.error !== "NOT_LOGGED_IN") return;
     return handleEventError(reply, $("scan-result"));
@@ -303,10 +308,11 @@ function showIdle(text) {
 function showResult(result) {
   const box = $("scan-result");
   const p = result.person;
-  const answers = p ? Object.entries(p.answers || {}).map(([k, v]) => `${escapeHtml(k)}: <strong>${escapeHtml(v)}</strong>`).join(" · ") : "";
+  const lean = SCANNER_MODE && result.color !== "green";   // scanner phones keep problems short: name and "go to the help desk"; the desk sees the details
+  const answers = p && !lean ? Object.entries(p.answers || {}).map(([k, v]) => `${escapeHtml(k)}: <strong>${escapeHtml(v)}</strong>`).join(" · ") : "";
   box.className = "scan-result " + result.color;
   box.innerHTML = `
-    ${p ? `<div class="big-name">${escapeHtml(p.name)}</div><div class="detail">${escapeHtml(p.ticketType)} · ${escapeHtml(p.id)}</div>` : ""}
+    ${p ? `<div class="big-name">${escapeHtml(p.name)}</div>${lean ? "" : `<div class="detail">${escapeHtml(p.ticketType)} · ${escapeHtml(p.id)}</div>`}` : ""}
     <div>${escapeHtml(result.message)}</div>
     ${answers ? `<div class="detail">${answers}</div>` : ""}
     ${doorState.scanner ? `<div class="detail tap-hint">${T.tapForNext}</div>` : ""}`;

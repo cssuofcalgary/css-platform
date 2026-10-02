@@ -23,6 +23,9 @@ function setEntryOpen_(session, eventId, open) {
 function scan_(session, eventId, code, atDesk) {
   const reply = scanCode_(session, eventId, code, atDesk);
   try { noteDeskAlert_(session, eventId, reply.result, atDesk); } catch (e) { /* the alert is a bonus: never fail a scan over it */ }
+  // Scanner phones get the short answer; the help desk screen shows the reason (the alert above, and its own scans in full)
+  if (reply.result && reply.result.desk && (session.role === "door" || REQ_SCANNER_) && !atDesk) reply.result.message = "Go to the help desk.";
+  if (reply.result) delete reply.result.desk;
   return reply;
 }
 
@@ -66,9 +69,9 @@ function scanCode_(session, eventId, code, atDesk) {
   let matchedViaMember = "";
   if (key.kind === "member") {
     const member = key.value ? findMemberById_(loadMembers_(), key.value) : null;
-    if (!member) return scanResult_("red", "Member ID not found. Send to help desk.");
+    if (!member) return deskResult_("red", "Member ID not found. Send to help desk.");
     const ticket = memberTicketForEvent_(member, eventId);
-    if (!ticket) return scanResult_("orange", member.name + " is a CSS Member, but has no ticket for this event. Send to help desk / walk-in.",
+    if (!ticket) return deskResult_("orange", member.name + " is a CSS Member, but has no ticket for this event. Send to help desk / walk-in.",
       { id: member.id, name: member.name, ticketType: "Member pass", answers: {}, flag: "" });
     key = { kind: "id", value: ticket.id };
     matchedViaMember = member.name;
@@ -87,14 +90,14 @@ function scanCode_(session, eventId, code, atDesk) {
     const person = personView_(ticket);
     if (ticket.eventId !== event.id) {
       const other = findEvent_(function (e) { return e.id === ticket.eventId; });
-      return scanResult_("red", "This ticket is for " + (other ? other.name : "another event") + ".", person);
+      return deskResult_("red", "This ticket is for " + (other ? other.name : "another event") + ".", person);
     }
     if (ticket.status === "refunded" || ticket.status === "cancelled") {
-      return scanResult_("red", "This ticket was " + ticket.status + ".", person);
+      return deskResult_("red", "This ticket was " + ticket.status + ".", person);
     }
     if (ticket.status === "awaiting") {
       const order = readRows_("Orders").filter(function (o) { return o.id === ticket.orderId; })[0] || {};
-      return scanResult_("orange", "Not paid yet. Send to the help desk (" + (order.code || "") + ", " + moneyText_(order.total) + ").", person);
+      return deskResult_("orange", "Not paid yet. Send to the help desk (" + (order.code || "") + ", " + moneyText_(order.total) + ").", person);
     }
     if (ticket.checkedInAt) {
       return scanResult_("orange", "Already checked in at " + clockText_(ticket.checkedInAt) + " by " + (ticket.checkedInBy || "someone") + ".", person);
@@ -104,7 +107,7 @@ function scanCode_(session, eventId, code, atDesk) {
     }
     // Flagged tickets (membership not found, duplicate email...) only get in through the help desk.
     if (ticket.flag && !atDesk) {
-      return scanResult_("orange", "Please go to the help desk: " + ticket.flag + ".", person);
+      return deskResult_("orange", "Please go to the help desk: " + ticket.flag + ".", person);
     }
 
     const now = new Date().toISOString();
@@ -339,6 +342,13 @@ function memberTicketForEvent_(member, eventId) {
 
 function personView_(ticket) {
   return { id: ticket.id, name: ticket.name, ticketType: ticket.ticketType, answers: ticket.answers || {}, flag: ticket.flag };
+}
+
+/** A result only the help desk should explain. The scanner phone is told just "go to the help desk" (see scan_). */
+function deskResult_(color, message, person) {
+  const reply = scanResult_(color, message, person);
+  reply.result.desk = true;
+  return reply;
 }
 
 function scanResult_(color, message, person) {
