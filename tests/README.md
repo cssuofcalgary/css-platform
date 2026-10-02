@@ -7,6 +7,7 @@ safety fixes (SEC-01, SEC-02) and the per-person login lockout.
 ```
 node tests/waitlist.test.js
 node tests/core.test.js
+node tests/partners.test.js
 ```
 
 Each prints PASS/FAIL lines and exits with an error if anything fails. Run both before a deploy.

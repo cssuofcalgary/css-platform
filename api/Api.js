@@ -60,6 +60,9 @@ function route_(req) {
     case "requestCancel":
       return requestCancel_(req.secret, !!req.undo);
 
+    case "memberPartners":
+      return memberPartners_(req);
+
     case "joinWaitlist":
       return joinWaitlist_(req);
 
@@ -239,6 +242,16 @@ function route_(req) {
     case "eventSummary":
       requireSession_(req.token);
       return eventSummary_(req.eventId, req);
+
+    case "listPartners":
+      requireSession_(req.token);
+      return listPartners_();
+
+    case "savePartner":
+      return savePartner_(requireSession_(req.token), req.partner);
+
+    case "deletePartner":
+      return deletePartner_(requireAdmin_(req.token), req.partnerId);
 
     case "listWaitlist":
       requireSession_(req.token);

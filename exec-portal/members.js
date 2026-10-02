@@ -7,6 +7,7 @@ const memState = { view: "", list: [], total: 0, hasMore: false, loaded: false, 
 /** Opens the Members tab: Pending first when someone is waiting, Search otherwise. */
 async function openMembersTab() {
   showMemberList();
+  loadPartners();
   if (!memState.loaded) await loadPending(false);
   else loadPending(false);   // already have a list: show it now, refresh quietly
   if (!memState.view) setMembersView(memState.total > 0 ? "pending" : "search");
