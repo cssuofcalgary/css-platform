@@ -91,7 +91,7 @@ function listOrders_(eventId, opts) {
     money: money,
     reminderHours: REMINDER_AFTER_HOURS,
     spotsTaken: spotsTaken_(event),
-    unsentEmails: tickets.filter(function (t) { return t.status === "paid" && !t.emailedAt; }).length,
+    unsentEmails: tickets.filter(function (t) { return t.status === "paid" && ticketUnsent_(t); }).length,
     emailsLeftToday: emailsLeftToday_(),
     waitlist: waitlistSummary_(event)
   };
@@ -243,19 +243,46 @@ function refundOrder_(session, orderId, reason) {
 }
 
 /** Sends ticket emails for paid tickets that haven't had one yet (one order, or all). */
-function sendPendingTicketEmails_(orderId, limit) {
-  let tickets = readRows_("Tickets").filter(function (t) {
-    return t.status === "paid" && !t.emailedAt && (!orderId || t.orderId === orderId);
+const EMAIL_CLAIM_MINUTES = 10;   // a claimed ticket that was never marked sent (the script died mid-send) becomes sendable again after this
+
+/** A ticket's emailedAt says "claim:<time>" while one run is sending it, so a second run (another exec, another tab) skips it. */
+function freshClaim_(t) {
+  const v = String(t.emailedAt || "");
+  if (v.indexOf("claim:") !== 0) return false;
+  const when = new Date(v.slice(6)).getTime();
+  return !isNaN(when) && Date.now() - when < EMAIL_CLAIM_MINUTES * 60000;
+}
+
+/** Waiting for its ticket email: never sent, or claimed so long ago that the run that claimed it must have died. */
+function ticketUnsent_(t) {
+  const v = String(t.emailedAt || "");
+  return !v || (v.indexOf("claim:") === 0 && !freshClaim_(t));
+}
+
+/**
+ * Sends ticket emails for paid tickets that haven't had one yet (one order, or all). Each ticket is CLAIMED under the lock
+ * before it is sent, so two people pressing Send now at the same moment can never email the same person twice.
+ * `again` = send even tickets that were emailed before (resend); a ticket another run is sending right now is still skipped.
+ */
+function sendPendingTicketEmails_(orderId, limit, again) {
+  const claimed = withLock_(function () {
+    delete DB_.rows["Tickets"];   // decide on fresh data, inside the lock
+    let tickets = readRows_("Tickets").filter(function (t) {
+      if (t.status !== "paid" || (orderId && t.orderId !== orderId)) return false;
+      return again ? !freshClaim_(t) : ticketUnsent_(t);
+    });
+    if (limit > 0) tickets = tickets.slice(0, limit);   // oldest first: new rows go at the bottom of the sheet
+    const now = new Date().toISOString();
+    tickets.forEach(function (t) { updateRow_("Tickets", t.id, { emailedAt: "claim:" + now }, t._row); });
+    return tickets;
   });
-  if (!tickets.length) return { sent: 0, waiting: 0 };
-  if (limit > 0) tickets = tickets.slice(0, limit);   // oldest first: new rows go at the bottom of the sheet
 
   const events = {};
   allEvents_().forEach(function (e) { events[e.id] = e; });
   let sent = 0;
-  tickets.forEach(function (t) {
+  claimed.forEach(function (t) {
     const event = events[t.eventId];
-    if (!event) return;
+    if (!event) { updateRow_("Tickets", t.id, { emailedAt: "" }, t._row); return; }   // nothing to send: let it go
     if (isTestAddress_(t.email)) {
       updateRow_("Tickets", t.id, { emailedAt: "test address, not sent" }, t._row);
       return;
@@ -263,10 +290,13 @@ function sendPendingTicketEmails_(orderId, limit) {
     if (sendTicketEmail_(event, t)) {
       updateRow_("Tickets", t.id, { emailedAt: new Date().toISOString() }, t._row);
       sent++;
+    } else {
+      updateRow_("Tickets", t.id, { emailedAt: "" }, t._row);   // not sent (allowance used up, bad address): give the claim back so it can be tried again
     }
   });
+  delete DB_.rows["Tickets"];
   const waiting = readRows_("Tickets").filter(function (t) {
-    return t.status === "paid" && !t.emailedAt && (!orderId || t.orderId === orderId);
+    return t.status === "paid" && ticketUnsent_(t) && (!orderId || t.orderId === orderId);
   }).length;
   return { sent: sent, waiting: waiting };
 }
@@ -276,8 +306,7 @@ function resendTickets_(session, orderId, siteUrl) {
   rememberSiteUrl_(siteUrl);
   const tickets = readRows_("Tickets").filter(function (t) { return t.orderId === orderId && t.status === "paid"; });
   if (!tickets.length) throw new ApiError_("BAD_REQUEST", "No paid tickets in this order.");
-  tickets.forEach(function (t) { updateRow_("Tickets", t.id, { emailedAt: "" }, t._row); });
-  const result = sendPendingTicketEmails_(orderId);
+  const result = sendPendingTicketEmails_(orderId, 0, true);
   log_(session.name, "tickets.resend", orderId, result);
   return { ok: true, emailsSent: result.sent, emailsWaiting: result.waiting };
 }
