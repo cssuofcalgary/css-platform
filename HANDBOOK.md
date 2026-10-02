@@ -75,7 +75,27 @@ The Events list shows how many people have **paid** and how many are **awaiting 
 **Edit** (next to a person, here and in Attendees): opens a form.
 - **Any exec:** name and email. A new email gets their ticket sent again automatically.
 - **Admin password only:** UCID, member ID (the membership is checked again), **ticket type** (the price and the order total change; the message tells you whether to collect or refund the difference), answers to the event's questions, the help-desk warning (clear it if it was sorted out), and the order's payer name/email, e-transfer name and notes. Everything is saved in the change log with the old and new values.
-If you see "ticket emails waiting (daily email limit)", press **Send now** later, or the next day. Gmail allows about 100 emails a day.
+If you see "ticket emails waiting", the daily email limit was reached. The bar shows how many are waiting and **how many emails are left today**. Press **Send now**: it asks how many to send (it suggests the smaller of the two numbers) and sends the oldest first. You can send fewer to keep some allowance for reminders. Gmail allows about 100 emails a day and resets about a day after the first send.
+**Search by amount:** type `$25` (orders totalling exactly $25) or just `25` (that amount, or that text) in the Payments search. Handy when a parent e-transfers under another name with no message.
+
+## Waitlist (when an event is full)
+- Turn it on per event: **Events → Edit → Waitlist**. It is off by default.
+- When the event is full, the public page shows **Join the waitlist** instead of "sold out". People give the same details as when registering. They get one short email. They have **no ticket and take no spot**.
+- **Payments → Waitlist** lists them, oldest first. When a spot opens (a cancel or refund), press **Offer a spot** next to the next name. That makes a normal registration and emails them the payment details (or the ticket, if it is free). If no spot looks free the portal asks before offering anyway.
+- Nothing moves by itself. An offer is held for 48 hours as a guide: if they have not paid by then, cancel their order (Refund / cancel) and offer the next person. **Remove** takes someone off the list.
+
+## Cancel requests
+On the ticket page of an **unpaid** ticket there is a **Cancel my registration** button. It does **not** cancel anything: it records that the person asked. Payments shows **Asked to cancel (n)** (and an alert on Overview). Press **Refund / cancel** to cancel the order, or **Dismiss request** to keep it. Nobody is emailed.
+
+## Partner deals and the redemption log (Members tab)
+At the bottom of **Members**: the partners and their offers. Any exec can **Add a partner**, **Edit**, or switch one **On/Off** (Off hides it from members without deleting it). Only the admin can **Delete**. Members see the On partners on their pass page (when they opened it from their emailed link or signed in with UCID + last name).
+**Redemption log:** each time a member shows a deal it is recorded (who, which partner, when). The latest 25 show here with a count per partner; **Download all (CSV)** gives everything. Members who opened their pass some other way are not in this log (they are in the old one).
+
+## Feedback, the event report and member history
+- After someone is checked in, their ticket page shows five stars and an optional comment. Open an event's **Attendees** page to see the average, the spread and the comments.
+- **Event report** (button on the Attendees page): turnout, money, members vs non-members, walk-ins, sign-ups per day, answers to the questions and feedback. **Copy as text** or **Download .txt** to paste into a message.
+- A member's page now shows their **History** (events registered for, showed up, rating) and has **Edit member** (name, email, UCID, paid/unpaid) and **Resend membership pass**.
+- At the door, **scanning a member pass** finds that member's ticket for the open event and checks it in. No ticket? It says so and sends them to the desk.
 
 ## The portal on a laptop vs a phone
 - **Laptop or tablet (help desk, Finance):** the full portal with a menu on the left. Pick the event once at the top and Payments and Door both follow it.
@@ -148,7 +168,7 @@ Settings has six sections down the left. Pick one to open it:
   - **Email allowance:** the CSS Gmail can send about **100 emails a day**. At 0, nothing sends until Google resets it (about a day). Mark paid still works, but the pass email waits. Tickets sit as "waiting" until someone presses **Send now**.
   - **Last error** stays until a newer one replaces it. An old one is not a current problem if everything else says OK.
 
-**Backups and alerts:** every night the system copies the data sheet into the Drive folder "CSS Platform Backups" (in the CSS Gmail's Drive) and keeps the last 14. If a check fails, it emails the CSS Gmail (once a day at most). To restore, open the newest backup and copy the tabs you need back into "CSS Platform Data". Entry also closes by itself 4 hours after an event ends.
+**Backups and alerts:** every **Sunday** the system copies the data sheet and the Membership sheet into the Drive folder "CSS Platform Backups" (in the CSS Gmail's Drive), keeps the last 4 of each, and bins older ones (Drive bin). To take one now: in Apps Script run `installJobs`. Every night it also runs the health check. If a check fails, it emails the CSS Gmail (once a day at most). To restore, open the newest backup and copy the tabs you need back into "CSS Platform Data". Entry also closes by itself 4 hours after an event ends.
 
 The **light/dark switch** is next to the gear. It remembers your choice on that device.
 

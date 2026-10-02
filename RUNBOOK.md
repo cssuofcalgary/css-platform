@@ -100,3 +100,16 @@ The old system (`../CSS Ticketing System/`: Google Forms, the old scanner and pa
 
 ## Last resort
 Everything is plain JavaScript with comments. Any developer (or a future AI) can start from `README.md`.
+
+## Things added in October 2026 (what to do if…)
+
+| You see | Why | Fix |
+|---|---|---|
+| Health says "Weekly backup" is red | The last Sunday backup failed (often: the script can't open the Membership sheet because it sits on a personal Drive), or none ran for 9 days | Open the Membership sheet and share it with the CSS Google account (or move it there). Then in Apps Script run `installJobs` to take one now. Check Triggers lists `nightlyJob` |
+| Someone got the same ticket email twice | Should not happen any more (each ticket is claimed before sending). An older email from before Oct 2 can explain it | Check Activity; if it keeps happening, check that the deploy is @49 or newer |
+| Tickets say "waiting" and never send | A send was interrupted. A claimed ticket becomes sendable again after 10 minutes | Press **Send now** again |
+| Partner list or the redemption log is empty / "Off" for everyone | The `Partners` tab is missing or its `active` column was typed by hand | The starter list is only inserted once. Edit the partners in Members → Partner deals and switch them On |
+| A member sees the old partner list | Their phone has no pass key (they opened the pass without the emailed link) | Nothing is broken. Resend their pass link (member page → Resend membership pass), or they sign in with UCID + last name once |
+| Waitlist "Offer a spot" says no spot is free | Capacity minus paid tickets minus offers still waiting for payment is zero | Cancel an unpaid offer, or confirm to offer anyway |
+| New columns or tabs do not appear | Column names are cached per `API_VERSION` | Change `API_VERSION` in `api/Config.js`, `clasp push`, deploy |
+| You need to undo an accidental "Close registration" | | Events → the event → **Reopen** |
