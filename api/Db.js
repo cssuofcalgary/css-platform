@@ -11,13 +11,15 @@ const TABLES = {
   Events: ["id", "slug", "name", "description", "date", "startTime", "endTime", "location",
            "capacity", "capacityRule", "status", "entryOpen", "imageFileId", "imageUrl",
            "ticketTypes", "questions", "codePrefix", "createdBy", "createdAt", "updatedBy", "updatedAt",
-           "registrationCloses", "archivedAt", "archiveYear", "summary"],
+           "registrationCloses", "archivedAt", "archiveYear", "summary", "waitlist"],
   Orders: ["id", "code", "eventId", "payerName", "payerEmail", "etransferName", "total", "status",
            "createdAt", "paidAt", "paidBy", "notes", "remindedAt", "cancelRequestedAt", "cancelRequestedBy"],
   Tickets: ["id", "secret", "orderId", "eventId", "name", "email", "ucid", "memberId", "ticketType",
             "price", "answers", "flag", "status", "checkedInAt", "checkedInBy", "createdAt", "emailedAt"],
   Emails: ["id", "subject", "title", "subtitle", "intro", "closing", "updatedBy", "updatedAt"],
   Feedback: ["id", "eventId", "memberId", "name", "rating", "comment", "createdAt", "updatedAt"],
+  Waitlist: ["id", "eventId", "name", "email", "ucid", "memberId", "ticketTypeId", "ticketType", "answers", "status",
+             "createdAt", "offeredAt", "offeredBy", "orderId", "orderCode", "notes"],
   Log: ["time", "who", "action", "target", "details"]
 };
 

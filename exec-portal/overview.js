@@ -108,6 +108,7 @@ function renderOverviewAttention(payData, doorData) {
     if (data.counts.overdue > 0) items.push(attentionItem("bad", "alert", `${event.name}: ${T.ovOverdue(data.counts.overdue)}`, T.ovOverdueNote, { tab: "payments", eventId: event.id }));
     else if (data.counts.awaiting > 0) items.push(attentionItem("warn", "clock", `${event.name}: ${T.ovAwaiting(data.counts.awaiting)}`, T.ovAwaitingNote(dollars(data.money.awaiting)), { tab: "payments", eventId: event.id }));
     if (data.counts.cancelRequests > 0) items.push(attentionItem("warn", "alert", `${event.name}: ${T.ovCancelReq(data.counts.cancelRequests)}`, T.ovCancelReqNote, { tab: "payments", eventId: event.id }));
+    if (data.waitlist && data.waitlist.waiting > 0 && data.waitlist.free > 0) items.push(attentionItem("warn", "clock", `${event.name}: ${T.ovWaitlist(data.waitlist.waiting, data.waitlist.free)}`, T.ovWaitlistNote, { tab: "payments", eventId: event.id }));
     if (data.unsentEmails > 0) items.push(attentionItem("info", "alert", `${event.name}: ${T.ovUnsent(data.unsentEmails)}`, T.ovUnsentNote, { tab: "payments", eventId: event.id }));
   });
   if (memState.total > 0) items.push(attentionItem("warn", "clock", T.ovMembersWaiting(memState.total), T.ovMembersWaitingNote, { tab: "members" }));

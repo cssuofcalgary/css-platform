@@ -23,6 +23,10 @@ function renderFinanceExtras(shown) {
   const cancelChip = document.querySelector('#pay-filters [data-filter="cancelreq"]');
   cancelChip.textContent = T.filterCancelReq(data.counts.cancelRequests || 0);
   cancelChip.hidden = !data.counts.cancelRequests && payState.filter !== "cancelreq";
+  const wl = data.waitlist || {};
+  const waitChip = document.querySelector('#pay-filters [data-filter="waitlist"]');
+  waitChip.textContent = T.filterWaitlist((wl.waiting || 0) + (wl.offered || 0));
+  waitChip.hidden = !wl.enabled && !wl.waiting && !wl.offered && payState.filter !== "waitlist";
 
   const box = $("pay-overdue");
   box.hidden = !overdue;

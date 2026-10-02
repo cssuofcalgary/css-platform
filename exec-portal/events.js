@@ -199,6 +199,7 @@ function openEditor(existing, isEdit = !!existing, title) {
   $("ev-description").value = e.description;
   $("ev-capacity").value = e.capacity ?? "";
   $("ev-capacity-rule").value = e.capacityRule || "paid";
+  $("ev-waitlist").checked = !!e.waitlist;
   $("ev-code-prefix").value = e.codePrefix || "";
   $("ev-closes").value = e.registrationCloses || "";
   $("ev-image-file").value = "";
@@ -367,6 +368,7 @@ async function saveEvent(publish) {
     description: $("ev-description").value,
     capacity: $("ev-capacity").value,
     capacityRule: $("ev-capacity-rule").value,
+    waitlist: $("ev-waitlist").checked,
     codePrefix: $("ev-code-prefix").value,
     registrationCloses: $("ev-closes").value
   };

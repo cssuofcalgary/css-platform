@@ -60,6 +60,9 @@ function route_(req) {
     case "requestCancel":
       return requestCancel_(req.secret, !!req.undo);
 
+    case "joinWaitlist":
+      return joinWaitlist_(req);
+
     case "submitFeedback":
       return submitFeedback_(req);
 
@@ -236,6 +239,16 @@ function route_(req) {
     case "eventSummary":
       requireSession_(req.token);
       return eventSummary_(req.eventId, req);
+
+    case "listWaitlist":
+      requireSession_(req.token);
+      return listWaitlist_(req.eventId);
+
+    case "offerWaitlistSpot":
+      return offerWaitlistSpot_(requireSession_(req.token), req.entryId, !!req.force, req.siteUrl);
+
+    case "removeWaitlistEntry":
+      return removeWaitlistEntry_(requireSession_(req.token), req.entryId);
 
     case "eventReport":
       return eventReport_(requireSession_(req.token), req.eventId);

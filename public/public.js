@@ -82,10 +82,12 @@ async function showEvent(slug) {
   currentEvent = e;
   const open = $("open-register");
   if (open) open.addEventListener("click", () => showRegisterForm(e));
+  const wl = $("open-waitlist");
+  if (wl) wl.addEventListener("click", () => showWaitlistForm(e));
 }
 
 function registerBlock(e) {
-  if (e.soldOut) return `<p class="notice">${T.soldOut}</p>`;
+  if (e.soldOut) return `<p class="notice">${T.soldOut}</p>${e.waitlistOpen ? `<p class="muted small">${T.waitlistPitch}</p><button class="register" id="open-waitlist">${T.waitlistJoin}</button>` : ""}`;
   if (!e.registrationOpen) return `<p class="notice">${T.closed}</p>`;
   return `
     ${e.spotsLeft !== null && e.spotsLeft <= 20 ? `<p class="spots">${T.spotsLeft(e.spotsLeft)}</p>` : ""}
@@ -147,6 +149,59 @@ function showRegisterForm(e) {
   $("register-form").addEventListener("submit", onSubmit);
   updateMemberFields();
   updateTotal();
+  window.scrollTo(0, 0);
+}
+
+// ---- Waitlist (event is full) --------------------------------------------------
+
+function showWaitlistForm(e) {
+  guestCount = 0;
+  $("page").innerHTML = `
+    <button class="back link-button" id="back-to-event">${T.cancel}</button>
+    <h1 class="page-title">${escapeHtml(e.name)}</h1>
+    <p class="lead">${T.waitlistIntro}</p>
+    <form id="register-form" class="register-form" novalidate>
+      <section class="person card-block" data-person="0">
+        <h2>${T.yourDetails}</h2>
+        ${personFields(e, 0)}
+      </section>
+      <span id="total" hidden></span>
+      <input type="text" name="website" id="website" class="hp" tabindex="-1" autocomplete="off" aria-hidden="true">
+      <p id="form-error" class="form-error" role="alert" hidden></p>
+      <button type="submit" class="register" id="submit">${T.waitlistSubmit}</button>
+    </form>`;
+  $("back-to-event").addEventListener("click", () => showEvent(e.slug));
+  $("register-form").addEventListener("change", onFormChange);
+  $("register-form").addEventListener("submit", onWaitlistSubmit);
+  updateMemberFields();
+  window.scrollTo(0, 0);
+}
+
+async function onWaitlistSubmit(ev) {
+  ev.preventDefault();
+  const people = readPeople();
+  const problem = firstProblem(people);
+  const error = $("form-error");
+  if (problem) { error.textContent = T.pleaseFill(problem); error.hidden = false; return; }
+  error.hidden = true;
+  const button = $("submit");
+  button.disabled = true;
+  button.textContent = T.submitting;
+  let reply;
+  for (let attempt = 1; attempt <= 3; attempt++) {   // joining twice is harmless: the second try just says "already on the list"
+    reply = await api("joinWaitlist", { slug: currentEvent.slug, person: people[0], website: $("website").value });
+    if (reply.ok || !["BUSY", "TEMPORARY", "NETWORK"].includes(reply.error) || attempt === 3) break;
+    await new Promise((resolve) => setTimeout(resolve, 1500 * attempt));
+  }
+  button.disabled = false;
+  button.textContent = T.waitlistSubmit;
+  if (!reply.ok) { error.textContent = reply.error === "NETWORK" ? T.error : (reply.message || T.error); error.hidden = false; return; }
+  $("page").innerHTML = `
+    <article class="done">
+      <h1 class="page-title">${T.waitlistDoneTitle}</h1>
+      <p class="lead">${reply.already ? T.waitlistAlready : T.waitlistDoneNote}</p>
+      <a class="back" href="./">${T.allEvents}</a>
+    </article>`;
   window.scrollTo(0, 0);
 }
 

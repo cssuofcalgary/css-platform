@@ -28,7 +28,7 @@ async function loadOrders(append) {
   const have = payState.data ? payState.data.orders.length : 0;
   $("pay-status").textContent = T.loadingOrders;
   const reply = await api("listOrders", {
-    eventId: payState.eventId, filter: payState.filter, q: payState.q,
+    eventId: payState.eventId, filter: payState.filter === "waitlist" ? "awaiting" : payState.filter, q: payState.q,
     offset: append ? have : 0, limit: append ? ORDERS_PAGE : Math.min(200, Math.max(ORDERS_PAGE, have))
   });
   if (mine !== ordersCounter) return;   // a newer request already started
@@ -51,6 +51,13 @@ function renderOrders() {
   $("pay-unsent").innerHTML = data.unsentEmails
     ? `<span>${T.unsentEmails(data.unsentEmails, data.emailsLeftToday)}</span><button class="link" id="send-unsent">${T.sendNow}</button>` : "";
 
+  if (payState.filter === "waitlist") {   // the Waitlist chip swaps the orders list for the waitlist (waitlist.js)
+    renderPayTiles();
+    renderFinanceExtras([]);
+    $("orders-more").hidden = true;
+    $("pay-status").textContent = "";
+    return renderWaitlist();
+  }
   const list = data.orders;   // the server already filtered and searched
   $("pay-status").textContent = list.length ? T.orderCountOf(list.length, data.total) : T.noOrders;
   $("orders-more").hidden = !data.hasMore;
@@ -118,6 +125,7 @@ function editTicket(button) {
 }
 
 async function onOrdersClick(event) {
+  if (event.target.closest("[data-wl-act]")) return onWaitlistClick(event);
   const edit = event.target.closest("button[data-edit-ticket]");
   if (edit) return editTicket(edit);
   const button = event.target.closest("button[data-act]");

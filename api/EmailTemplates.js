@@ -85,6 +85,18 @@ const EMAIL_KINDS = {
       closing: "Questions? Just reply to this email."
     }
   },
+  waitlist: {
+    label: "On the waitlist",
+    when: "Sent when someone joins the waitlist of a full event. It has no payment details: we write again only if a spot opens.",
+    placeholders: ["name", "event", "when", "where"],
+    defaults: {
+      subject: "You're on the waitlist: {event}",
+      title: "You're on the waitlist",
+      subtitle: "{event}",
+      intro: "Hi {name}, **{event}** is full right now, so we've put you on the waitlist.\n\nIf a spot opens up we'll email you with how to confirm it. You don't need to do anything else, and there is nothing to pay yet.",
+      closing: "Please don't come to the event unless we've confirmed a spot for you."
+    }
+  },
   findPass: {
     label: "Find my member pass",
     when: "Sent when a member asks for their pass link on the member portal.",

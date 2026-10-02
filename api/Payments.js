@@ -92,7 +92,8 @@ function listOrders_(eventId, opts) {
     reminderHours: REMINDER_AFTER_HOURS,
     spotsTaken: spotsTaken_(event),
     unsentEmails: tickets.filter(function (t) { return t.status === "paid" && !t.emailedAt; }).length,
-    emailsLeftToday: emailsLeftToday_()
+    emailsLeftToday: emailsLeftToday_(),
+    waitlist: waitlistSummary_(event)
   };
 }
 

@@ -20,6 +20,7 @@ function eventFromRow_(row) {
     location: row.location,
     capacity: row.capacity === "" ? null : Number(row.capacity),
     capacityRule: row.capacityRule || "paid",
+    waitlist: row.waitlist === "TRUE",
     status: row.status || "draft",
     entryOpen: row.entryOpen === "TRUE",
     imageFileId: row.imageFileId,
@@ -191,7 +192,7 @@ function publicEvent_(slug) {
 /** Only what the public may see. */
 function publicEventView_(event) {
   const taken = event.capacity ? spotsTaken_(event) : 0;
-  const soldOut = !!event.capacity && taken >= event.capacity;
+  const soldOut = !!event.capacity && (taken >= event.capacity || eventFull_(event));
   return {
     slug: event.slug,
     name: event.name,
@@ -208,6 +209,7 @@ function publicEventView_(event) {
     registrationOpen: registrationOpen_(event) && !soldOut,
     registrationCloses: registrationClosesAt_(event),
     soldOut: soldOut,
+    waitlistOpen: soldOut && !!event.waitlist && registrationOpen_(event),
     spotsLeft: event.capacity ? Math.max(event.capacity - taken, 0) : null,
     etransferEmail: getConfig_().etransferEmail
   };
@@ -274,6 +276,7 @@ function cleanEventInput_(input) {
     location: text(input.location, 150),
     capacity: capacity,
     capacityRule: input.capacityRule === "all" ? "all" : "paid",
+    waitlist: !!input.waitlist,
     imageFileId: text(input.imageFileId, 80),
     imageUrl: text(input.imageUrl, 300),
     ticketTypes: ticketTypes,
