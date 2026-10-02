@@ -73,6 +73,7 @@ function orderCard(o) {
         ${o.etransferName ? `<span>${T.etransferNameLabel}: <strong>${escapeHtml(o.etransferName)}</strong></span>` : ""}
         ${o.status === "paid" && o.paidBy ? `<span>${escapeHtml(T.paidByLabel(o.paidBy, shortTime(o.paidAt)))}</span>` : ""}
         ${o.notes ? `<span>${escapeHtml(o.notes)}</span>` : ""}
+        ${o.cancelRequestedAt ? `<span class="flag">${escapeHtml(T.cancelRequestedNote(o.cancelRequestedBy || o.payerName, shortTime(o.cancelRequestedAt)))}</span>` : ""}
       </div>
       <ul class="order-tickets o-tickets">${o.tickets.map((t) => `
         <li>${escapeHtml(t.name)} · ${escapeHtml(t.ticketType)} ${money(t.price)}
@@ -87,6 +88,7 @@ function orderCard(o) {
       <div class="order-actions o-actions">
         ${o.status === "awaiting" ? `<button class="primary" data-act="paid">${T.markPaid(money(o.total))}</button>` : ""}
         ${o.status === "paid" ? `<button class="link" data-act="resend">${T.resend}</button>` : ""}
+        ${o.cancelRequestedAt ? `<button class="link" data-act="dismiss">${T.dismissRequest}</button>` : ""}
         ${o.status === "paid" || o.status === "awaiting" ? `<button class="link danger" data-act="refund">${T.refund}</button>` : ""}
         <span class="order-result"></span>
       </div>
@@ -143,6 +145,12 @@ async function onOrdersClick(event) {
     if (reason === null) return;
     button.disabled = true;
     reply = await api("refundOrder", { orderId: order.id, reason });
+  }
+
+  if (button.dataset.act === "dismiss") {
+    button.disabled = true;
+    reply = await api("dismissCancelRequest", { orderId: order.id });
+    if (reply.ok) result.textContent = T.requestDismissed;
   }
 
   if (button.dataset.act === "resend") {

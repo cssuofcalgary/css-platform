@@ -57,6 +57,9 @@ function route_(req) {
     case "getTicket":
       return getTicket_(req.secret);
 
+    case "requestCancel":
+      return requestCancel_(req.secret, !!req.undo);
+
     case "findMyTickets":
       return findMyTickets_(req);
 
@@ -158,6 +161,9 @@ function route_(req) {
 
     case "deleteOrder":
       return deleteOrder_(requireAdmin_(req.token), req.orderId);
+
+    case "dismissCancelRequest":
+      return dismissCancelRequest_(requireSession_(req.token), req.orderId);
 
     case "resendTickets":
       return resendTickets_(requireSession_(req.token), req.orderId, req.siteUrl);

@@ -20,6 +20,9 @@ function renderFinanceExtras(shown) {
   const overdue = data.counts.overdue;
   const chip = document.querySelector('#pay-filters [data-filter="overdue"]');
   chip.textContent = T.filterOverdue(overdue);
+  const cancelChip = document.querySelector('#pay-filters [data-filter="cancelreq"]');
+  cancelChip.textContent = T.filterCancelReq(data.counts.cancelRequests || 0);
+  cancelChip.hidden = !data.counts.cancelRequests && payState.filter !== "cancelreq";
 
   const box = $("pay-overdue");
   box.hidden = !overdue;

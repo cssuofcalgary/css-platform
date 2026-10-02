@@ -41,7 +41,7 @@ async function start() {
   render(reply);
 }
 
-function render({ ticket, event, etransferEmail, orderTotal }) {
+function render({ ticket, event, etransferEmail, orderTotal, canRequestCancel, cancelRequested }) {
   document.title = `${T.yourTicket} · ${event.name}`;
   const status = ticket.checkedIn ? "checkedin" : ticket.status;
   // A rubber-stamp look, like the member portal's "VERIFIED" stamp.
@@ -66,7 +66,19 @@ function render({ ticket, event, etransferEmail, orderTotal }) {
       ${look.stamp ? `<div class="stamp ${look.cls}">${look.stamp}</div>` : ""}
       <p class="ticket-state">${escapeHtml(look.note)}</p>
       ${showQr ? `<p class="muted small">${T.showAtDoor}</p>` : ""}
+      ${canRequestCancel ? (cancelRequested
+        ? `<p class="muted small">${T.cancelAsked}</p><button type="button" class="link" id="cancel-undo">${T.cancelUndo}</button>`
+        : `<button type="button" class="link" id="cancel-ask">${T.cancelAsk}</button>`) : ""}
     </article>`;
+
+  const askCancel = async (undo) => {
+    if (!undo && !confirm(T.cancelConfirm)) return;
+    const reply = await api("requestCancel", { secret: new URLSearchParams(location.search).get("t") || "", undo });
+    if (!reply.ok) return alert(reply.message || T.cancelFailed);
+    render({ ticket, event, etransferEmail, orderTotal, canRequestCancel, cancelRequested: reply.cancelRequested });
+  };
+  if ($("cancel-ask")) $("cancel-ask").addEventListener("click", () => askCancel(false));
+  if ($("cancel-undo")) $("cancel-undo").addEventListener("click", () => askCancel(true));
 
   if (showQr) {
     new QRCode($("qr"), { text: location.href, width: 344, height: 344, colorDark: "#2a2520", colorLight: "#ffffff", correctLevel: QRCode.CorrectLevel.M });

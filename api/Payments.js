@@ -34,20 +34,21 @@ function listOrders_(eventId, opts) {
   tickets.forEach(function (t) { (byOrder[t.orderId] = byOrder[t.orderId] || []).push(t); });
   const all = eventRows_("Orders", event);
 
-  const counts = { all: all.length, awaiting: 0, overdue: 0, paid: 0, closed: 0 };
+  const counts = { all: all.length, awaiting: 0, overdue: 0, paid: 0, closed: 0, cancelRequests: 0 };
   const money = { received: 0, awaiting: 0 };
   all.forEach(function (o) {
     const total = Number(o.total) || 0;
-    if (o.status === "awaiting") { counts.awaiting++; money.awaiting += total; if (reminderDue_(o)) counts.overdue++; }
+    if (o.status === "awaiting") { counts.awaiting++; money.awaiting += total; if (reminderDue_(o)) counts.overdue++; if (o.cancelRequestedAt) counts.cancelRequests++; }
     else if (o.status === "paid") { counts.paid++; money.received += total; }
     else counts.closed++;
   });
 
-  const filter = ["awaiting", "overdue", "paid", "closed", "all"].indexOf(opts.filter) !== -1 ? opts.filter : "awaiting";
+  const filter = ["awaiting", "overdue", "cancelreq", "paid", "closed", "all"].indexOf(opts.filter) !== -1 ? opts.filter : "awaiting";
   const q = String(opts.q || "").trim().toLowerCase();
   const shown = all.filter(function (o) {
     if (filter === "awaiting" && o.status !== "awaiting") return false;
     if (filter === "overdue" && !reminderDue_(o)) return false;
+    if (filter === "cancelreq" && !(o.status === "awaiting" && o.cancelRequestedAt)) return false;
     if (filter === "paid" && o.status !== "paid") return false;
     if (filter === "closed" && o.status !== "refunded" && o.status !== "cancelled") return false;
     if (!q) return true;
@@ -68,6 +69,7 @@ function listOrders_(eventId, opts) {
       id: o.id, code: o.code, payerName: o.payerName, payerEmail: o.payerEmail,
       etransferName: o.etransferName, total: Number(o.total) || 0, status: o.status,
       createdAt: o.createdAt, paidAt: o.paidAt, paidBy: o.paidBy, notes: o.notes, remindedAt: o.remindedAt || "",
+      cancelRequestedAt: o.status === "awaiting" ? (o.cancelRequestedAt || "") : "", cancelRequestedBy: o.cancelRequestedBy || "",
       tickets: (byOrder[o.id] || []).map(function (t) {
         return {
           id: t.id, name: t.name, email: t.email, ucid: t.ucid, memberId: t.memberId,
@@ -444,8 +446,45 @@ function getTicket_(secret) {
     },
     site: siteInfo_(),
     etransferEmail: getConfig_().etransferEmail,
-    orderTotal: Number(order.total) || 0
+    orderTotal: Number(order.total) || 0,
+    canRequestCancel: ticket.status === "awaiting" && order.status === "awaiting",
+    cancelRequested: order.status === "awaiting" && !!order.cancelRequestedAt
   };
+}
+
+/**
+ * Public, from the ticket page: someone with an UNPAID ticket says "please cancel this". Nothing is cancelled: the request is
+ * written on the order and Finance decides (Refund / cancel, or Dismiss request). `undo` takes the request back.
+ */
+function requestCancel_(secret, undo) {
+  const key = String(secret || "").trim();
+  if (key.length < 20) throw new ApiError_("NOT_FOUND", "Ticket not found.");
+  const done = withLock_(function () {
+    const ticket = readRows_("Tickets").filter(function (t) { return t.secret === key; })[0];
+    if (!ticket) throw new ApiError_("NOT_FOUND", "Ticket not found.");
+    const order = readRows_("Orders").filter(function (o) { return o.id === ticket.orderId; })[0];
+    if (!order) throw new ApiError_("NOT_FOUND", "Order not found.");
+    if (order.status !== "awaiting" || ticket.status !== "awaiting") throw new ApiError_("BAD_REQUEST", "Only an unpaid ticket can ask to be cancelled. Please contact us.");
+    if (undo) {
+      if (order.cancelRequestedAt) updateRow_("Orders", order.id, { cancelRequestedAt: "", cancelRequestedBy: "" }, order._row);
+    } else if (!order.cancelRequestedAt) {
+      updateRow_("Orders", order.id, { cancelRequestedAt: new Date().toISOString(), cancelRequestedBy: ticket.name }, order._row);
+    }
+    return { order: order, ticket: ticket };
+  });
+  log_("Public: " + done.ticket.name, undo ? "order.cancelRequest.undo" : "order.cancelRequest", done.order.code, {});
+  return { ok: true, cancelRequested: !undo };
+}
+
+/** Finance: the person asked to cancel but Finance is keeping the order. Clears the request (no email). */
+function dismissCancelRequest_(session, orderId) {
+  return withLock_(function () {
+    const order = readRows_("Orders").filter(function (o) { return o.id === orderId; })[0];
+    if (!order) throw new ApiError_("NOT_FOUND", "Order not found.");
+    if (order.cancelRequestedAt) updateRow_("Orders", order.id, { cancelRequestedAt: "", cancelRequestedBy: "" }, order._row);
+    log_(session.name, "order.cancelRequest.dismiss", order.code, {});
+    return { ok: true };
+  });
 }
 
 // ---- Links -------------------------------------------------------------------------

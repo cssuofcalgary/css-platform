@@ -82,6 +82,11 @@ const STRINGS = {
     stampConfirmed: "CONFIRMED",
     stampCheckedIn: "CHECKED IN",
     stampPending: "UNPAID",
+    cancelAsk: "Cancel my registration",
+    cancelConfirm: "Ask the CSS team to cancel this registration? Nothing is cancelled yet: a team member will confirm.",
+    cancelAsked: "You asked to cancel. A CSS team member will confirm shortly. You don't need to do anything else.",
+    cancelUndo: "Keep my spot after all",
+    cancelFailed: "That didn't go through. Please try again, or contact us.",
     stampVoid: "VOID",
     showAtDoor: "Show this QR code at the door. A screenshot works too.",
 
