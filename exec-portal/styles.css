@@ -202,7 +202,6 @@ button.link {
 
 /* Payments tab */
 .payments-top { display: grid; gap: 10px; margin-bottom: 8px; }
-.pay-live { margin-right: auto; margin-left: 8px; }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .chip { border: 1px solid var(--border); background: var(--surface); color: var(--muted); border-radius: 999px; padding: 6px 14px; font-weight: 600; cursor: pointer; }
 .chip.active { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }

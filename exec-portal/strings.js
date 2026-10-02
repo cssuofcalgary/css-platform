@@ -156,7 +156,7 @@ const STRINGS = {
     scanHere: "Scan on this device",
     membersSub: "Look anyone up by name, email, UCID or member ID.",
     paySub: "Match e-transfers to orders, mark them paid, and email people.",
-    payLive: "Doors are open: this list refreshes itself in the background.",
+    deskLive: "This screen keeps itself up to date.",
     actSub: "Everything that happens in the portal, newest first.",
     setSub: "Organisation-wide options. Admin only.",
     eventsSub: "Create, publish and run every CSS event from here.",

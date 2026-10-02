@@ -9,8 +9,8 @@
   <link rel="icon" href="assets/css-logo.png" type="image/png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Fraunces:opsz,wght@9..144,500;9..144,600&family=JetBrains+Mono:wght@400;500&display=swap">
-  <link rel="stylesheet" href="styles.css?v=1.6.0">
-  <link rel="stylesheet" href="theme.css?v=0.10.5">
+  <link rel="stylesheet" href="styles.css?v=1.6.1">
+  <link rel="stylesheet" href="theme.css?v=0.11.0">
   <link rel="stylesheet" href="peekaboo.css?v=1.0.1">
 </head>
 <body>
@@ -320,7 +320,6 @@
         <div id="pay-tiles" class="tiles pay-tiles"></div>
         <div class="row-between">
           <p id="pay-summary" class="muted small"></p>
-          <span id="pay-live" class="pay-live" hidden></span>
           <span class="button-row">
             <button id="mail-all-button" class="secondary small-button" data-t="mailAll"></button>
             <button id="add-order-button" class="secondary small-button" data-t="addOrder"></button>
@@ -357,7 +356,7 @@
           <span id="door-event-name" class="door-scanning"></span>
           <button id="entry-toggle" class="entry-toggle" type="button" aria-live="polite"></button>
           <span id="door-counts" class="muted small"></span>
-          <span id="desk-roller" class="desk-roller" aria-hidden="true"></span>
+          <span id="desk-live" class="desk-live"></span>
           <span id="door-scanners-online" class="badge b-info" hidden><i></i><span id="scanners-count">0</span> <span id="scanners-word"></span></span>
         </div>
         <div class="door-live" aria-live="polite">
@@ -854,14 +853,14 @@
   </dialog>
 
   <script src="config.js?v=0.3.7"></script>
-  <script src="strings.js?v=1.8.0"></script>
+  <script src="strings.js?v=1.8.1"></script>
   <script src="mock.js?v=0.3.7"></script>
   <script src="panda.js?v=1.5.0"></script>
   <script src="peekaboo.js?v=1.0.0"></script>
   <script src="app.js?v=1.6.2"></script>
   <script src="events.js?v=1.6.2"></script>
   <script src="waitlist.js?v=1.5.0"></script>
-  <script src="payments.js?v=1.6.0"></script>
+  <script src="payments.js?v=1.6.1"></script>
   <script src="edit.js?v=0.9.6"></script>
   <script src="finance.js?v=1.1.0"></script>
   <script src="activity.js?v=0.5.0"></script>
@@ -872,7 +871,7 @@
   <script src="insights.js?v=1.0.0"></script>
   <script src="attendees.js?v=1.0.1"></script>
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
-  <script src="door.js?v=0.11.1"></script>
+  <script src="door.js?v=0.12.0"></script>
   <script src="members.js?v=1.2.0"></script>
   <script src="overview.js?v=1.1.1"></script>
   <script src="shell.js?v=0.9.0"></script>

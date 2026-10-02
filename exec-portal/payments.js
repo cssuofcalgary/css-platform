@@ -38,10 +38,9 @@ async function loadOrders(append, background) {
   // keep only ticks for orders that are still waiting for payment
   payState.selected = new Set([...payState.selected].filter((id) => reply.orders.some((o) => o.id === id && o.status === "awaiting")));
   renderOrders();
-  updatePayLive();
 }
 
-// ---- Background refresh while doors are open: the list reloads itself and the Peekaboo panda shows it is happening ----
+// ---- Background refresh while doors are open: the list reloads itself every 30 s (no panda on this tab) ----
 const PAY_LIVE_MS = 30000;
 
 function payDoorsOpen() {
@@ -49,16 +48,8 @@ function payDoorsOpen() {
   return !!(found ? found.entryOpen : payState.data && payState.data.event && payState.data.event.entryOpen);
 }
 
-function updatePayLive() {
-  const box = $("pay-live");
-  const on = payDoorsOpen() && !$("tab-payments").hidden;
-  if (!on) { if (!box.hidden) { box.hidden = true; clearPeekaboo(box); } return; }
-  if (box.hidden) { box.hidden = false; mountPeekaboo(box, T.payLive); }
-}
-
 setInterval(() => {
   const idle = state.token && !$("app-view").hidden && !$("tab-payments").hidden && !document.hidden;
-  updatePayLive();
   // Skip a round while a request is running, a dialog is open, or the Waitlist chip is showing (it has its own loader).
   if (!idle || !payDoorsOpen() || !payState.data || payState.filter === "waitlist" || document.querySelector("dialog[open]")) return;
   if (document.querySelector("#orders button:disabled")) return;
