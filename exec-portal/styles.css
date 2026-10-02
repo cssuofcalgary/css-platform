@@ -447,14 +447,13 @@ body.scanner-mode .content { max-width: 520px; }
 .partner-list .p-main { flex: 1 1 260px; }
 .partner-list .p-off { opacity: .55; }
 
-/* Rolling panda loader */
-.panda-roll { position: relative; width: 150px; height: 92px; margin: 28px auto 8px; }
-.panda-ball { position: absolute; left: 39px; top: 0; width: 72px; height: 72px; animation: pandaRoll 1.8s ease-in-out infinite; }
-.panda-shadow { position: absolute; left: 39px; bottom: 8px; width: 72px; height: 10px; border-radius: 50%; background: rgba(42, 37, 32, .18); animation: pandaShadow 1.8s ease-in-out infinite; }
-@keyframes pandaRoll { 0%, 100% { transform: translateX(-38px) rotate(0deg); } 50% { transform: translateX(38px) rotate(360deg); } }
-@keyframes pandaShadow { 0%, 100% { transform: translateX(-38px); } 50% { transform: translateX(38px); } }
-@keyframes pandaBob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
-@media (prefers-reduced-motion: reduce) { .panda-ball { animation: pandaBob 1.4s ease-in-out infinite; } .panda-shadow { animation: none; } }
-.panda-loader { text-align: center; }
-.panda-busy { position: fixed; inset: 0; display: grid; place-items: center; pointer-events: none; z-index: 9999; }
-.panda-busy .panda-roll { margin: 0; padding: 10px 14px 0; border-radius: 18px; background: var(--surface, var(--paper, #fffdf6)); box-shadow: 0 8px 30px rgba(0, 0, 0, .2); }
+/* Bamboo wave loader: three stalks bobbing in turn, no background */
+.bamboo-wave { display: flex; justify-content: center; align-items: flex-end; gap: 12px; height: 82px; margin: 26px auto 8px; filter: drop-shadow(0 2px 3px rgba(42, 37, 32, .25)); }
+.bamboo { width: 34px; height: 68px; animation: bambooWave 1.2s ease-in-out infinite; }
+.bamboo:nth-child(2) { animation-delay: .2s; }
+.bamboo:nth-child(3) { animation-delay: .4s; }
+@keyframes bambooWave { 0%, 100% { transform: translateY(10px); } 50% { transform: translateY(-10px); } }
+@media (prefers-reduced-motion: reduce) { .bamboo { animation: none; } }
+.wave-loader { text-align: center; }
+.wave-busy { position: fixed; inset: 0; display: grid; place-items: center; pointer-events: none; z-index: 9999; }
+.wave-busy .bamboo-wave { margin: 0; }

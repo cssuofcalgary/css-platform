@@ -22,24 +22,24 @@ const READ_ACTIONS = ["listEvents", "listOrders", "doorList", "eventSummary", "s
 const REQUEST_TIMEOUT_MS = 35000;
 const RETRY_PAUSE_MS = 1200;
 
-// The rolling panda shows in the middle when a request takes longer than a moment. Door scans, searches-as-you-type and
+// The bamboo wave shows in the middle when a request takes longer than a moment. Door scans, searches-as-you-type and
 // the keep-alive stay quiet, and so does the scanner phone page.
 const QUIET_ACTIONS = ["ping", "scan", "doorList", "searchMembers", "getMember"];
-const PANDA_DELAY_MS = 700;
-let pandaBusyCount = 0, pandaBusyTimer = null;
+const BAMBOO_DELAY_MS = 700;
+let bambooBusyCount = 0, bambooBusyTimer = null;
 
-function pandaBusy(on) {
-  pandaBusyCount = Math.max(0, pandaBusyCount + (on ? 1 : -1));
-  const box = $("panda-busy");
+function bambooBusy(on) {
+  bambooBusyCount = Math.max(0, bambooBusyCount + (on ? 1 : -1));
+  const box = $("wave-busy");
   if (!box) return;
-  if (on && pandaBusyCount === 1) pandaBusyTimer = setTimeout(() => { box.hidden = false; }, PANDA_DELAY_MS);
-  if (pandaBusyCount === 0) { clearTimeout(pandaBusyTimer); box.hidden = true; }
+  if (on && bambooBusyCount === 1) bambooBusyTimer = setTimeout(() => { box.hidden = false; }, BAMBOO_DELAY_MS);
+  if (bambooBusyCount === 0) { clearTimeout(bambooBusyTimer); box.hidden = true; }
 }
 
 async function api(action, details = {}) {
   const quiet = SCANNER_MODE || QUIET_ACTIONS.includes(action);
-  if (!quiet) pandaBusy(true);
-  try { return await apiRequest(action, details); } finally { if (!quiet) pandaBusy(false); }
+  if (!quiet) bambooBusy(true);
+  try { return await apiRequest(action, details); } finally { if (!quiet) bambooBusy(false); }
 }
 
 async function apiRequest(action, details = {}) {

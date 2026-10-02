@@ -28,13 +28,13 @@ function applySite(site) {
 
 // ---- Pages ------------------------------------------------------------------
 
-/** The rolling panda, shown while a page is being fetched. */
-function pandaLoader() {
-  return '<div class="panda-loader" role="status" aria-live="polite"><div class="panda-roll"><svg class="panda-ball" viewBox="0 0 100 100" aria-hidden="true"><circle cx="24" cy="24" r="13" fill="#2a2520"/><circle cx="76" cy="24" r="13" fill="#2a2520"/><circle cx="50" cy="54" r="40" fill="#fff" stroke="#2a2520" stroke-width="3"/><ellipse cx="34" cy="50" rx="9" ry="12" transform="rotate(25 34 50)" fill="#2a2520"/><ellipse cx="66" cy="50" rx="9" ry="12" transform="rotate(-25 66 50)" fill="#2a2520"/><circle cx="35" cy="49" r="3.5" fill="#fff"/><circle cx="65" cy="49" r="3.5" fill="#fff"/><ellipse cx="50" cy="63" rx="5.5" ry="4" fill="#2a2520"/><path d="M44 70 Q50 76 56 70" fill="none" stroke="#2a2520" stroke-width="2.5" stroke-linecap="round"/></svg><span class="panda-shadow"></span></div><p class="muted center pulse">' + T.loading + '</p></div>';
+/** The bamboo wave, shown while a page is being fetched. */
+function bambooLoader() {
+  return '<div class="wave-loader" role="status" aria-live="polite"><div class="bamboo-wave" aria-hidden="true"><svg class="bamboo" viewBox="0 0 40 80" aria-hidden="true"><rect x="8" y="0" width="12" height="80" rx="6" fill="#7aa356"/><rect x="11" y="0" width="3" height="80" rx="1.5" fill="#a9cf82"/><rect x="7" y="22" width="14" height="4" rx="2" fill="#4c6b47"/><rect x="7" y="52" width="14" height="4" rx="2" fill="#4c6b47"/><path d="M20 24 Q31 12 38 19 Q29 27 20 24Z" fill="#6f9a4a"/></svg><svg class="bamboo" viewBox="0 0 40 80" aria-hidden="true"><rect x="8" y="0" width="12" height="80" rx="6" fill="#7aa356"/><rect x="11" y="0" width="3" height="80" rx="1.5" fill="#a9cf82"/><rect x="7" y="22" width="14" height="4" rx="2" fill="#4c6b47"/><rect x="7" y="52" width="14" height="4" rx="2" fill="#4c6b47"/><path d="M20 24 Q31 12 38 19 Q29 27 20 24Z" fill="#6f9a4a"/></svg><svg class="bamboo" viewBox="0 0 40 80" aria-hidden="true"><rect x="8" y="0" width="12" height="80" rx="6" fill="#7aa356"/><rect x="11" y="0" width="3" height="80" rx="1.5" fill="#a9cf82"/><rect x="7" y="22" width="14" height="4" rx="2" fill="#4c6b47"/><rect x="7" y="52" width="14" height="4" rx="2" fill="#4c6b47"/><path d="M20 24 Q31 12 38 19 Q29 27 20 24Z" fill="#6f9a4a"/></svg></div><p class="muted center pulse">' + T.loading + '</p></div>';
 }
 
 async function showEventList() {
-  $("page").innerHTML = pandaLoader();
+  $("page").innerHTML = bambooLoader();
   const reply = await api("publicEvents");
   if (!reply.ok) return showMessage(T.error);
   document.title = "CSS Events";
@@ -57,7 +57,7 @@ function eventCard(e) {
 }
 
 async function showEvent(slug) {
-  $("page").innerHTML = pandaLoader();
+  $("page").innerHTML = bambooLoader();
   const reply = await api("publicEvent", { slug });
   if (!reply.ok) return showMessage(reply.error === "NOT_FOUND" ? T.notFound : T.error, true);
   const e = reply.event;
