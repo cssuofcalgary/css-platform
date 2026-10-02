@@ -418,6 +418,7 @@
             <ul id="recent-list" class="results"></ul>
           </details>
           <button id="door-view-all" class="link small" type="button" data-t="viewAllCheckIns" hidden></button>
+          <button id="door-scan-log" class="link small" type="button" data-t="scanLogButton" hidden></button>
           <div class="door-buttons">
             <div id="camera" class="camera" hidden></div>
             <button id="camera-toggle" class="primary" type="button" data-t="startCamera"></button>
@@ -614,6 +615,20 @@
   </div>
 
   <!-- Everyone checked in (help desk) -->
+  <dialog id="scanlog-dialog" class="edit-dialog wide">
+    <div class="editor">
+      <h2 data-t="scanLogTitle"></h2>
+      <p class="muted small" data-t="scanLogHint"></p>
+      <p id="scanlog-status" class="muted small" aria-live="polite"></p>
+      <ul id="scanlog-list" class="results"></ul>
+      <div class="button-row">
+        <button type="button" id="scanlog-refresh" class="secondary" data-t="scanLogRefresh"></button>
+        <button type="button" id="scanlog-copy" class="secondary" data-t="scanLogCopy"></button>
+        <button type="button" id="scanlog-close" class="primary" data-t="close"></button>
+      </div>
+    </div>
+  </dialog>
+
   <dialog id="all-checkins-dialog" class="edit-dialog wide">
     <div class="editor">
       <h2 id="all-checkins-title"></h2>
@@ -837,7 +852,7 @@
   </dialog>
 
   <script src="config.js?v=0.3.7"></script>
-  <script src="strings.js?v=1.6.2"></script>
+  <script src="strings.js?v=1.7.0"></script>
   <script src="mock.js?v=0.3.7"></script>
   <script src="panda.js?v=1.5.0"></script>
   <script src="app.js?v=1.6.1"></script>
@@ -854,7 +869,7 @@
   <script src="insights.js?v=1.0.0"></script>
   <script src="attendees.js?v=1.0.1"></script>
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
-  <script src="door.js?v=0.10.3"></script>
+  <script src="door.js?v=0.11.1"></script>
   <script src="members.js?v=1.2.0"></script>
   <script src="overview.js?v=1.1.1"></script>
   <script src="shell.js?v=0.9.0"></script>

@@ -285,6 +285,11 @@ function route_(req) {
       return deskAlerts_(req.eventId);
     }
 
+    case "scanLog": {
+      requireSession_(req.token);   // door volunteers too: it shows what their own scanner read
+      return scanLog_(req.eventId);
+    }
+
     case "doorList":
       return doorList_(req.eventId, requireSession_(req.token), req);
 

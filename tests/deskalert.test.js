@@ -71,5 +71,29 @@ ok(scan("door", true, "TKTGOOD001").result.message.indexOf("Already checked in")
 run(`TBL.Events[0].entryOpen = "TRUE"; for (var i = 0; i < 12; i++) { tk("TKTXTRA0" + i, "Extra " + i, "awaiting", "", "O2"); scan_(S("door", "V"), "EV1", "TKTXTRA0" + i, false); }`.replace("scan_(", "REQ_SCANNER_ = true; scan_("));
 ok(alerts().length === 8, "only the last 8 are kept: " + alerts().length);
 
+// ---- Scan log
+run(`CacheService.getScriptCache().remove("scanlog_EV1"); TBL.__members = [{ memberId:"CSS0011234", name:"Mia Member", paid:true, email:"mia@x.ca", ucid:"30111222" }]; TBL.Events[0].entryOpen = "TRUE";`);
+scan("door", true, "CSS0011234");        // a member with no ticket
+scan("door", true, "CSS-0099999");       // not on the sheet
+scan("door", true, "hello world");       // unreadable
+const lg = run('scanLog_("EV1")').log;
+ok(lg.length === 3 && lg[0].kind === "unreadable" && lg[0].color === "red", "every scan is logged, newest first, unreadable ones too: " + lg.length);
+ok(/not there/.test(lg[1].note) && lg[1].value === "CSS0099999" && /Member ID not found/.test(lg[1].message), "a missing member says what was looked up and the full message: " + lg[1].note);
+ok(/Mia Member/.test(lg[2].note) && /no ticket/.test(lg[2].note) && lg[2].via === "scanner", "a member with no ticket logs who they are and why: " + lg[2].note);
+const secretScan = run(`(function(){ SCAN_NOTE_ = ""; return noteScanLog_(S("exec","E"), "EV1", "https://events/ticket.html?t=0123456789abcdef0123456789abcdef", false, { color:"green", message:"ok", person:{ id:"x", name:"N" } }); })()`);
+ok(run('scanLog_("EV1")').log[0].raw.indexOf("0123456789abcdef0123") === -1, "ticket secrets are cut short in the log");
+ok(run('scanLog_("EV1")').log.length === 4, "log grows");
+
+// ---- A pass nobody recognized still reaches the help desk
+run('CacheService.getScriptCache().remove("deskalerts_EV1")');
+const unknown = scan("door", true, "CSS-0099999").result;
+ok(unknown.message.indexOf("Go to the help desk") === 0 && /wasn't recognized/.test(unknown.message), "the phone says go to the help desk and that the pass wasn't recognized: " + unknown.message);
+const ua = alerts();
+ok(ua.length === 1 && ua[0].name === "Unrecognized member pass" && /Member ID not found/.test(ua[0].reason) && /CSS-0099999/.test(ua[0].reason), "the desk gets an alert with what the scanner read: " + (ua[0] && ua[0].reason));
+scan("door", true, "hello world");
+ok(alerts().length === 1, "an unreadable code makes no alert (the scanner just scans again)");
+const memberAlert = scan("door", true, "CSS0011234").result;
+ok(alerts()[0].name === "Mia Member", "a known member with no ticket alerts under their name");
+
 console.log(fails ? fails + " FAILED" : "ALL PASSED");
 process.exit(fails ? 1 : 0);

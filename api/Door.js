@@ -21,12 +21,51 @@ function setEntryOpen_(session, eventId, open) {
  * `code` can be a ticket link (…ticket.html?t=SECRET), a bare secret, or a ticket ID (TKT…).
  */
 function scan_(session, eventId, code, atDesk) {
+  SCAN_NOTE_ = "";
   const reply = scanCode_(session, eventId, code, atDesk);
-  try { noteDeskAlert_(session, eventId, reply.result, atDesk); } catch (e) { /* the alert is a bonus: never fail a scan over it */ }
+  try { noteScanLog_(session, eventId, code, atDesk, reply.result); } catch (e) { /* the log is a bonus: never fail a scan over it */ }
+  try { noteDeskAlert_(session, eventId, reply.result, atDesk, code); } catch (e) { /* the alert is a bonus: never fail a scan over it */ }
   // Scanner phones get the short answer; the help desk screen shows the reason (the alert above, and its own scans in full)
-  if (reply.result && reply.result.desk && (session.role === "door" || REQ_SCANNER_) && !atDesk) reply.result.message = "Go to the help desk.";
+  if (reply.result && reply.result.desk && (session.role === "door" || REQ_SCANNER_) && !atDesk) reply.result.message = reply.result.person ? "Go to the help desk." : "Go to the help desk. (This pass wasn't recognized.)";
   if (reply.result) delete reply.result.desk;
   return reply;
+}
+
+// ---- Scan log (for working out what went wrong) ---------------------------------------
+// The last scans for an event with exactly what the scanner read and what the system answered. Script cache only
+// (a few hours), best effort. Ticket secrets are cut short so the log can be shown or pasted without leaking tickets.
+
+const SCAN_LOG_KEEP = 60;
+const SCAN_LOG_SECONDS = 12 * 3600;
+let SCAN_NOTE_ = "";   // a line scanCode_ can leave for the log (for example how a member lookup went)
+
+function scanLogRaw_(code, key) {
+  const raw = String(code || "").replace(/s+/g, " ").trim();
+  if (key && key.kind === "secret") return "ticket link/secret " + String(key.value).slice(0, 6) + "…";
+  return raw.length > 70 ? raw.slice(0, 70) + "…" : raw;
+}
+
+function noteScanLog_(session, eventId, code, atDesk, result) {
+  if (!result) return;
+  const key = ticketKey_(code);
+  const entry = {
+    atMs: Date.now(), by: session.name, via: atDesk ? "desk" : (session.role === "door" || REQ_SCANNER_ ? "scanner" : "desk screen"),
+    raw: scanLogRaw_(code, key), kind: key ? key.kind : "unreadable", value: key && key.kind !== "secret" ? String(key.value || "").slice(0, 40) : "",
+    color: result.color, message: String(result.message || "").slice(0, 200),
+    who: result.person ? result.person.name : "", personId: result.person ? result.person.id : "", note: SCAN_NOTE_
+  };
+  const cacheKey = "scanlog_" + eventId, cache = CacheService.getScriptCache();
+  let list = [];
+  try { list = JSON.parse(cache.get(cacheKey) || "[]") || []; } catch (e) { list = []; }
+  list.unshift(entry);
+  cache.put(cacheKey, JSON.stringify(list.slice(0, SCAN_LOG_KEEP)), SCAN_LOG_SECONDS);
+}
+
+/** Help desk: the last scans for an event. */
+function scanLog_(eventId) {
+  let list = [];
+  try { list = JSON.parse(CacheService.getScriptCache().get("scanlog_" + eventId) || "[]") || []; } catch (e) { list = []; }
+  return { ok: true, serverNow: Date.now(), log: list };
 }
 
 // ---- "Send to desk" alerts ----------------------------------------------------------
@@ -37,19 +76,23 @@ const DESK_ALERTS_KEEP = 8;
 const DESK_ALERT_SECONDS = 6 * 3600;
 const DESK_ALERT_SKIP = /entry is closed/i;   // nothing for the desk to do
 
-function noteDeskAlert_(session, eventId, result, atDesk) {
+function noteDeskAlert_(session, eventId, result, atDesk, code) {
   const fromScanner = session.role === "door" || REQ_SCANNER_;
-  if (!fromScanner || atDesk || !result || result.color === "green" || !result.person) return;
+  if (!fromScanner || atDesk || !result || result.color === "green") return;
+  if (!result.person && !result.desk) return;   // "couldn't read that code": the scanner simply scans again
   if (DESK_ALERT_SKIP.test(result.message)) return;
+  // A pass nobody recognized has no person: the alert says so and shows what the scanner read
+  const person = result.person || { id: "raw:" + scanLogRaw_(code, ticketKey_(code)), name: "Unrecognized member pass", ticketType: "" };
+  const reason = result.person ? result.message : result.message + " (scanner read: " + scanLogRaw_(code, ticketKey_(code)) + ")";
   const key = "deskalerts_" + eventId;
   const cache = CacheService.getScriptCache();
   let list = [];
   try { list = JSON.parse(cache.get(key) || "[]") || []; } catch (e) { list = []; }
   const now = Date.now();
-  list = list.filter(function (a) { return a.personId !== result.person.id || now - a.atMs > 30000; });   // the same person scanned again: one alert
+  list = list.filter(function (a) { return a.personId !== person.id || now - a.atMs > 30000; });   // the same person scanned again: one alert
   list.unshift({
-    id: Utilities.getUuid().slice(0, 8), atMs: now, color: result.color, name: result.person.name, personId: result.person.id,
-    ticketType: result.person.ticketType, reason: result.message, by: session.name
+    id: Utilities.getUuid().slice(0, 8), atMs: now, color: result.color, name: person.name, personId: person.id,
+    ticketType: person.ticketType, reason: reason, by: session.name
   });
   cache.put(key, JSON.stringify(list.slice(0, DESK_ALERTS_KEEP)), DESK_ALERT_SECONDS);
 }
@@ -68,11 +111,18 @@ function scanCode_(session, eventId, code, atDesk) {
   // A member pass: find that member's ticket for this event and check THAT ticket in through the normal pipeline below.
   let matchedViaMember = "";
   if (key.kind === "member") {
-    const member = key.value ? findMemberById_(loadMembers_(), key.value) : null;
-    if (!member) return deskResult_("red", "Member ID not found. Send to help desk.");
+    const members = loadMembers_();
+    const member = key.value ? findMemberById_(members, key.value) : null;
+    if (!member) {
+      SCAN_NOTE_ = key.value ? "Looked for member ID " + key.value + " in " + members.length + " members: not there" : "Member pass with no readable ID (" + members.length + " members loaded)";
+      return deskResult_("red", "Member ID not found. Send to help desk.");
+    }
+    SCAN_NOTE_ = "Member " + member.name + " (" + member.memberId + ", " + (member.paid ? "paid" : "NOT paid") + ")";
     const ticket = memberTicketForEvent_(member, eventId);
+    if (!ticket) SCAN_NOTE_ += "; no ticket for this event matched by member ID, email or UCID";
     if (!ticket) return deskResult_("orange", member.name + " is a CSS Member, but has no ticket for this event. Send to help desk / walk-in.",
       { id: member.id, name: member.name, ticketType: "Member pass", answers: {}, flag: "" });
+    SCAN_NOTE_ += "; matched ticket " + ticket.id + " (" + ticket.status + ")";
     key = { kind: "id", value: ticket.id };
     matchedViaMember = member.name;
   }
@@ -260,7 +310,7 @@ function doorList_(eventId, session, opts) {
 // can only scan, undo a check-in, and see the open events. Closing entry locks it out again.
 
 const DOOR_CLOSED_TEXT = "Door scanning is closed right now. An exec has to open entry first.";
-const DOOR_ACTIONS = ["listEvents", "doorList", "scan", "undoCheckIn", "logout", "ping"];
+const DOOR_ACTIONS = ["listEvents", "doorList", "scan", "scanLog", "undoCheckIn", "logout", "ping"];
 
 function entryOpenEvents_() {
   return allEvents_().filter(function (e) { return e.entryOpen && e.status !== "archived" && e.status !== "draft"; });

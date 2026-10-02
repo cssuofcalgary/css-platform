@@ -605,3 +605,46 @@ $("walkin-form").addEventListener("submit", onWalkInSubmit);
 $("manual-form").addEventListener("submit", onManualSubmit);
 $("desk-alerts").addEventListener("click", onDeskAlertClick);
 ["manual-results", "helpdesk-unpaid", "helpdesk-flagged", "recent-list", "all-checkins-list"].forEach((id) => $(id).addEventListener("click", onDoorListClick));
+
+// ---- Scan log (help desk) -------------------------------------------------------------
+
+const scanLogState = { log: [], serverNow: 0 };
+
+function scanLogLine(e) {
+  const time = new Date(e.atMs).toLocaleTimeString("en-CA", { hour: "numeric", minute: "2-digit", second: "2-digit" });
+  return `${time} · ${e.via} (${e.by}) · ${e.color.toUpperCase()} · ${e.who || "no person"} · read: "${e.raw}" as ${e.kind}${e.value ? " " + e.value : ""} · said: ${e.message}${e.note ? " · note: " + e.note : ""}`;
+}
+
+async function loadScanLog() {
+  $("scanlog-status").textContent = T.allLoading;
+  const reply = await api("scanLog", { eventId: doorState.eventId });
+  if (!reply.ok) return handleEventError(reply, $("scanlog-status"));
+  scanLogState.log = reply.log || [];
+  $("scanlog-status").textContent = scanLogState.log.length ? "" : T.scanLogEmpty;
+  const dot = { green: "🟢", orange: "🟠", red: "🔴" };
+  $("scanlog-list").innerHTML = scanLogState.log.map((e) => `
+    <li class="card door-person"><div>
+      <div class="name">${dot[e.color] || "⚪"} <strong>${escapeHtml(e.who || "(no person)")}</strong> · ${escapeHtml(new Date(e.atMs).toLocaleTimeString("en-CA", { hour: "numeric", minute: "2-digit", second: "2-digit" }))} · ${escapeHtml(e.via)} (${escapeHtml(e.by)})</div>
+      <div class="sub">System said: ${escapeHtml(e.message)}</div>
+      <div class="sub">Scanner read: ${escapeHtml(e.raw)} → ${escapeHtml(e.kind)}${e.value ? " " + escapeHtml(e.value) : ""}</div>
+      ${e.note ? `<div class="sub">${escapeHtml(e.note)}</div>` : ""}
+    </div></li>`).join("");
+}
+
+function openScanLog() {
+  $("scanlog-list").innerHTML = "";
+  $("scanlog-dialog").showModal();
+  loadScanLog();
+}
+
+async function copyScanLog() {
+  const text = scanLogState.log.map(scanLogLine).join("\n");
+  try { await navigator.clipboard.writeText(text); $("scanlog-status").textContent = T.scanLogCopied; }
+  catch (e) { $("scanlog-status").textContent = T.scanLogCopyFail; }
+}
+
+$("door-scan-log").hidden = false;
+$("door-scan-log").addEventListener("click", openScanLog);
+$("scanlog-refresh").addEventListener("click", loadScanLog);
+$("scanlog-copy").addEventListener("click", copyScanLog);
+$("scanlog-close").addEventListener("click", () => $("scanlog-dialog").close());
