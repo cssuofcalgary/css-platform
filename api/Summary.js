@@ -122,6 +122,7 @@ function eventSummary_(eventId, opts) {
     money: { received: received, awaiting: waiting },
     byType: byType,
     questions: questions,
+    feedback: feedbackSummary_(event.id),
     attendees: attendees,
     attTotal: matching.length, attOffset: offset, attHasMore: offset + attendees.length < matching.length
   };

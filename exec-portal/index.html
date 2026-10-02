@@ -9,7 +9,7 @@
   <link rel="icon" href="assets/css-logo.png" type="image/png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Fraunces:opsz,wght@9..144,500;9..144,600&family=JetBrains+Mono:wght@400;500&display=swap">
-  <link rel="stylesheet" href="styles.css?v=0.5.1">
+  <link rel="stylesheet" href="styles.css?v=1.0.1">
   <link rel="stylesheet" href="theme.css?v=0.9.9">
 </head>
 <body>
@@ -132,6 +132,7 @@
           <h2 id="member-name"></h2>
           <div id="member-badges" class="badges"></div>
           <dl id="member-fields" class="fields"></dl>
+          <div id="member-history" class="detail-block"></div>
           <div class="button-row">
             <button id="member-edit-button" class="secondary small-button" type="button" data-t="editMember"></button>
             <button id="member-resend-pass" class="secondary small-button" type="button" data-t="resendPass" hidden></button>
@@ -162,6 +163,7 @@
         <div class="row-between">
           <h2 id="detail-title" class="section-title"></h2>
           <button id="detail-refresh" class="link" data-t="refreshed"></button>
+          <button id="detail-report" class="link" data-t="eventReport"></button>
           <button id="detail-csv" class="link" data-t="attDownload"></button>
         </div>
         <p id="detail-status" class="muted small" aria-live="polite"></p>
@@ -169,6 +171,7 @@
         <div id="detail-tiles" class="tiles"></div>
         <div id="detail-types" class="detail-block"></div>
         <div id="detail-questions" class="detail-block"></div>
+        <div id="detail-feedback" class="detail-block"></div>
         <h3 class="section-title" data-t="attendeesTitle"></h3>
         <input id="att-search" class="search" type="search" autocomplete="off">
         <div class="row-between att-tools">
@@ -631,6 +634,19 @@
     </form>
   </dialog>
 
+  <!-- Event report -->
+  <dialog id="report-dialog" class="edit-dialog wide">
+    <div class="editor">
+      <h2 data-t="reportTitle"></h2>
+      <pre id="report-body" class="report-body"></pre>
+      <div class="button-row">
+        <button type="button" id="report-close" class="secondary" data-t="reportClose"></button>
+        <button type="button" id="report-download" class="secondary" data-t="reportDownload"></button>
+        <button type="button" id="report-copy" class="primary" data-t="reportCopy"></button>
+      </div>
+    </div>
+  </dialog>
+
   <!-- Edit a member -->
   <dialog id="edit-member-dialog" class="edit-dialog">
     <form id="edit-member-form" class="editor" novalidate>
@@ -778,9 +794,9 @@
   </dialog>
 
   <script src="config.js?v=0.3.7"></script>
-  <script src="strings.js?v=1.0.0"></script>
+  <script src="strings.js?v=1.0.1"></script>
   <script src="mock.js?v=0.3.7"></script>
-  <script src="app.js?v=0.9.4"></script>
+  <script src="app.js?v=1.0.1"></script>
   <script src="events.js?v=0.9.9"></script>
   <script src="payments.js?v=1.0.0"></script>
   <script src="edit.js?v=0.9.6"></script>
@@ -789,7 +805,8 @@
   <script src="settings.js?v=0.9.1"></script>
   <script src="emails.js?v=0.3.7"></script>
   <script src="mailall.js?v=0.3.7"></script>
-  <script src="attendees.js?v=0.6.0"></script>
+  <script src="insights.js?v=1.0.0"></script>
+  <script src="attendees.js?v=1.0.1"></script>
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
   <script src="door.js?v=0.9.3"></script>
   <script src="members.js?v=0.9.10"></script>

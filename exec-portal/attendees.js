@@ -63,6 +63,7 @@ function renderSummary() {
   $("detail-types").innerHTML = d.byType.length ? `<h3 class="section-title">${T.byTypeTitle}</h3><ul class="plain-list">${d.byType.map((b) =>
     `<li><strong>${escapeHtml(b.name)}</strong> <span class="muted">${T.byTypeLine(b.paid, b.awaiting, b.checkedIn)}</span></li>`).join("")}</ul>` : "";
 
+  renderFeedbackBlock(d.feedback);
   $("detail-questions").innerHTML = d.questions.length ? `<h3 class="section-title">${T.answersTitle}</h3>${d.questions.map((q) => `
     <div class="answer-block"><div class="answer-q">${escapeHtml(q.label)}</div>
       ${q.answers.length ? `<ul class="plain-list">${q.answers.map((a) =>

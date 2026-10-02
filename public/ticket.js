@@ -41,7 +41,8 @@ async function start() {
   render(reply);
 }
 
-function render({ ticket, event, etransferEmail, orderTotal, canRequestCancel, cancelRequested }) {
+function render(data) {
+  const { ticket, event, etransferEmail, orderTotal, canRequestCancel, cancelRequested, canGiveFeedback, feedback } = data;
   document.title = `${T.yourTicket} · ${event.name}`;
   const status = ticket.checkedIn ? "checkedin" : ticket.status;
   // A rubber-stamp look, like the member portal's "VERIFIED" stamp.
@@ -66,6 +67,17 @@ function render({ ticket, event, etransferEmail, orderTotal, canRequestCancel, c
       ${look.stamp ? `<div class="stamp ${look.cls}">${look.stamp}</div>` : ""}
       <p class="ticket-state">${escapeHtml(look.note)}</p>
       ${showQr ? `<p class="muted small">${T.showAtDoor}</p>` : ""}
+      ${canGiveFeedback ? `
+      <hr class="perforation">
+      <section class="feedback" aria-label="${escapeHtml(T.feedbackTitle)}">
+        <h2 class="small-heading">${T.feedbackTitle}</h2>
+        <p class="muted small">${T.feedbackHint}</p>
+        <div class="stars" role="radiogroup" aria-label="${escapeHtml(T.feedbackTitle)}">${[1, 2, 3, 4, 5].map((n) =>
+          `<button type="button" class="star${feedback && feedback.rating >= n ? " on" : ""}" data-star="${n}" role="radio" aria-checked="${feedback && feedback.rating === n}" aria-label="${escapeHtml(T.starsLabel(n))}">★</button>`).join("")}</div>
+        <textarea id="fb-comment" maxlength="500" rows="3" placeholder="${escapeHtml(T.feedbackPlaceholder)}">${escapeHtml(feedback ? feedback.comment : "")}</textarea>
+        <button type="button" class="primary" id="fb-send" ${feedback ? "" : "disabled"}>${T.feedbackSend}</button>
+        <p id="fb-note" class="muted small" aria-live="polite">${feedback ? T.feedbackSaved : ""}</p>
+      </section>` : ""}
       ${canRequestCancel ? (cancelRequested
         ? `<p class="muted small">${T.cancelAsked}</p><button type="button" class="link" id="cancel-undo">${T.cancelUndo}</button>`
         : `<button type="button" class="link" id="cancel-ask">${T.cancelAsk}</button>`) : ""}
@@ -75,8 +87,25 @@ function render({ ticket, event, etransferEmail, orderTotal, canRequestCancel, c
     if (!undo && !confirm(T.cancelConfirm)) return;
     const reply = await api("requestCancel", { secret: new URLSearchParams(location.search).get("t") || "", undo });
     if (!reply.ok) return alert(reply.message || T.cancelFailed);
-    render({ ticket, event, etransferEmail, orderTotal, canRequestCancel, cancelRequested: reply.cancelRequested });
+    render({ ...data, cancelRequested: reply.cancelRequested });
   };
+  let stars = feedback ? feedback.rating : 0;
+  document.querySelectorAll(".star").forEach((b) => b.addEventListener("click", () => {
+    stars = Number(b.dataset.star);
+    document.querySelectorAll(".star").forEach((s) => {
+      s.classList.toggle("on", Number(s.dataset.star) <= stars);
+      s.setAttribute("aria-checked", String(Number(s.dataset.star) === stars));
+    });
+    $("fb-send").disabled = false;
+  }));
+  if ($("fb-send")) $("fb-send").addEventListener("click", async () => {
+    $("fb-send").disabled = true;
+    $("fb-note").textContent = T.feedbackSaving;
+    const reply = await api("submitFeedback", { secret: new URLSearchParams(location.search).get("t") || "", rating: stars, comment: $("fb-comment").value });
+    if (!reply.ok) { $("fb-send").disabled = false; $("fb-note").textContent = reply.message || T.feedbackFailed; return; }
+    data.feedback = reply.feedback;
+    $("fb-note").textContent = T.feedbackSaved;
+  });
   if ($("cancel-ask")) $("cancel-ask").addEventListener("click", () => askCancel(false));
   if ($("cancel-undo")) $("cancel-undo").addEventListener("click", () => askCancel(true));
 

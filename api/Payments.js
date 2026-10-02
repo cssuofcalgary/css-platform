@@ -447,9 +447,18 @@ function getTicket_(secret) {
     site: siteInfo_(),
     etransferEmail: getConfig_().etransferEmail,
     orderTotal: Number(order.total) || 0,
+    canGiveFeedback: ticket.status === "paid" && !!ticket.checkedInAt,
+    feedback: feedbackOfTicket_(ticket),
     canRequestCancel: ticket.status === "awaiting" && order.status === "awaiting",
     cancelRequested: order.status === "awaiting" && !!order.cancelRequestedAt
   };
+}
+
+/** This ticket's saved rating ({ rating, comment }), or null. Only looked up for people who were checked in. */
+function feedbackOfTicket_(ticket) {
+  if (ticket.status !== "paid" || !ticket.checkedInAt) return null;
+  const fb = readRows_("Feedback").filter(function (r) { return r.id === ticket.id; })[0];
+  return fb ? { rating: Number(fb.rating) || 0, comment: fb.comment || "" } : null;
 }
 
 /**

@@ -226,3 +226,10 @@ label.radio:has(input:checked) { border-style: solid; border-color: var(--primar
 .stamp.void { color: #8a7f6a; border-color: #8a7f6a; }
 .ticket-state { font-style: italic; color: var(--ink-soft); margin: 0 0 6px; }
 .mono { font-family: var(--pixel); letter-spacing: 0.5px; }
+
+/* Feedback stars on the ticket page */
+.feedback { margin-top: 18px; text-align: center; }
+.feedback .stars { display: flex; justify-content: center; gap: 6px; margin: 10px 0; }
+.feedback .star { font-size: 34px; line-height: 1; background: none; border: 0; padding: 2px 4px; cursor: pointer; color: #b9b09a; }
+.feedback .star.on { color: #d9a21b; }
+.feedback textarea { width: 100%; box-sizing: border-box; margin: 6px 0 10px; padding: 10px; border: 1px solid #b9b09a; border-radius: 8px; font: inherit; background: #fffdf6; color: inherit; }

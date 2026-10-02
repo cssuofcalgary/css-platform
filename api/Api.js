@@ -60,6 +60,9 @@ function route_(req) {
     case "requestCancel":
       return requestCancel_(req.secret, !!req.undo);
 
+    case "submitFeedback":
+      return submitFeedback_(req);
+
     case "findMyTickets":
       return findMyTickets_(req);
 
@@ -229,6 +232,12 @@ function route_(req) {
     case "eventSummary":
       requireSession_(req.token);
       return eventSummary_(req.eventId, req);
+
+    case "eventReport":
+      return eventReport_(requireSession_(req.token), req.eventId);
+
+    case "memberHistory":
+      return memberHistory_(requireSession_(req.token), req.memberId);
 
     case "walkIn":
       return walkIn_(requireSession_(req.token), req.eventId, req.walkIn);

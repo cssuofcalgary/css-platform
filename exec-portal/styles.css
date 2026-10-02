@@ -433,3 +433,9 @@ body.scanner-mode .content { max-width: 520px; }
 .site-footer { margin: 32px 16px 24px; text-align: center; font-size: 13px; color: var(--muted, #6b6b6b); }
 .site-footer p { margin: 4px 0; }
 .site-footer a { color: inherit; font-weight: 600; }
+
+/* Event report, feedback and member history */
+.report-body { white-space: pre-wrap; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 13px; max-height: 60vh; overflow: auto; background: var(--surface-2, #f4efe3); padding: 12px; border-radius: 10px; margin: 10px 0; }
+.history-list { list-style: none; padding: 0; margin: 6px 0 0; display: grid; gap: 6px; }
+.history-list li { display: flex; gap: 8px; flex-wrap: wrap; align-items: baseline; }
+.rating-stars { color: #d9a21b; letter-spacing: 1px; }
