@@ -23,22 +23,47 @@ async function openPaymentsTab() {
  * A plain reload (after an action) asks for as many as are already on screen, so the list doesn't jump back to the top.
  */
 let ordersCounter = 0;
-async function loadOrders(append) {
+async function loadOrders(append, background) {
   const mine = ++ordersCounter;
   const have = payState.data ? payState.data.orders.length : 0;
-  $("pay-status").textContent = T.loadingOrders;
-  const reply = await api("listOrders", {
+  if (!background) $("pay-status").textContent = T.loadingOrders;
+  const reply = await (background ? apiRequest : api)("listOrders", {
     eventId: payState.eventId, filter: payState.filter === "waitlist" ? "awaiting" : payState.filter, q: payState.q,
     offset: append ? have : 0, limit: append ? ORDERS_PAGE : Math.min(200, Math.max(ORDERS_PAGE, have))
   });
   if (mine !== ordersCounter) return;   // a newer request already started
-  if (!reply.ok) return handleEventError(reply, $("pay-status"));
+  if (!reply.ok) return background ? undefined : handleEventError(reply, $("pay-status"));   // a failed quiet check just waits for the next one
   if (append && payState.data) reply.orders = payState.data.orders.concat(reply.orders);
   payState.data = reply;
   // keep only ticks for orders that are still waiting for payment
   payState.selected = new Set([...payState.selected].filter((id) => reply.orders.some((o) => o.id === id && o.status === "awaiting")));
   renderOrders();
+  updatePayLive();
 }
+
+// ---- Background refresh while doors are open: the list reloads itself and the Peekaboo panda shows it is happening ----
+const PAY_LIVE_MS = 30000;
+
+function payDoorsOpen() {
+  const found = eventsState.events.find((e) => e.id === payState.eventId);
+  return !!(found ? found.entryOpen : payState.data && payState.data.event && payState.data.event.entryOpen);
+}
+
+function updatePayLive() {
+  const box = $("pay-live");
+  const on = payDoorsOpen() && !$("tab-payments").hidden;
+  if (!on) { if (!box.hidden) { box.hidden = true; clearPeekaboo(box); } return; }
+  if (box.hidden) { box.hidden = false; mountPeekaboo(box, T.payLive); }
+}
+
+setInterval(() => {
+  const idle = state.token && !$("app-view").hidden && !$("tab-payments").hidden && !document.hidden;
+  updatePayLive();
+  // Skip a round while a request is running, a dialog is open, or the Waitlist chip is showing (it has its own loader).
+  if (!idle || !payDoorsOpen() || !payState.data || payState.filter === "waitlist" || document.querySelector("dialog[open]")) return;
+  if (document.querySelector("#orders button:disabled")) return;
+  loadOrders(false, true);
+}, PAY_LIVE_MS);
 
 function renderOrders() {
   const data = payState.data;

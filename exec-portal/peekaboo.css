@@ -1,0 +1,29 @@
+/* Peekaboo panda: the small "refreshing in the background" indicator (peekaboo.js).
+   One 10 s loop through four poses of assets/panda/peekaboo-sheet.png (transparent, 4 frames side by side):
+   0 shy peek · 1 peeking out · 2 waving · 3 hidden behind the bamboo. It hides at the end of each loop, between checks.
+   Size it with --pk on the element or any parent (default 44px). */
+.peekaboo {
+  --pk: 44px;
+  display: inline-block; flex: none; width: var(--pk); height: var(--pk); vertical-align: middle;
+  background: url(assets/panda/peekaboo-sheet.png?v=2) no-repeat 0 0 / calc(var(--pk) * 4) var(--pk);
+  background-position-x: calc(var(--pk) * -3);
+  filter: drop-shadow(0 0 1px #fff) drop-shadow(0 0 1px #fff) drop-shadow(0 0 2px rgba(255, 255, 255, .6));
+  pointer-events: none;
+  animation: peekaboo 10s step-end infinite;
+}
+.peekaboo[hidden] { display: none; }
+@keyframes peekaboo {
+  0%   { background-position-x: calc(var(--pk) * -3); }
+  6%   { background-position-x: 0; }
+  16%  { background-position-x: calc(var(--pk) * -1); }
+  28%  { background-position-x: calc(var(--pk) * -2); }
+  46%  { background-position-x: calc(var(--pk) * -1); }
+  56%  { background-position-x: calc(var(--pk) * -2); }
+  68%  { background-position-x: calc(var(--pk) * -1); }
+  76%  { background-position-x: 0; }
+  86%  { background-position-x: calc(var(--pk) * -3); }
+}
+@media (prefers-reduced-motion: reduce) { .peekaboo { animation: none; background-position-x: calc(var(--pk) * -1); } }
+/* Dark mode: the panda's black ears would melt into the page, so it gets a solid pale sticker edge */
+:root[data-theme="dark"] .peekaboo { filter: drop-shadow(1px 0 0 #f4efe6) drop-shadow(-1px 0 0 #f4efe6) drop-shadow(0 1px 0 #f4efe6) drop-shadow(0 -1px 0 #f4efe6); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .peekaboo { filter: drop-shadow(1px 0 0 #f4efe6) drop-shadow(-1px 0 0 #f4efe6) drop-shadow(0 1px 0 #f4efe6) drop-shadow(0 -1px 0 #f4efe6); } }
