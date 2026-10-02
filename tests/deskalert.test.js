@@ -95,5 +95,14 @@ ok(alerts().length === 1, "an unreadable code makes no alert (the scanner just s
 const memberAlert = scan("door", true, "CSS0011234").result;
 ok(alerts()[0].name === "Mia Member", "a known member with no ticket alerts under their name");
 
+// ---- The real member pass QR is a link with the ID in the path
+for (const text of ["http://member.ucalgarycss.ca/CSS0011234", "https://member.ucalgarycss.ca/CSS0011234/", "https://member.ucalgarycss.ca/pass/css-0011234?x=1", "CSS0011234", "CSS-0011234", "https://member.ucalgarycss.ca/?member=CSS0011234"]) {
+  const k = run("ticketKey_(" + JSON.stringify(text) + ")");
+  ok(k && k.kind === "member" && k.value === "CSS0011234", "member pass text reads as CSS0011234: " + text + " -> " + JSON.stringify(k));
+}
+ok(run('ticketKey_("https://events.ucalgarycss.ca/ticket.html?t=0123456789abcdef0123456789abcdef")').kind === "secret", "a ticket link is still a ticket");
+const viaLink = scan("door", true, "http://member.ucalgarycss.ca/CSS0011234").result;
+ok(viaLink.person && /Mia Member/.test(viaLink.person.name), "scanning the real pass link finds the member (then no ticket): " + JSON.stringify(viaLink.message));
+
 console.log(fails ? fails + " FAILED" : "ALL PASSED");
 process.exit(fails ? 1 : 0);

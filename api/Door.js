@@ -368,6 +368,9 @@ function ticketKey_(code) {
   const fromPass = /[?&](?:member|m)=([A-Za-z0-9-]+)/i.exec(raw);
   if (fromPass) return { kind: "member", value: fromPass[1].toUpperCase().replace(/[^A-Z0-9]/g, "") };
   if (/^CSS[0-9]{4,12}$/.test(id)) return { kind: "member", value: id };
+  // The pass QR is a link with the ID in the path (member.ucalgarycss.ca/CSS0214578): take the ID from anywhere in the text
+  const inText = /CSS[-\s]?(\d{4,12})(?!\d)/i.exec(raw);
+  if (inText) return { kind: "member", value: "CSS" + inText[1] };
   if (/^CSS/.test(id) || /member\.ucalgarycss\.ca/i.test(raw)) return { kind: "member", value: "" };
   return null;
 }
