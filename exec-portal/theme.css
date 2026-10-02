@@ -559,10 +559,9 @@ body:not(.scanner-mode):not(.phone) .door-buttons { display: none; }
 @keyframes deskflash { 50% { box-shadow: 0 0 0 6px rgba(255, 255, 255, .85), var(--shadow-1); transform: scale(1.01); } }
 @media (prefers-reduced-motion: reduce) { .desk-alert.flash { animation: none; } }
 
-/* Help desk: a small panda rolls beside the counts while the list is refreshing (sprite sheet: 4 x 3 poses) */
-.desk-roller { display: none; width: 44px; height: 39px; border-radius: 12px; background: #fdfdfd url("assets/panda/roll-sheet.webp") 0 0 / 400% 300% no-repeat; box-shadow: inset 0 0 0 1px var(--border); vertical-align: middle; animation: rollx .5s steps(1) infinite, rolly 1.5s steps(1) infinite; }
+/* Help desk: a small transparent panda always rolls beside the counts (strip of 12 frames is built by door.js) */
+.desk-roller { display: none; width: 44px; height: 36px; background: no-repeat 0 0 / 528px 36px; vertical-align: middle; animation: rollx 1.5s steps(12) infinite; filter: drop-shadow(0 0 1px #fff) drop-shadow(0 0 1px #fff) drop-shadow(0 0 2px rgba(255,255,255,.6)); }
 .desk-roller.on { display: inline-block; }
 body.scanner-mode .desk-roller { display: none !important; }
-@keyframes rollx { 0% { background-position-x: 0%; } 25% { background-position-x: 33.333%; } 50% { background-position-x: 66.667%; } 75% { background-position-x: 100%; } }
-@keyframes rolly { 0% { background-position-y: 0%; } 33.333% { background-position-y: 50%; } 66.667% { background-position-y: 100%; } }
+@keyframes rollx { to { background-position-x: -528px; } }
 @media (prefers-reduced-motion: reduce) { .desk-roller { animation: none; } }

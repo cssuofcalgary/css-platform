@@ -24,7 +24,71 @@ async function openDoorTab() {
     loadDoor(true);
   }, SCANNER_MODE ? 20000 : 6000);
   clearInterval(deskAlertState.timer);
+  buildRoller();
   if (!SCANNER_MODE) { pollDeskAlerts(); deskAlertState.timer = setInterval(pollDeskAlerts, DESK_ALERT_POLL_MS); }
+}
+
+// ---- The small rolling panda beside the counts (help desk only) --------------------------
+// The sheet has a plain background, so the page cuts the 12 poses out once: the background is wiped from the edges inward
+// (white fur inside the outline stays) and the poses are laid in a strip of equal frames that CSS steps through.
+
+const ROLL_FRAME_W = 96, ROLL_FRAME_H = 78;
+
+async function buildRoller() {
+  const box = $("desk-roller");
+  if (SCANNER_MODE || !box || box.dataset.ready) return;
+  box.dataset.ready = "1";
+  try {
+    const img = new Image();
+    img.src = "assets/panda/roll-sheet.webp";
+    await img.decode();
+    const sheet = document.createElement("canvas");
+    sheet.width = img.width; sheet.height = img.height;
+    const sctx = sheet.getContext("2d", { willReadFrequently: true });
+    sctx.drawImage(img, 0, 0);
+    const cellW = img.width / 4, cellH = img.height / 3;
+    const strip = document.createElement("canvas");
+    strip.width = ROLL_FRAME_W * 12; strip.height = ROLL_FRAME_H;
+    const out = strip.getContext("2d");
+    out.imageSmoothingQuality = "high";
+    const minCh = (d, i) => Math.min(d[i], d[i + 1], d[i + 2]);
+    for (let n = 0; n < 12; n++) {
+      const cell = sctx.getImageData(Math.floor((n % 4) * cellW), Math.floor(Math.floor(n / 4) * cellH), Math.floor(cellW), Math.floor(cellH));
+      const w = cell.width, h = cell.height, d = cell.data;
+      let x0 = w, y0 = h, x1 = -1, y1 = -1;
+      for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+        if (minCh(d, (y * w + x) * 4) < 225) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+      }
+      if (x1 < 0) continue;
+      x0 = Math.max(0, x0 - 6); y0 = Math.max(0, y0 - 6); x1 = Math.min(w - 1, x1 + 6); y1 = Math.min(h - 1, y1 + 6);
+      const cw = x1 - x0 + 1, ch = y1 - y0 + 1;
+      const crop = document.createElement("canvas").getContext("2d", { willReadFrequently: true });
+      crop.canvas.width = cw; crop.canvas.height = ch;
+      crop.putImageData(cell, -x0, -y0, x0, y0, cw, ch);
+      const px = crop.getImageData(0, 0, cw, ch), p = px.data;
+      const gone = new Uint8Array(cw * ch), stack = [];
+      for (let x = 0; x < cw; x++) stack.push(x, (ch - 1) * cw + x);
+      for (let y = 0; y < ch; y++) stack.push(y * cw, y * cw + cw - 1);
+      while (stack.length) {
+        const i = stack.pop();
+        if (gone[i] || minCh(p, i * 4) < 205) continue;
+        gone[i] = 1;
+        const x = i % cw, y = (i / cw) | 0;
+        if (x > 0) stack.push(i - 1); if (x < cw - 1) stack.push(i + 1); if (y > 0) stack.push(i - cw); if (y < ch - 1) stack.push(i + cw);
+      }
+      for (let i = 0; i < cw * ch; i++) {
+        if (gone[i]) { p[i * 4 + 3] = 0; continue; }
+        const x = i % cw, y = (i / cw) | 0;
+        const nextToGone = (x > 0 && gone[i - 1]) || (x < cw - 1 && gone[i + 1]) || (y > 0 && gone[i - cw]) || (y < ch - 1 && gone[i + cw]);
+        if (nextToGone) p[i * 4 + 3] = Math.max(0, Math.min(255, Math.round((255 - minCh(p, i * 4)) / 50 * 255)));   // soften the pale edge pixels
+      }
+      crop.putImageData(px, 0, 0);
+      const scale = Math.min((ROLL_FRAME_W - 4) / cw, (ROLL_FRAME_H - 4) / ch);
+      out.drawImage(crop.canvas, n * ROLL_FRAME_W + (ROLL_FRAME_W - cw * scale) / 2, ROLL_FRAME_H - 2 - ch * scale, cw * scale, ch * scale);   // bottom-centred: the roll stays on the floor
+    }
+    box.style.backgroundImage = `url(${strip.toDataURL("image/png")})`;
+    box.classList.add("on");
+  } catch (e) { box.dataset.ready = ""; /* no panda: the desk works without it */ }
 }
 
 // ---- "Send to desk" alerts (help desk only) ------------------------------------------
@@ -111,12 +175,7 @@ async function followLiveEvent() {
 
 /** `quiet` = the background refresh: if it fails, keep showing what we have instead of covering the scan result. */
 async function loadDoor(quiet) {
-  const roller = $("desk-roller");
-  clearTimeout(doorState.rollerTimer);
-  doorState.rollerTimer = setTimeout(() => roller.classList.add("on"), 500);   // a small panda rolls only if the refresh takes a moment
   const reply = await api("doorList", { eventId: doorState.eventId });
-  clearTimeout(doorState.rollerTimer);
-  roller.classList.remove("on");
   if (!reply.ok) {
     if (quiet && reply.error !== "NOT_LOGGED_IN") return;
     return handleEventError(reply, $("scan-result"));
