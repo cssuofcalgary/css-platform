@@ -187,7 +187,7 @@ async function sendUnsent() {
   const reply = await api("sendPendingEmails", { count });
   if (!reply.ok) return handleEventError(reply, $("pay-unsent"));
   await loadOrders();
-  showToast(T.sentSome(reply.emailsSent, reply.emailsWaiting));
+  showToast(T.sentSome(reply.emailsSent, reply.emailsWaiting), "success");
 }
 
 function ticketUrl(t) {

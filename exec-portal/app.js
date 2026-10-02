@@ -22,24 +22,27 @@ const READ_ACTIONS = ["listEvents", "listOrders", "doorList", "eventSummary", "s
 const REQUEST_TIMEOUT_MS = 35000;
 const RETRY_PAUSE_MS = 1200;
 
-// The bamboo wave shows in the middle when a request takes longer than a moment. Door scans, searches-as-you-type and
-// the keep-alive stay quiet, and so does the scanner phone page.
+// The panda shows in the middle when a request takes longer than a moment (and moves on to "taking a little longer" and
+// "still working" the longer it waits). Door scans, searches-as-you-type and the keep-alive stay quiet, and so does the
+// scanner phone page. Jobs that work through a list show "almost there" instead.
 const QUIET_ACTIONS = ["ping", "scan", "doorList", "searchMembers", "getMember"];
-const BAMBOO_DELAY_MS = 700;
-let bambooBusyCount = 0, bambooBusyTimer = null;
+const BATCH_ACTIONS = ["sendPendingEmails", "markOrdersPaid", "sendReminders"];
+const PANDA_DELAY_MS = 700;
+let pandaBusyCount = 0, pandaBusyTimer = null, pandaBatch = false;
 
-function bambooBusy(on) {
-  bambooBusyCount = Math.max(0, bambooBusyCount + (on ? 1 : -1));
-  const box = $("wave-busy");
+function pandaBusy(on, batch) {
+  pandaBusyCount = Math.max(0, pandaBusyCount + (on ? 1 : -1));
+  const box = $("panda-busy");
   if (!box) return;
-  if (on && bambooBusyCount === 1) bambooBusyTimer = setTimeout(() => { box.hidden = false; }, BAMBOO_DELAY_MS);
-  if (bambooBusyCount === 0) { clearTimeout(bambooBusyTimer); box.hidden = true; }
+  if (on && batch) pandaBatch = true;
+  if (on && pandaBusyCount === 1) pandaBusyTimer = setTimeout(() => { box.hidden = false; mountPanda(box, "loading", { compact: true, batch: pandaBatch }); }, PANDA_DELAY_MS);
+  if (pandaBusyCount === 0) { clearTimeout(pandaBusyTimer); box.hidden = true; clearPanda(box); pandaBatch = false; }
 }
 
 async function api(action, details = {}) {
   const quiet = SCANNER_MODE || QUIET_ACTIONS.includes(action);
-  if (!quiet) bambooBusy(true);
-  try { return await apiRequest(action, details); } finally { if (!quiet) bambooBusy(false); }
+  if (!quiet) pandaBusy(true, BATCH_ACTIONS.includes(action));
+  try { return await apiRequest(action, details); } finally { if (!quiet) pandaBusy(false); }
 }
 
 async function apiRequest(action, details = {}) {
@@ -81,9 +84,10 @@ async function sendOnce(body) {
 }
 
 let toastTimer = null;
-function showToast(message) {
+function showToast(message, kind) {
   const box = $("toast");
   box.textContent = message;
+  if (kind === "success") box.insertAdjacentHTML("afterbegin", pandaImg("success", "pl-toast"));
   box.hidden = false;
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => { box.hidden = true; }, 8000);
@@ -343,7 +347,7 @@ async function markMemberPaid() {
   Object.assign(m, reply.member || {}, { paid: true });   // the open page and the search results show the new state
   memberPaidHook(m);   // and Pending drops them
   showMember(m);
-  showToast(reply.already ? T.markedAlready : reply.emailed ? T.memberMarkedPaid(m.name) : T.markedPaidNoEmail(m.name));
+  showToast(reply.already ? T.markedAlready : reply.emailed ? T.memberMarkedPaid(m.name) : T.markedPaidNoEmail(m.name), reply.emailed ? "success" : undefined);
 }
 
 async function resendMemberPass() {
@@ -359,7 +363,7 @@ async function resendMemberPass() {
     if (reply.error === "NOT_LOGGED_IN") { signOutLocally(); return showLogin(errorText(reply)); }
     return showToast(errorText(reply));
   }
-  showToast(T.passEmailed(m.email));
+  showToast(T.passEmailed(m.email), "success");
 }
 
 // ---- Edit a member ----------------------------------------------------------
@@ -399,7 +403,7 @@ async function onEditMemberSubmit(event) {
   Object.assign(m, reply.member || {});   // the open page and the search results show the new details
   if (m.paid) memberPaidHook(m);          // and Pending drops them
   showMember(m);
-  showToast(reply.emailed ? T.memberUpdatedPass : T.memberUpdated);
+  showToast(reply.emailed ? T.memberUpdatedPass : T.memberUpdated, "success");
 }
 
 function showSearch() {

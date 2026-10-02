@@ -28,15 +28,17 @@ function applySite(site) {
 
 // ---- Pages ------------------------------------------------------------------
 
-/** The bamboo wave, shown while a page is being fetched. */
-function bambooLoader() {
-  return '<div class="wave-loader" role="status" aria-live="polite"><div class="bamboo-wave" aria-hidden="true"><svg class="bamboo" viewBox="0 0 40 80" aria-hidden="true"><rect x="8" y="0" width="12" height="80" rx="6" fill="#7aa356"/><rect x="11" y="0" width="3" height="80" rx="1.5" fill="#a9cf82"/><rect x="7" y="22" width="14" height="4" rx="2" fill="#4c6b47"/><rect x="7" y="52" width="14" height="4" rx="2" fill="#4c6b47"/><path d="M20 24 Q31 12 38 19 Q29 27 20 24Z" fill="#6f9a4a"/></svg><svg class="bamboo" viewBox="0 0 40 80" aria-hidden="true"><rect x="8" y="0" width="12" height="80" rx="6" fill="#7aa356"/><rect x="11" y="0" width="3" height="80" rx="1.5" fill="#a9cf82"/><rect x="7" y="22" width="14" height="4" rx="2" fill="#4c6b47"/><rect x="7" y="52" width="14" height="4" rx="2" fill="#4c6b47"/><path d="M20 24 Q31 12 38 19 Q29 27 20 24Z" fill="#6f9a4a"/></svg><svg class="bamboo" viewBox="0 0 40 80" aria-hidden="true"><rect x="8" y="0" width="12" height="80" rx="6" fill="#7aa356"/><rect x="11" y="0" width="3" height="80" rx="1.5" fill="#a9cf82"/><rect x="7" y="22" width="14" height="4" rx="2" fill="#4c6b47"/><rect x="7" y="52" width="14" height="4" rx="2" fill="#4c6b47"/><path d="M20 24 Q31 12 38 19 Q29 27 20 24Z" fill="#6f9a4a"/></svg></div><p class="muted center pulse">' + T.loading + '</p></div>';
+/** An error screen with the confused panda. `retry` adds a "Try again" button; `withBack` adds the link back to all events. */
+function showPandaError(message, retry, withBack) {
+  $("page").innerHTML = (withBack ? `<a class="back" href="./">${T.allEvents}</a>` : "") + pandaMarkup("error", { sub: message, retry: !!retry });
+  const button = $("page").querySelector(".pl-retry");
+  if (button && retry) button.addEventListener("click", retry);
 }
 
 async function showEventList() {
-  $("page").innerHTML = bambooLoader();
+  mountPanda($("page"), "loading");
   const reply = await api("publicEvents");
-  if (!reply.ok) return showMessage(T.error);
+  if (!reply.ok) return showPandaError(T.error, showEventList);
   document.title = "CSS Events";
   $("page").innerHTML = `
     <h1 class="page-title">${T.upcoming}</h1>
@@ -57,9 +59,9 @@ function eventCard(e) {
 }
 
 async function showEvent(slug) {
-  $("page").innerHTML = bambooLoader();
+  mountPanda($("page"), "loading");
   const reply = await api("publicEvent", { slug });
-  if (!reply.ok) return showMessage(reply.error === "NOT_FOUND" ? T.notFound : T.error, true);
+  if (!reply.ok) return showPandaError(reply.error === "NOT_FOUND" ? T.notFound : T.error, reply.error === "NOT_FOUND" ? null : () => showEvent(slug), true);
   const e = reply.event;
   document.title = `${e.name} · CSS`;
 
@@ -205,6 +207,7 @@ async function onWaitlistSubmit(ev) {
   if (!reply.ok) { error.textContent = reply.error === "NETWORK" ? T.error : (reply.message || T.error); error.hidden = false; return; }
   $("page").innerHTML = `
     <article class="done">
+      ${pandaImg("sleep")}
       <h1 class="page-title">${T.waitlistDoneTitle}</h1>
       <p class="lead">${reply.already ? T.waitlistAlready : T.waitlistDoneNote}</p>
       <a class="back" href="./">${T.allEvents}</a>
@@ -373,6 +376,7 @@ function showPaymentScreen(reply) {
   const flagged = reply.tickets.filter((t) => t.flag && t.flag.indexOf("Member price") === 0);
   $("page").innerHTML = `
     <article class="done">
+      ${pandaImg(!review && free ? "success" : "almost")}
       <h1 class="page-title">${review ? T.reviewTitle : free ? T.registeredFree : T.almostDone}</h1>
       ${review ? `<p class="lead">${T.reviewNote}</p>` : free ? `<p>${T.freeNote}</p>` : `
         <p class="lead">${T.sendEtransfer}</p>

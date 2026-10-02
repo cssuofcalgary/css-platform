@@ -234,13 +234,41 @@ label.radio:has(input:checked) { border-style: solid; border-color: var(--primar
 .feedback .star.on { color: #d9a21b; }
 .feedback textarea { width: 100%; box-sizing: border-box; margin: 6px 0 10px; padding: 10px; border: 1px solid #b9b09a; border-radius: 8px; font: inherit; background: #fffdf6; color: inherit; }
 
-/* Bamboo wave loader: three stalks bobbing in turn, no background */
-.bamboo-wave { display: flex; justify-content: center; align-items: flex-end; gap: 12px; height: 82px; margin: 26px auto 8px; filter: drop-shadow(0 2px 3px rgba(42, 37, 32, .25)); }
-.bamboo { width: 34px; height: 68px; animation: bambooWave 1.2s ease-in-out infinite; }
-.bamboo:nth-child(2) { animation-delay: .2s; }
-.bamboo:nth-child(3) { animation-delay: .4s; }
-@keyframes bambooWave { 0%, 100% { transform: translateY(10px); } 50% { transform: translateY(-10px); } }
-@media (prefers-reduced-motion: reduce) { .bamboo { animation: none; } }
-.wave-loader { text-align: center; }
-.wave-busy { position: fixed; inset: 0; display: grid; place-items: center; pointer-events: none; z-index: 9999; }
-.wave-busy .bamboo-wave { margin: 0; }
+/* Panda loader (loading, slow, success, error) */
+.pl { text-align: center; padding: 12px 0 8px; color: inherit; }
+.pl-stage { position: relative; width: 150px; height: 144px; margin: 0 auto; animation: plBob 2s ease-in-out infinite; }
+.pl-img { position: absolute; left: 50%; bottom: 0; transform: translateX(-50%); max-width: 100%; max-height: 100%; width: auto; height: auto; }
+.pl-frames-2 .pl-f0 { animation: plFrameA .9s steps(1, end) infinite; }
+.pl-frames-2 .pl-f1 { animation: plFrameB .9s steps(1, end) infinite; }
+@keyframes plFrameA { 0% { opacity: 1; } 50% { opacity: 0; } }
+@keyframes plFrameB { 0% { opacity: 0; } 50% { opacity: 1; } }
+@keyframes plBob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
+.pl-dots { display: flex; justify-content: center; gap: 8px; height: 16px; margin: 6px 0 4px; }
+.pl-dots i { width: 14px; height: 14px; background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M3 21C3 9 11 3 21 3c0 10-6 18-18 18z' fill='%236aa84f'/%3E%3Cpath d='M3 21L15 9' stroke='%23467a35' stroke-width='1.6' fill='none'/%3E%3C/svg%3E") center / contain no-repeat; transform: scale(0); animation: plLeaf 1.5s ease-in-out infinite; }
+.pl-dots i:nth-child(2) { animation-delay: .25s; }
+.pl-dots i:nth-child(3) { animation-delay: .5s; }
+@keyframes plLeaf { 0%, 10% { transform: scale(0) rotate(-35deg); opacity: 0; } 35%, 75% { transform: scale(1) rotate(0); opacity: 1; } 100% { transform: scale(1) rotate(0); opacity: 0; } }
+.pl-title { margin: 4px 0 2px; font-weight: 700; font-size: 16px; }
+.pl-sub { margin: 0; opacity: .7; font-size: 13px; }
+.pl-retry { margin-top: 12px; padding: 8px 18px; border-radius: 10px; border: 1px solid currentColor; background: transparent; color: inherit; font: inherit; font-weight: 600; cursor: pointer; }
+.pl[data-state="success"] .pl-stage { animation: plHop .7s ease-out 1; }
+@keyframes plHop { 0% { transform: translateY(0); } 35% { transform: translateY(-14px); } 60% { transform: translateY(0); } 78% { transform: translateY(-5px); } 100% { transform: translateY(0); } }
+.pl-compact .pl-stage { width: 88px; height: 86px; }
+.pl-compact .pl-dots { height: 12px; gap: 6px; margin: 4px 0 2px; }
+.pl-compact .pl-dots i { width: 11px; height: 11px; }
+.pl-compact .pl-title { font-size: 12px; margin: 2px 0 0; }
+.pl-compact .pl-sub { display: none; }
+.pl-solo { display: block; height: 84px; width: auto; margin: 0 auto 10px; }
+.pl-solo.pl-toast { height: 30px; margin: 0 10px 0 0; display: inline-block; vertical-align: middle; }
+.pl-leaves { padding: 26px 0 18px; }
+.pl-leaves .pl-dots { gap: 16px; height: 34px; margin: 0 0 12px; }
+.pl-leaves .pl-dots i { width: 26px; height: 26px; }
+.pl-busy .pl-img, .pl-solo { filter: drop-shadow(0 2px 5px rgba(0, 0, 0, .35)); }
+.pl-busy .pl-title, .pl-busy .pl-sub { text-shadow: 0 0 6px var(--bg, #fff), 0 0 10px var(--bg, #fff); }
+.pl-busy { position: fixed; inset: 0; display: grid; place-items: center; pointer-events: none; z-index: 9999; }
+@media (prefers-reduced-motion: reduce) {
+  .pl-stage, .pl[data-state="success"] .pl-stage { animation: none; }
+  .pl-frames-2 .pl-f0, .pl-frames-2 .pl-f1 { animation: none; }
+  .pl-frames-2 .pl-f1 { opacity: 0; }
+  .pl-dots i { animation: none; transform: scale(1); opacity: 1; }
+}

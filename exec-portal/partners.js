@@ -91,7 +91,7 @@ $("partner-form").addEventListener("submit", async (event) => {
   if (!reply) return;
   if (!reply.ok) { $("pt-error").textContent = errorText(reply); $("pt-error").hidden = false; return; }
   $("partner-dialog").close();
-  showToast(T.partnerSaved);
+  showToast(T.partnerSaved, "success");
 });
 
 $("pt-delete").addEventListener("click", async () => {

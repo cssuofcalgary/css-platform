@@ -66,7 +66,7 @@ async function onWaitlistClick(event) {
     if (!reply.ok && reply.error === "OVER_CAPACITY" && confirm(reply.message)) {
       reply = await api("offerWaitlistSpot", { entryId: id, siteUrl, force: true });
     }
-    if (reply.ok) showToast(T.wlOfferDone(reply.code, reply.emailed));
+    if (reply.ok) showToast(T.wlOfferDone(reply.code, reply.emailed), reply.emailed ? "success" : undefined);
   }
   if (button.dataset.wlAct === "remove") {
     if (!confirm(T.wlConfirmRemove(name))) return;

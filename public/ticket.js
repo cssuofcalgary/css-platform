@@ -35,7 +35,7 @@ async function start() {
   const secret = new URLSearchParams(location.search).get("t") || "";
   const reply = await api("getTicket", { secret });
   if (!reply.ok) {
-    $("page").innerHTML = `<p class="muted center">${reply.error === "NOT_FOUND" ? T.ticketNotFound : T.error}</p>`;
+    $("page").innerHTML = pandaMarkup("error", { sub: reply.error === "NOT_FOUND" ? T.ticketNotFound : T.error });
     return;
   }
   render(reply);
