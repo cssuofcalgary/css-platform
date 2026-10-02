@@ -263,6 +263,7 @@ label.radio:has(input:checked) { border-style: solid; border-color: var(--primar
 .pl-leaves { padding: 26px 0 18px; }
 .pl-leaves .pl-dots { gap: 16px; height: 34px; margin: 0 0 12px; }
 .pl-leaves .pl-dots i { width: 26px; height: 26px; }
+.pl-solo.pl-inline { display: inline-block; height: 30px; margin: 0 8px 2px 0; vertical-align: middle; }
 .pl-busy .pl-img, .pl-solo { filter: drop-shadow(0 2px 5px rgba(0, 0, 0, .35)); }
 .pl-busy .pl-title, .pl-busy .pl-sub { text-shadow: 0 0 6px var(--bg, #fff), 0 0 10px var(--bg, #fff); }
 .pl-busy { position: fixed; inset: 0; display: grid; place-items: center; pointer-events: none; z-index: 9999; }

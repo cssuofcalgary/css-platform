@@ -112,7 +112,7 @@ function showLogin(message) {
 }
 
 function setLoginError(text) {
-  $("login-error").textContent = text;
+  $("login-error").innerHTML = text ? pandaImg("error", "pl-inline") + pandaEsc(text) : "";
   $("login-error").hidden = !text;
 }
 
@@ -456,7 +456,7 @@ function fillText() {
   $("name-input").placeholder = T.namePlaceholder;
   $("pay-search").placeholder = T.paySearchPlaceholder;
   $("att-search").placeholder = T.attSearchPlaceholder;
-  $("connection-notice").textContent = T.reconnecting;
+  $("connection-notice").innerHTML = pandaImg("error", "pl-inline") + pandaEsc(T.reconnecting);
   $("search-status").textContent = T.searchHint;
   document.title = T.appTitle;
 }

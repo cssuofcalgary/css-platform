@@ -403,7 +403,7 @@ function setEditorError(text) {
 
 function handleEventError(reply, el) {
   if (reply.error === "NOT_LOGGED_IN") { signOutLocally(); return showLogin(errorText(reply)); }
-  el.textContent = errorText(reply);
+  el.innerHTML = pandaImg("error", "pl-inline") + pandaEsc(errorText(reply));   // the confused panda beside the message
 }
 
 function statusPill(status) {
