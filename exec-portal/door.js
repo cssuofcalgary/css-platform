@@ -33,6 +33,19 @@ async function openDoorTab() {
 // (white fur inside the outline stays) and the poses are laid in a strip of equal frames that CSS steps through.
 
 const ROLL_FRAME_W = 96, ROLL_FRAME_H = 78;
+const ROLL_WALL = 3;   // pixels the outline is thickened by while wiping the background
+
+/** Grows the 1-cells of a mask by `r` pixels (square), in two quick passes. */
+function dilate(mask, w, h, r) {
+  const across = new Uint8Array(w * h), out = new Uint8Array(w * h);
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    for (let k = Math.max(0, x - r); k <= Math.min(w - 1, x + r); k++) if (mask[y * w + k]) { across[y * w + x] = 1; break; }
+  }
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    for (let k = Math.max(0, y - r); k <= Math.min(h - 1, y + r); k++) if (across[k * w + x]) { out[y * w + x] = 1; break; }
+  }
+  return out;
+}
 
 async function buildRoller() {
   const box = $("desk-roller");
@@ -66,15 +79,30 @@ async function buildRoller() {
       crop.canvas.width = cw; crop.canvas.height = ch;
       crop.putImageData(cell, -x0, -y0, x0, y0, cw, ch);
       const px = crop.getImageData(0, 0, cw, ch), p = px.data;
+      // The outline is a wall the background wipe must not cross. A few poses have tiny gaps in it, so the wall is thickened
+      // first (otherwise the white fur is wiped too and the panda looks see-through).
+      const dark = new Uint8Array(cw * ch);
+      for (let i = 0; i < cw * ch; i++) dark[i] = minCh(p, i * 4) < 205 ? 1 : 0;
+      const wall = dilate(dark, cw, ch, ROLL_WALL);
       const gone = new Uint8Array(cw * ch), stack = [];
       for (let x = 0; x < cw; x++) stack.push(x, (ch - 1) * cw + x);
       for (let y = 0; y < ch; y++) stack.push(y * cw, y * cw + cw - 1);
       while (stack.length) {
         const i = stack.pop();
-        if (gone[i] || minCh(p, i * 4) < 205) continue;
+        if (gone[i] || wall[i]) continue;
         gone[i] = 1;
         const x = i % cw, y = (i / cw) | 0;
         if (x > 0) stack.push(i - 1); if (x < cw - 1) stack.push(i + 1); if (y > 0) stack.push(i - cw); if (y < ch - 1) stack.push(i + cw);
+      }
+      // give back the thin pale rim the thick wall kept outside the outline (only pale pixels touching the wiped area)
+      for (let pass = 0; pass < ROLL_WALL; pass++) {
+        const next = gone.slice();
+        for (let i = 0; i < cw * ch; i++) {
+          if (gone[i] || dark[i]) continue;
+          const x = i % cw, y = (i / cw) | 0;
+          if ((x > 0 && gone[i - 1]) || (x < cw - 1 && gone[i + 1]) || (y > 0 && gone[i - cw]) || (y < ch - 1 && gone[i + cw])) next[i] = 1;
+        }
+        gone.set(next);
       }
       for (let i = 0; i < cw * ch; i++) {
         if (gone[i]) { p[i * 4 + 3] = 0; continue; }

@@ -559,9 +559,34 @@ body:not(.scanner-mode):not(.phone) .door-buttons { display: none; }
 @keyframes deskflash { 50% { box-shadow: 0 0 0 6px rgba(255, 255, 255, .85), var(--shadow-1); transform: scale(1.01); } }
 @media (prefers-reduced-motion: reduce) { .desk-alert.flash { animation: none; } }
 
-/* Help desk: a small transparent panda always rolls beside the counts (strip of 12 frames is built by door.js) */
-.desk-roller { display: none; width: 44px; height: 36px; background: no-repeat 0 0 / 528px 36px; vertical-align: middle; animation: rollx 1.5s steps(12) infinite; filter: drop-shadow(0 0 1px #fff) drop-shadow(0 0 1px #fff) drop-shadow(0 0 2px rgba(255,255,255,.6)); }
+/* Help desk: a small transparent panda rolls right (about 4 s), rests, rolls back left, rests (12 s loop).
+   door.js builds the strip of 12 frames; frame 0 is the sleepy resting pose. The travel is what makes it look like rolling. */
+.desk-roller { display: none; width: 44px; height: 36px; margin-right: 38px; background: no-repeat 0 0 / 528px 36px; vertical-align: middle;
+  filter: drop-shadow(0 0 1px #fff) drop-shadow(0 0 1px #fff) drop-shadow(0 0 2px rgba(255,255,255,.6));
+  animation: rollframes 12s infinite, rollmove 12s infinite; }
 .desk-roller.on { display: inline-block; }
 body.scanner-mode .desk-roller { display: none !important; }
-@keyframes rollx { to { background-position-x: -528px; } }
+@keyframes rollframes {
+  0%     { background-position-x: 0;       animation-timing-function: steps(12, end); }
+  35%    { background-position-x: -528px;  animation-timing-function: step-end; }
+  35.1%  { background-position-x: 0; }
+  50%    { background-position-x: 0;       animation-timing-function: steps(12, end); }
+  85%    { background-position-x: -528px;  animation-timing-function: step-end; }
+  85.1%  { background-position-x: 0; }
+  100%   { background-position-x: 0; }
+}
+@keyframes rollmove {
+  0%     { transform: translateX(0) scaleX(1);     animation-timing-function: ease-in-out; }
+  35%    { transform: translateX(36px) scaleX(1); }
+  42%    { transform: translateX(36px) scaleX(1); }
+  43%    { transform: translateX(36px) scaleX(-1); }
+  50%    { transform: translateX(36px) scaleX(-1); animation-timing-function: ease-in-out; }
+  85%    { transform: translateX(0) scaleX(-1); }
+  92%    { transform: translateX(0) scaleX(-1); }
+  93%    { transform: translateX(0) scaleX(1); }
+  100%   { transform: translateX(0) scaleX(1); }
+}
 @media (prefers-reduced-motion: reduce) { .desk-roller { animation: none; } }
+/* Dark mode: the panda's black ears and paws would melt into the page, so it gets a solid pale sticker edge */
+:root[data-theme="dark"] .desk-roller { filter: drop-shadow(1px 0 0 #f4efe6) drop-shadow(-1px 0 0 #f4efe6) drop-shadow(0 1px 0 #f4efe6) drop-shadow(0 -1px 0 #f4efe6); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .desk-roller { filter: drop-shadow(1px 0 0 #f4efe6) drop-shadow(-1px 0 0 #f4efe6) drop-shadow(0 1px 0 #f4efe6) drop-shadow(0 -1px 0 #f4efe6); } }
