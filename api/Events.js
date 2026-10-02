@@ -129,6 +129,33 @@ function uploadImage_(session, dataUrl, filename) {
   return { ok: true, fileId: file.getId(), url: "https://lh3.googleusercontent.com/d/" + file.getId() + "=w1600" };
 }
 
+const IMAGE_LIST_MAX = 60;
+
+/** Pictures already uploaded for events (newest first), so an exec can reuse one instead of uploading it again. */
+function listImages_() {
+  const folder = imageFolder_();
+  const found = [];
+  const files = folder.getFiles();
+  while (files.hasNext()) {
+    const f = files.next();
+    if (!/^image\//.test(f.getMimeType())) continue;
+    found.push({ file: f, time: f.getDateCreated().getTime() });
+  }
+  found.sort(function (a, b) { return b.time - a.time; });
+  return {
+    ok: true,
+    images: found.slice(0, IMAGE_LIST_MAX).map(function (x) {
+      const id = x.file.getId();
+      return {
+        id: id, name: x.file.getName(), when: new Date(x.time).toISOString(),
+        url: "https://lh3.googleusercontent.com/d/" + id + "=w1600",
+        thumb: "https://lh3.googleusercontent.com/d/" + id + "=w300"
+      };
+    }),
+    more: found.length > IMAGE_LIST_MAX
+  };
+}
+
 function imageFolder_() {
   const props = PropertiesService.getScriptProperties();
   const id = props.getProperty("IMAGE_FOLDER_ID");

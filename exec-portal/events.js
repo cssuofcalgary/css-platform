@@ -202,6 +202,8 @@ function openEditor(existing, isEdit = !!existing, title) {
   $("ev-code-prefix").value = e.codePrefix || "";
   $("ev-closes").value = e.registrationCloses || "";
   $("ev-image-file").value = "";
+  $("ev-image-grid").hidden = true;
+  $("ev-image-pick").textContent = T.pickPrevImage;
   $("ev-image-status").textContent = "";
   showImagePreview(e.imageUrl);
   renderTicketTypes();
@@ -301,6 +303,30 @@ async function onImagePicked() {
   eventsState.editing.imageUrl = reply.url;
   showImagePreview(dataUrl);
   $("ev-image-status").textContent = T.uploaded;
+}
+
+/** "Pick a previous image": a grid of the pictures already in Drive; clicking one reuses it (no re-upload). */
+async function togglePreviousImages() {
+  const grid = $("ev-image-grid");
+  if (!grid.hidden) { grid.hidden = true; $("ev-image-pick").textContent = T.pickPrevImage; return; }
+  grid.hidden = false;
+  $("ev-image-pick").textContent = T.hidePrevImages;
+  grid.innerHTML = `<p class="muted small">${T.loadingImages}</p>`;
+  const reply = await api("listImages");
+  if (!reply.ok) { grid.hidden = true; $("ev-image-pick").textContent = T.pickPrevImage; return handleEventError(reply, $("ev-image-status")); }
+  grid.innerHTML = reply.images.length
+    ? reply.images.map((im) => `<button type="button" class="image-tile${im.id === eventsState.editing.imageFileId ? " picked" : ""}" data-image="${escapeHtml(im.id)}" data-url="${escapeHtml(im.url)}" title="${escapeHtml(im.name)}"><img src="${escapeHtml(im.thumb)}" alt="${escapeHtml(im.name)}" loading="lazy"></button>`).join("")
+    : `<p class="muted small">${T.noPrevImages}</p>`;
+}
+
+function onPreviousImageClick(event) {
+  const tile = event.target.closest(".image-tile");
+  if (!tile) return;
+  eventsState.editing.imageFileId = tile.dataset.image;
+  eventsState.editing.imageUrl = tile.dataset.url;
+  showImagePreview(tile.dataset.url);
+  document.querySelectorAll("#ev-image-grid .image-tile").forEach((t) => t.classList.toggle("picked", t === tile));
+  $("ev-image-status").textContent = T.imagePicked;
 }
 
 /** Resizes a photo in the browser so uploads are small (phones take huge photos). */
@@ -437,5 +463,7 @@ $("ev-ticket-types").addEventListener("click", onRepeatClick);
 $("ev-questions").addEventListener("click", onRepeatClick);
 $("ev-questions").addEventListener("change", onQuestionTypeChange);
 $("ev-image-file").addEventListener("change", onImagePicked);
+$("ev-image-pick").addEventListener("click", togglePreviousImages);
+$("ev-image-grid").addEventListener("click", onPreviousImageClick);
 $("event-form").addEventListener("submit", (ev) => { ev.preventDefault(); saveEvent(false); });
 $("save-publish-button").addEventListener("click", () => saveEvent(true));

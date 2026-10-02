@@ -137,6 +137,10 @@ function route_(req) {
     case "setEventStatus":
       return setEventStatus_(requireSession_(req.token), req.eventId, req.status);
 
+    case "listImages":
+      requireSession_(req.token);
+      return listImages_();
+
     case "uploadImage":
       return uploadImage_(requireSession_(req.token), req.dataUrl, req.filename);
 
