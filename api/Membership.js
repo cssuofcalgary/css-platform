@@ -200,3 +200,67 @@ function listPendingMembers_(offset, limit) {
   const size = Math.min(100, Math.max(1, parseInt(limit, 10) || PENDING_PAGE_DEFAULT));
   return { ok: true, members: waiting.slice(from, from + size), total: waiting.length, hasMore: from + size < waiting.length };
 }
+
+// ---- Exec: resend the pass, edit a member -----------------------------------------------
+
+/** Emails a paid member their pass link again (lost email, new phone). Any exec (checked by the caller). */
+function resendMemberPass_(session, memberId) {
+  const member = findMemberById_(loadMembers_(), memberId);
+  if (!member) throw new ApiError_("NOT_FOUND", "No member with that ID.");
+  if (!member.email) throw new ApiError_("BAD_REQUEST", "This member has no email address on file.");
+  if (!sendMemberWelcomeEmail_(member)) throw new ApiError_("EMAIL_FAILED", "Email failed to send. Check email allowance.");
+  log_(session.name, "member.resendPass", member.memberId, { name: member.name, email: member.email });
+  return { ok: true, emailed: true };
+}
+
+/**
+ * Exec edits a member's name, email, UCID and paid status. Any exec (checked by the caller). The Paid Status cell is only
+ * touched when paid actually changes (so "Awaiting Cash" isn't overwritten by an edit of the email). Flipping to paid emails the pass.
+ */
+function updateMember_(session, input) {
+  input = input || {};
+  const id = String(input.memberId || "").trim().toUpperCase();
+  if (!id) throw new ApiError_("BAD_REQUEST", "Which member?");
+  const name = memberText_(input.name, 80);
+  const email = String(input.email || "").trim().toLowerCase();
+  const ucid = String(input.ucid || "").replace(/\s+/g, "");
+  if (name.length < 2) throw new ApiError_("BAD_REQUEST", "Please enter the member's name.");
+  if (email && (email.length > 120 || !/^[a-z0-9][a-z0-9._%+'-]*@[a-z0-9-]+(\.[a-z0-9-]+)*\.[a-z]{2,}$/.test(email))) throw new ApiError_("BAD_REQUEST", "That email doesn't look right.");
+  if (ucid && !/^\d{8}$/.test(ucid)) throw new ApiError_("BAD_REQUEST", "The UCID is the 8-digit student number on the UCard.");
+  const paid = !!input.paid;
+
+  const result = withIntakeLock_(function () {
+    const book = openMemberSheet_();   // fresh read: the row number must be current
+    const member = book.members.filter(function (m) { return m.memberId === id; })[0];
+    if (!member) throw new ApiError_("NOT_FOUND", "No member with that ID.");
+    const clash = book.members.filter(function (m) {
+      return m.memberId !== id && ((ucid && String(m.ucid).replace(/\D/g, "") === ucid) || (email && String(m.email).toLowerCase() === email));
+    })[0];
+    if (clash) throw new ApiError_("DUPLICATE", "Another member (" + clash.name + ", " + clash.memberId + ") already has that UCID or email.");
+
+    const changes = { name: name, email: email, ucid: ucid };
+    const flippedToPaid = paid && !member.paid;
+    if (paid !== member.paid) changes.paid = paid ? MEMBER_PAID_STATUS : "UNPAID";
+    setMemberCells_(book, member, changes);
+    member.name = name; member.email = email; member.ucid = ucid;
+    if (paid !== member.paid) { member.paid = paid; member.status = changes.paid; }
+    return { member: member, flippedToPaid: flippedToPaid };
+  });
+
+  const member = result.member;
+  let emailed = false;
+  if (result.flippedToPaid && member.email) {
+    emailed = sendMemberWelcomeEmail_(member);
+    if (emailed) {
+      member.cardSent = true;
+      withIntakeLock_(function () {
+        const book = openMemberSheet_();   // read again: the row may have moved while the email went out
+        const fresh = book.members.filter(function (x) { return x.memberId === member.memberId; })[0];
+        if (fresh) setMemberCells_(book, fresh, { mailStatus: "Sent" });
+      });
+    }
+  }
+  forgetMembers_();
+  log_(session.name, "member.update", member.memberId, { name: name, paid: paid, emailed: emailed ? 1 : 0 });
+  return { ok: true, member: member, emailed: emailed };
+}

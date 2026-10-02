@@ -84,7 +84,7 @@ function showLogin(message) {
   $("app-view").hidden = true;
   $("login-view").hidden = false;
   setLoginError(message || "");
-  $("password").focus();
+  $("name-input").focus();
 }
 
 function setLoginError(text) {
@@ -245,6 +245,10 @@ function showMember(m) {
   // Someone who signed up on the website and hasn't been confirmed yet: one tap to mark the payment received.
   state.member = m;
   $("member-pay").hidden = m.paid || !m.memberId;
+  $("member-edit-button").hidden = !m.memberId;
+  $("member-resend-pass").hidden = !(m.memberId && m.email && m.paid);
+  $("member-resend-pass").disabled = false;
+  $("member-resend-pass").textContent = T.resendPass;
   $("member-pay-error").hidden = true;
   $("member-mark-paid").disabled = false;
   $("member-mark-paid").textContent = T.markPaid;
@@ -318,6 +322,62 @@ async function markMemberPaid() {
   memberPaidHook(m);   // and Pending drops them
   showMember(m);
   showToast(reply.already ? T.markedAlready : reply.emailed ? T.markedPaid(m.name) : T.markedPaidNoEmail(m.name));
+}
+
+async function resendMemberPass() {
+  const m = state.member;
+  if (!m || !m.memberId || !m.email) return;
+  const button = $("member-resend-pass");
+  button.disabled = true;
+  button.textContent = T.resendingPass;
+  const reply = await api("resendMemberPass", { memberId: m.memberId });
+  button.disabled = false;
+  button.textContent = T.resendPass;
+  if (!reply.ok) {
+    if (reply.error === "NOT_LOGGED_IN") { signOutLocally(); return showLogin(errorText(reply)); }
+    return showToast(errorText(reply));
+  }
+  showToast(T.passEmailed(m.email));
+}
+
+// ---- Edit a member ----------------------------------------------------------
+
+function openEditMember() {
+  const m = state.member;
+  if (!m || !m.memberId) return;
+  $("em-name").value = m.name || "";
+  $("em-email").value = m.email || "";
+  $("em-ucid").value = m.ucid || "";
+  $("em-paid").value = m.paid ? "paid" : "unpaid";
+  $("em-error").hidden = true;
+  $("em-submit").disabled = false;
+  $("em-submit").textContent = T.emSave;
+  $("edit-member-dialog").showModal();
+  $("em-name").focus();
+}
+
+async function onEditMemberSubmit(event) {
+  event.preventDefault();
+  const m = state.member;
+  if (!m) return;
+  const member = { memberId: m.memberId, name: $("em-name").value, email: $("em-email").value, ucid: $("em-ucid").value, paid: $("em-paid").value === "paid" };
+  $("em-error").hidden = true;
+  $("em-submit").disabled = true;
+  $("em-submit").textContent = T.emSaving;
+  const reply = await api("updateMember", { member });
+  if (!reply.ok) {
+    if (reply.error === "NOT_LOGGED_IN") { $("edit-member-dialog").close(); signOutLocally(); return showLogin(errorText(reply)); }
+    $("em-submit").disabled = false;
+    $("em-submit").textContent = T.emSave;
+    $("em-error").textContent = errorText(reply);
+    $("em-error").hidden = false;
+    return;
+  }
+  $("edit-member-dialog").close();
+  Object.assign(m, reply.member || {});   // the open page and the search results show the new details
+  if (m.paid) memberPaidHook(m);          // and Pending drops them
+  showMember(m);
+  showToast(reply.emailed ? T.memberUpdatedPass : T.memberUpdated);
 }
 
 function showSearch() {
@@ -397,6 +457,10 @@ function start() {
   $("results").addEventListener("click", onResultClick);
   $("back-button").addEventListener("click", showSearch);
   $("member-mark-paid").addEventListener("click", markMemberPaid);
+  $("member-resend-pass").addEventListener("click", resendMemberPass);
+  $("member-edit-button").addEventListener("click", openEditMember);
+  $("em-cancel").addEventListener("click", () => $("edit-member-dialog").close());
+  $("edit-member-form").addEventListener("submit", onEditMemberSubmit);
   $("add-member-button").addEventListener("click", openAddMember);
   $("ma-method").addEventListener("change", syncAddMemberMethod);
   $("ma-cancel").addEventListener("click", () => $("member-add-dialog").close());

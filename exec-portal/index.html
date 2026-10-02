@@ -39,11 +39,11 @@
       <h1 data-t="appTitle"></h1>
       <p class="muted" data-t="appSubtitle"></p>
 
+      <label for="name-input" data-t="nameLabel"></label>
+      <input id="name-input" type="text" autocomplete="username" required>
+
       <label for="password" data-t="passwordLabel"></label>
       <input id="password" type="password" autocomplete="current-password" required>
-
-      <label for="name-input" data-t="nameLabel"></label>
-      <input id="name-input" type="text" autocomplete="name" required>
 
       <p id="login-error" class="error" role="alert" hidden></p>
       <button id="login-button" type="submit" class="primary" data-t="signIn"></button>
@@ -132,6 +132,10 @@
           <h2 id="member-name"></h2>
           <div id="member-badges" class="badges"></div>
           <dl id="member-fields" class="fields"></dl>
+          <div class="button-row">
+            <button id="member-edit-button" class="secondary small-button" type="button" data-t="editMember"></button>
+            <button id="member-resend-pass" class="secondary small-button" type="button" data-t="resendPass" hidden></button>
+          </div>
           <div id="member-pay" class="member-pay" hidden>
             <p class="muted small" data-t="markPayNote"></p>
             <button id="member-mark-paid" class="primary" type="button" data-t="markPaid"></button>
@@ -622,6 +626,28 @@
       <div class="button-row">
         <button type="button" id="ma-cancel" class="secondary" data-t="cancel"></button>
         <button type="submit" id="ma-submit" class="primary" data-t="maSubmit"></button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Edit a member -->
+  <dialog id="edit-member-dialog" class="edit-dialog">
+    <form id="edit-member-form" class="editor" novalidate>
+      <h2 data-t="editMemberTitle"></h2>
+      <label for="em-name" data-t="emName"></label>
+      <input id="em-name" maxlength="80" autocomplete="off">
+      <label for="em-email" data-t="emEmail"></label>
+      <input id="em-email" type="email" maxlength="120" autocomplete="off">
+      <div class="grid-2">
+        <div><label for="em-ucid" data-t="emUcid"></label><input id="em-ucid" type="text" inputmode="numeric" maxlength="8" autocomplete="off"></div>
+        <div><label for="em-paid" data-t="emStatus"></label>
+          <select id="em-paid"><option value="paid" data-t="emPaid"></option><option value="unpaid" data-t="emUnpaid"></option></select></div>
+      </div>
+      <p class="muted small" data-t="emPaidHint"></p>
+      <p id="em-error" class="error" role="alert" hidden></p>
+      <div class="button-row">
+        <button type="button" id="em-cancel" class="secondary" data-t="cancel"></button>
+        <button type="submit" id="em-submit" class="primary" data-t="emSave"></button>
       </div>
     </form>
   </dialog>
