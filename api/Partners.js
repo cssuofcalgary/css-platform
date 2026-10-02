@@ -35,8 +35,13 @@ function ensurePartnersSeeded_() {
   });
 }
 
+/** A yes/no cell: Sheets may hand back TRUE as a real true (read as "true") when a row was appended, so accept both spellings. */
+function isOn_(value) {
+  return value === true || String(value).toUpperCase() === "TRUE";
+}
+
 function partnerView_(r) {
-  return { id: r.id, name: r.name, offer: r.offer, address: r.address, active: r.active === "TRUE", sort: Number(r.sort) || 0 };
+  return { id: r.id, name: r.name, offer: r.offer, address: r.address, active: isOn_(r.active), sort: Number(r.sort) || 0 };
 }
 
 function sortedPartners_() {

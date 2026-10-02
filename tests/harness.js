@@ -30,7 +30,7 @@ vm.runInContext(`
 var TBL = {}; var ROWN = 2;
 function readRows_(name) { return (TBL[name] = TBL[name] || []); }
 function cell_(o) { Object.keys(o).forEach(function (k) { if (o[k] === true) o[k] = "TRUE"; else if (o[k] === false) o[k] = "FALSE"; }); return o; }
-function insertRow_(name, obj) { var o = cell_(Object.assign({}, obj)); Object.defineProperty(o, "_row", { value: ROWN++, enumerable: false }); (TBL[name] = TBL[name] || []).push(o); }
+function insertRow_(name, obj) { var o = cell_(Object.assign({}, obj)); if (name !== "Events") Object.keys(o).forEach(function (k) { if (o[k] === "TRUE" || o[k] === "FALSE") o[k] = o[k].toLowerCase(); }); Object.defineProperty(o, "_row", { value: ROWN++, enumerable: false }); (TBL[name] = TBL[name] || []).push(o); }
 function updateRow_(name, id, changes) { var r = (TBL[name] || []).filter(function (x) { return String(x.id) === String(id); })[0]; if (!r) throw new Error("no row " + id); Object.assign(r, cell_(Object.assign({}, changes))); }
 function log_() {}
 function rememberError_() {}
