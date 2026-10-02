@@ -191,6 +191,9 @@ function route_(req) {
       return { ok: true, emailsSent: result.sent, emailsWaiting: result.waiting, emailsLeftToday: emailsLeftToday_() };
     }
 
+    case "restoreOrder":
+      return restoreOrder_(requireSession_(req.token), req.orderId, !!req.force);
+
     case "setEntryOpen":
       return setEntryOpen_(requireSession_(req.token), req.eventId, !!req.open);
 

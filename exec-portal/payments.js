@@ -59,7 +59,7 @@ function renderOrders() {
     return renderWaitlist();
   }
   const list = data.orders;   // the server already filtered and searched
-  $("pay-status").textContent = list.length ? T.orderCountOf(list.length, data.total) : T.noOrders;
+  $("pay-status").textContent = (list.length ? T.orderCountOf(list.length, data.total) : T.noOrders) + (data.counts.needsRepair ? " · " + T.repairNote(data.counts.needsRepair) : "");
   $("orders-more").hidden = !data.hasMore;
   $("orders").innerHTML = list.map(orderCard).join("");
   renderPayTiles();
@@ -80,6 +80,7 @@ function orderCard(o) {
         ${o.etransferName ? `<span>${T.etransferNameLabel}: <strong>${escapeHtml(o.etransferName)}</strong></span>` : ""}
         ${o.status === "paid" && o.paidBy ? `<span>${escapeHtml(T.paidByLabel(o.paidBy, shortTime(o.paidAt)))}</span>` : ""}
         ${o.notes ? `<span>${escapeHtml(o.notes)}</span>` : ""}
+        ${o.needsRepair ? `<span class="flag">⚠ ${escapeHtml(T.needsRepair)}</span>` : ""}
         ${o.cancelRequestedAt ? `<span class="flag">${escapeHtml(T.cancelRequestedNote(o.cancelRequestedBy || o.payerName, shortTime(o.cancelRequestedAt)))}</span>` : ""}
       </div>
       <ul class="order-tickets o-tickets">${o.tickets.map((t) => `
@@ -94,6 +95,8 @@ function orderCard(o) {
       <div class="o-total"><span class="order-total">${money(o.total)}</span><span class="pill ${statusClass}">${statusText}</span></div>
       <div class="order-actions o-actions">
         ${o.status === "awaiting" ? `<button class="primary" data-act="paid">${T.markPaid(money(o.total))}</button>` : ""}
+        ${o.needsRepair ? `<button class="primary" data-act="repair">${T.repairOrder}</button>` : ""}
+        ${o.status === "refunded" || o.status === "cancelled" ? `<button class="link" data-act="restore">${T.restoreOrder}</button>` : ""}
         ${o.status === "paid" ? `<button class="link" data-act="resend">${T.resend}</button>` : ""}
         ${o.cancelRequestedAt ? `<button class="link" data-act="dismiss">${T.dismissRequest}</button>` : ""}
         ${o.status === "paid" || o.status === "awaiting" ? `<button class="link danger" data-act="refund">${T.refund}</button>` : ""}
@@ -147,6 +150,23 @@ async function onOrdersClick(event) {
     if (reply.ok) result.textContent = T.markedPaid(reply.emailsSent, reply.emailsWaiting);
   }
 
+  if (button.dataset.act === "repair") {
+    button.disabled = true;
+    reply = await api("markOrderPaid", { orderId: order.id, siteUrl });   // an already-paid order: finishes tickets and emails that were left undone
+    if (reply.ok) result.textContent = T.repaired(reply.repaired || 0, reply.emailsSent);
+  }
+
+  if (button.dataset.act === "restore") {
+    if (!(await askConfirm(T.confirmRestoreOrder(order.code, order.status), T.restoreOrder))) return;
+    button.disabled = true;
+    reply = await api("restoreOrder", { orderId: order.id });
+    if (!reply.ok && reply.error === "OVER_CAPACITY") {
+      if (!(await askConfirm(T.restoreOverLimit(reply.message), T.restoreOrder))) { button.disabled = false; return; }
+      reply = await api("restoreOrder", { orderId: order.id, force: true });
+    }
+    if (reply.ok) result.textContent = T.restoredOrder;
+  }
+
   if (button.dataset.act === "refund") {
     if (!confirm(T.confirmRefund(order.code, order.payerName))) return;
     const reason = prompt(T.refundPrompt(order.code, order.status));
@@ -171,7 +191,7 @@ async function onOrdersClick(event) {
     button.disabled = false;
     return handleEventError(reply, result);
   }
-  setTimeout(loadOrders, button.dataset.act === "refund" ? 0 : 1800);
+  setTimeout(loadOrders, button.dataset.act === "refund" || button.dataset.act === "restore" ? 0 : 1800);
   eventsState.loaded = false;   // counts on the Events tab changed
 }
 

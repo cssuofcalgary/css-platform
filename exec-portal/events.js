@@ -17,6 +17,7 @@ function switchTab(name) {
   $("tab-settings").hidden = name !== "settings";
   $("crumb").textContent = { overview: T.tabOverview, members: T.tabMembers, events: T.tabEvents, payments: T.tabPayments, door: T.tabDoor, activity: T.tabActivity, settings: T.tabSettings }[name] || "";
   document.body.classList.remove("nav-open");
+  try { if (!SCANNER_MODE) sessionStorage.setItem("css_tab", name); } catch (e) { /* private window: the tab just isn't remembered */ }
   window.scrollTo(0, 0);
   if (name !== "door" && doorState.scanner) stopCamera();
   if (name === "overview") openOverview();
@@ -481,7 +482,23 @@ $("editor-back-button").addEventListener("click", showEventsList);
 $("editor-cancel").addEventListener("click", showEventsList);
 $("nav-burger").addEventListener("click", () => document.body.classList.toggle("nav-open"));
 $("sidebar").addEventListener("click", (e) => { if (e.target.closest(".tab")) document.body.classList.remove("nav-open"); });
-document.querySelector(".mainwrap").addEventListener("click", (e) => { if (!e.target.closest("#nav-burger")) document.body.classList.remove("nav-open"); });
+// Tapping anywhere outside the menu closes it. (The dark cover is part of <body>, on top of the page, so a handler on the page itself never saw the tap.)
+document.addEventListener("click", (e) => {
+  if (document.body.classList.contains("nav-open") && !e.target.closest("#sidebar, #nav-burger")) document.body.classList.remove("nav-open");
+});
+// Swipe: left closes the open menu; right from the very left edge of the screen opens it (phones and small windows)
+let swipeStart = null;
+document.addEventListener("touchstart", (e) => { const t = e.touches[0]; swipeStart = e.touches.length === 1 ? { x: t.clientX, y: t.clientY } : null; }, { passive: true });
+document.addEventListener("touchend", (e) => {
+  if (!swipeStart) return;
+  const t = e.changedTouches[0], dx = t.clientX - swipeStart.x, dy = t.clientY - swipeStart.y;
+  const edge = swipeStart.x <= 24;
+  swipeStart = null;
+  if (Math.abs(dx) < 60 || Math.abs(dy) > Math.abs(dx) * 0.6) return;   // not a clear sideways swipe
+  const open = document.body.classList.contains("nav-open");
+  if (open && dx < 0) document.body.classList.remove("nav-open");
+  else if (!open && dx > 0 && edge && window.innerWidth < 900 && !$("app-view").hidden && !document.querySelector("dialog[open]")) document.body.classList.add("nav-open");
+}, { passive: true });
 $("events-list").addEventListener("click", onEventsListClick);
 $("add-ticket-type").addEventListener("click", () => {
   readAllRows();

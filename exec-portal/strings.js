@@ -361,6 +361,16 @@ Everyone in this order will be emailed their ticket.`,
     overCapacity: (msg) => `${msg}
 
 Mark it paid anyway?`,
+    needsRepair: "Marked paid, but a ticket was left unpaid. Press Repair to finish it.",
+    repairOrder: "Repair",
+    repaired: (n, sent) => `Repaired: ${n} ticket${n === 1 ? "" : "s"} fixed, ${sent} email${sent === 1 ? "" : "s"} sent.`,
+    repairNote: (n) => `⚠ ${n} paid order${n === 1 ? " needs" : "s need"} repair`,
+    restoreOrder: "Restore",
+    confirmRestoreOrder: (code, status) => `Restore order ${code}? It was ${status}, so it goes back to waiting for payment (it must be paid again). Nothing is emailed.`,
+    restoreOverLimit: (msg) => `${msg}
+
+Restore it anyway?`,
+    restoredOrder: "Restored: waiting for payment again.",
     markedPaid: (sent, waiting) => `Paid ✓ ${sent} ticket email${sent === 1 ? "" : "s"} sent${waiting ? `, ${waiting} waiting (daily limit)` : ""}.`,
     refund: "Refund / cancel",
     confirmRefund: (code, name) => `Refund / cancel order ${code} (${name})? This voids the order and opens the spot again.`,

@@ -160,6 +160,7 @@ function signOutLocally() {
   sessionStorage.removeItem("css_token");
   sessionStorage.removeItem("css_name");
   sessionStorage.removeItem("css_role");
+  sessionStorage.removeItem("css_tab");
 }
 
 // ---- Member search ----------------------------------------------------------
@@ -173,11 +174,17 @@ function showApp() {
   $("settings-tab-button").hidden = state.role !== "admin";
   $("activity-tab-button").hidden = state.role !== "admin";
   $("admin-nav-label").hidden = state.role !== "admin";
-  $("who-avatar").textContent = state.name.trim().split(/s+/).map((p) => p[0]).join("").slice(0, 2).toUpperCase();
+  $("who-avatar").textContent = state.name.trim().split(/\s+/).map((p) => p[0]).join("").slice(0, 2).toUpperCase();
   showSearch();
   // Phones are for the door: open straight to the Door tab. Everyone else lands on the Overview.
   // (The tab code loads after this file, so on first load wait until every script has run.)
-  const landing = SCANNER_MODE || isPhone() ? "door" : "overview";
+  let landing = SCANNER_MODE || isPhone() ? "door" : "overview";
+  // A refresh keeps you where you were (same browser tab): the last tab is remembered for this sign-in.
+  try {
+    const saved = sessionStorage.getItem("css_tab");
+    const button = saved && document.querySelector('.tab[data-tab="' + saved + '"]');
+    if (!SCANNER_MODE && state.role !== "door" && button && !button.hidden) landing = saved;
+  } catch (e) { /* no storage: land on the usual tab */ }
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", () => switchTab(landing));
   else switchTab(landing);
 }

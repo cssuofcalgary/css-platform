@@ -34,12 +34,12 @@ function listOrders_(eventId, opts) {
   tickets.forEach(function (t) { (byOrder[t.orderId] = byOrder[t.orderId] || []).push(t); });
   const all = eventRows_("Orders", event);
 
-  const counts = { all: all.length, awaiting: 0, overdue: 0, paid: 0, closed: 0, cancelRequests: 0 };
+  const counts = { all: all.length, awaiting: 0, overdue: 0, paid: 0, closed: 0, cancelRequests: 0, needsRepair: 0 };
   const money = { received: 0, awaiting: 0 };
   all.forEach(function (o) {
     const total = Number(o.total) || 0;
     if (o.status === "awaiting") { counts.awaiting++; money.awaiting += total; if (reminderDue_(o)) counts.overdue++; if (o.cancelRequestedAt) counts.cancelRequests++; }
-    else if (o.status === "paid") { counts.paid++; money.received += total; }
+    else if (o.status === "paid") { counts.paid++; money.received += total; if ((byOrder[o.id] || []).some(function (t) { return t.status === "awaiting"; })) counts.needsRepair++; }
     else counts.closed++;
   });
 
@@ -70,6 +70,7 @@ function listOrders_(eventId, opts) {
       etransferName: o.etransferName, total: Number(o.total) || 0, status: o.status,
       createdAt: o.createdAt, paidAt: o.paidAt, paidBy: o.paidBy, notes: o.notes, remindedAt: o.remindedAt || "",
       cancelRequestedAt: o.status === "awaiting" ? (o.cancelRequestedAt || "") : "", cancelRequestedBy: o.cancelRequestedBy || "",
+      needsRepair: o.status === "paid" && (byOrder[o.id] || []).some(function (t) { return t.status === "awaiting"; }),
       tickets: (byOrder[o.id] || []).map(function (t) {
         return {
           id: t.id, name: t.name, email: t.email, ucid: t.ucid, memberId: t.memberId,
@@ -107,14 +108,20 @@ function markOrderPaid_(session, orderId, force, siteUrl) {
   rememberSiteUrl_(siteUrl);
   const result = withLock_(function () { return markPaidLocked_(session, orderId, force); });
   const sent = sendPendingTicketEmails_(result.order.id);
-  return { ok: true, alreadyPaid: result.already, emailsSent: sent.sent, emailsWaiting: sent.waiting };
+  return { ok: true, alreadyPaid: result.already, repaired: result.repaired || 0, emailsSent: sent.sent, emailsWaiting: sent.waiting };
 }
 
 /** The part of "mark paid" that changes data. Call it while holding the lock. */
 function markPaidLocked_(session, orderId, force) {
   const order = readRows_("Orders").filter(function (o) { return o.id === orderId; })[0];
   if (!order) throw new ApiError_("NOT_FOUND", "Order not found.");
-  if (order.status === "paid") return { already: true, order: order };
+  if (order.status === "paid") {
+    // Already paid. If an earlier run died halfway (order paid, a ticket still waiting), finish the job now.
+    const stuck = readRows_("Tickets").filter(function (t) { return t.orderId === order.id && t.status === "awaiting"; });
+    stuck.forEach(function (t) { updateRow_("Tickets", t.id, { status: "paid" }, t._row); });
+    if (stuck.length) log_(session.name, "order.repaired", order.code, { tickets: stuck.length });
+    return { already: true, repaired: stuck.length, order: order };
+  }
   if (order.status !== "awaiting") throw new ApiError_("BAD_REQUEST", "This order was " + order.status + ". It can't be marked paid.");
 
   const event = findEvent_(function (e) { return e.id === order.eventId; });
@@ -150,7 +157,7 @@ function markOrdersPaid_(session, orderIds, siteUrl) {
     return ids.map(function (id) {
       try {
         const r = markPaidLocked_(session, id, false);
-        return { orderId: id, code: r.order.code, ok: true, already: r.already };
+        return { orderId: id, code: r.order.code, ok: true, already: r.already, repaired: r.repaired || 0 };
       } catch (err) {
         if (!(err instanceof ApiError_)) throw err;
         const o = readRows_("Orders").filter(function (x) { return x.id === id; })[0];
@@ -161,7 +168,7 @@ function markOrdersPaid_(session, orderIds, siteUrl) {
 
   let sent = 0, waiting = 0;
   outcomes.forEach(function (o) {
-    if (!o.ok || o.already) return;
+    if (!o.ok || (o.already && !o.repaired)) return;
     const r = sendPendingTicketEmails_(o.orderId);
     sent += r.sent; waiting += r.waiting;
   });
@@ -239,6 +246,44 @@ function refundOrder_(session, orderId, reason) {
     });
     log_(session.name, "order." + newStatus, order.code, { total: order.total, reason: note });
     return { ok: true, status: newStatus };
+  });
+}
+
+/**
+ * Finance: put a cancelled or refunded order back to "awaiting" (it must be paid again). Same room rules as a new
+ * registration: refused when the event has no room, unless Finance confirms (`force`). Nothing is emailed.
+ */
+function restoreOrder_(session, orderId, force) {
+  return withLock_(function () {
+    const order = readRows_("Orders").filter(function (o) { return o.id === orderId; })[0];
+    if (!order) throw new ApiError_("NOT_FOUND", "Order not found.");
+    if (order.status !== "cancelled" && order.status !== "refunded") throw new ApiError_("BAD_REQUEST", "Only a cancelled or refunded order can be restored. This one is " + order.status + ".");
+    const event = findEvent_(function (e) { return e.id === order.eventId; });
+    if (!event) throw new ApiError_("NOT_FOUND", "Event not found.");
+    assertNotArchived_(event);
+    const tickets = readRows_("Tickets").filter(function (t) { return t.orderId === order.id && t.status === order.status; });
+    if (!tickets.length) throw new ApiError_("BAD_REQUEST", "This order has no cancelled tickets to restore.");
+
+    if (event.capacity && !force) {
+      let paid = 0, awaiting = 0;
+      readRows_("Tickets").forEach(function (t) {
+        if (t.eventId !== event.id) return;
+        if (t.status === "paid") paid++; else if (t.status === "awaiting") awaiting++;
+      });
+      const limit = event.capacityRule === "all" ? event.capacity : Math.floor(event.capacity * 1.25);
+      if (paid + awaiting + tickets.length > limit) {
+        throw new ApiError_("OVER_CAPACITY", "Restoring this would make " + (paid + awaiting + tickets.length) + " paid and waiting tickets, over the limit of " + limit + ".");
+      }
+    }
+
+    const was = order.status;
+    updateRow_("Orders", order.id, {
+      status: "awaiting", remindedAt: "", cancelRequestedAt: "", cancelRequestedBy: "",
+      notes: [order.notes, "restored from " + was + " by " + session.name].filter(Boolean).join(" | ")
+    }, order._row);
+    tickets.forEach(function (t) { updateRow_("Tickets", t.id, { status: "awaiting" }, t._row); });
+    log_(session.name, "order.restored", order.code, { was: was, tickets: tickets.length, overLimit: !!force });
+    return { ok: true, status: "awaiting", restored: tickets.length };
   });
 }
 
