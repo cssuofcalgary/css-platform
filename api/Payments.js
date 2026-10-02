@@ -83,8 +83,14 @@ function listOrders_(eventId, opts) {
     money: money,
     reminderHours: REMINDER_AFTER_HOURS,
     spotsTaken: spotsTaken_(event),
-    unsentEmails: tickets.filter(function (t) { return t.status === "paid" && !t.emailedAt; }).length
+    unsentEmails: tickets.filter(function (t) { return t.status === "paid" && !t.emailedAt; }).length,
+    emailsLeftToday: emailsLeftToday_()
   };
+}
+
+/** How many emails Google will still let this account send today (-1 when it cannot be read). */
+function emailsLeftToday_() {
+  try { return MailApp.getRemainingDailyQuota(); } catch (e) { return -1; }
 }
 
 /** Finance: the e-transfer arrived. `force` = go over capacity anyway (Finance was warned). */
@@ -228,11 +234,12 @@ function refundOrder_(session, orderId, reason) {
 }
 
 /** Sends ticket emails for paid tickets that haven't had one yet (one order, or all). */
-function sendPendingTicketEmails_(orderId) {
-  const tickets = readRows_("Tickets").filter(function (t) {
+function sendPendingTicketEmails_(orderId, limit) {
+  let tickets = readRows_("Tickets").filter(function (t) {
     return t.status === "paid" && !t.emailedAt && (!orderId || t.orderId === orderId);
   });
   if (!tickets.length) return { sent: 0, waiting: 0 };
+  if (limit > 0) tickets = tickets.slice(0, limit);   // oldest first: new rows go at the bottom of the sheet
 
   const events = {};
   allEvents_().forEach(function (e) { events[e.id] = e; });

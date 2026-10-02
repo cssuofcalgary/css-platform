@@ -164,8 +164,9 @@ function route_(req) {
 
     case "sendPendingEmails": {
       requireSession_(req.token);
-      const result = sendPendingTicketEmails_(null);
-      return { ok: true, emailsSent: result.sent, emailsWaiting: result.waiting };
+      const count = Math.floor(Number(req.count));   // optional: send only this many, oldest first
+      const result = sendPendingTicketEmails_(null, count > 0 ? count : 0);
+      return { ok: true, emailsSent: result.sent, emailsWaiting: result.waiting, emailsLeftToday: emailsLeftToday_() };
     }
 
     case "setEntryOpen":

@@ -49,7 +49,7 @@ function renderOrders() {
 
   $("pay-unsent").hidden = !data.unsentEmails;
   $("pay-unsent").innerHTML = data.unsentEmails
-    ? `<span>${T.unsentEmails(data.unsentEmails)}</span><button class="link" id="send-unsent">${T.sendNow}</button>` : "";
+    ? `<span>${T.unsentEmails(data.unsentEmails, data.emailsLeftToday)}</span><button class="link" id="send-unsent">${T.sendNow}</button>` : "";
 
   const list = data.orders;   // the server already filtered and searched
   $("pay-status").textContent = list.length ? T.orderCountOf(list.length, data.total) : T.noOrders;
@@ -160,10 +160,18 @@ async function onOrdersClick(event) {
 }
 
 async function sendUnsent() {
+  const waiting = payState.data.unsentEmails;
+  const left = payState.data.emailsLeftToday;
+  const suggested = left >= 0 ? Math.min(waiting, left) : waiting;
+  const typed = prompt(T.sendHowMany(waiting, left), String(suggested));
+  if (typed === null) return;
+  const count = Math.floor(Number(typed));
+  if (!(count >= 1)) return alert(T.sendHowManyBad);
   $("pay-unsent").textContent = T.saving;
-  const reply = await api("sendPendingEmails");
+  const reply = await api("sendPendingEmails", { count });
   if (!reply.ok) return handleEventError(reply, $("pay-unsent"));
-  loadOrders();
+  await loadOrders();
+  showToast(T.sentSome(reply.emailsSent, reply.emailsWaiting));
 }
 
 function ticketUrl(t) {
