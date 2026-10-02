@@ -273,3 +273,6 @@ label.radio:has(input:checked) { border-style: solid; border-color: var(--primar
   .pl-frames-2 .pl-f1 { opacity: 0; }
   .pl-dots i { animation: none; transform: scale(1); opacity: 1; }
 }
+
+/* Ticket page: shown while the phone has no signal and the saved copy is on screen */
+.offline-badge { margin: 0 0 12px; padding: 8px 12px; border-radius: 8px; background: #fff4e0; color: #7a4a00; border: 1px solid #e8c88a; font-size: 13px; text-align: left; }

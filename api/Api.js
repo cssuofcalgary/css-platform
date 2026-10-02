@@ -279,6 +279,12 @@ function route_(req) {
     case "walkIn":
       return walkIn_(requireSession_(req.token), req.eventId, req.walkIn);
 
+    case "deskAlerts": {
+      const session = requireSession_(req.token);
+      if (session.role === "door") throw new ApiError_("FORBIDDEN", "Help desk only.");
+      return deskAlerts_(req.eventId);
+    }
+
     case "doorList":
       return doorList_(req.eventId, requireSession_(req.token), req);
 

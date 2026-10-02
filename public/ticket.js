@@ -3,10 +3,10 @@
 
 const $ = (id) => document.getElementById(id);
 
-async function api(action, details = {}) {
+async function api(action, details = {}, timeoutMs = 30000) {
   try {
     const res = await fetch(API_URL, {
-      signal: AbortSignal.timeout(30000),   // never stay on "Loading…" forever
+      signal: AbortSignal.timeout(timeoutMs),   // never stay on "Loading…" forever
       method: "POST",
       headers: { "Content-Type": "text/plain;charset=utf-8" },
       body: JSON.stringify({ action, ...details })
@@ -32,17 +32,88 @@ async function start() {
   $("contact-link").href = "mailto:" + CONTACT_EMAIL;
   $("instagram-link").href = INSTAGRAM_URL;
 
+  if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});   // lets this page itself open without signal
+
   const secret = new URLSearchParams(location.search).get("t") || "";
-  const reply = await api("getTicket", { secret });
-  if (!reply.ok) {
-    $("page").innerHTML = pandaMarkup("error", { sub: reply.error === "NOT_FOUND" ? T.ticketNotFound : T.error });
-    return;
+  const cached = readCache(secret);
+  // With a saved copy, wait only a moment for the network: in a dead zone the copy appears instead of a spinner.
+  const pending = api("getTicket", { secret }, cached ? 12000 : 30000);
+  let reply = cached ? await Promise.race([pending, new Promise((done) => setTimeout(() => done(null), 2500))]) : await pending;
+  if (!reply) {
+    render(cached.data, { state: "checking", savedAt: cached.savedAt, qr: cached.qr });
+    reply = await pending;
   }
-  render(reply);
+  showReply(reply, secret, cached);
 }
 
-function render(data) {
+// ---- Offline copy -------------------------------------------------------------------
+// Only the ticket page the person already had is kept on their phone (so the QR can still be shown with no signal).
+// It never decides who gets in: the scanner and help desk always check the live sheet. Online, the live ticket replaces the copy.
+
+const CACHE_PREFIX = "css_ticket_";
+const CACHE_KEEP = 8;
+let retryTimer = null;
+let retryRunning = false;
+
+function readCache(secret) {
+  try {
+    const entry = JSON.parse(localStorage.getItem(CACHE_PREFIX + secret) || "null");
+    return entry && entry.data && entry.data.ticket ? entry : null;
+  } catch (e) { return null; }
+}
+
+function writeCache(secret, data, qr) {
+  try {
+    const keep = { ticket: data.ticket, event: data.event, etransferEmail: data.etransferEmail, orderTotal: data.orderTotal };   // no cancel or feedback: those need a connection
+    localStorage.setItem(CACHE_PREFIX + secret, JSON.stringify({ savedAt: Date.now(), data: keep, qr: qr || (readCache(secret) || {}).qr || "" }));
+    const all = Object.keys(localStorage).filter((k) => k.startsWith(CACHE_PREFIX)).map((k) => {
+      let at = 0; try { at = JSON.parse(localStorage.getItem(k)).savedAt || 0; } catch (e) { /* unreadable: oldest */ }
+      return { k, at };
+    }).sort((a, b) => b.at - a.at);
+    all.slice(CACHE_KEEP).forEach((x) => localStorage.removeItem(x.k));
+  } catch (e) { /* storage full or blocked: the page works without a copy */ }
+}
+
+function clearCache(secret) { try { localStorage.removeItem(CACHE_PREFIX + secret); } catch (e) { /* fine */ } }
+
+function showReply(reply, secret, cached) {
+  if (reply.ok) {
+    retryRunning = false;
+    render(reply, { state: "live", secret });
+    return;
+  }
+  if (reply.error === "NOT_FOUND") {
+    retryRunning = false;
+    clearCache(secret);
+    $("page").innerHTML = pandaMarkup("error", { sub: T.ticketNotFound });
+    return;
+  }
+  if (cached) render(cached.data, { state: "offline", savedAt: cached.savedAt, qr: cached.qr });
+  else $("page").innerHTML = pandaMarkup("error", { sub: reply.error === "NETWORK" ? T.ticketNoSignal : T.error });
+  if (reply.error === "NETWORK" || cached) scheduleRetry(secret, cached);
+}
+
+/** No signal: try again every 10 seconds, and straight away when the phone says it is back online. */
+function scheduleRetry(secret, cached) {
+  retryRunning = true;
+  clearTimeout(retryTimer);
+  const attempt = async () => {
+    if (!retryRunning) return;
+    clearTimeout(retryTimer);
+    const reply = await api("getTicket", { secret }, 12000);
+    if (!retryRunning) return;
+    if (reply.ok || reply.error === "NOT_FOUND") return showReply(reply, secret, cached);
+    retryTimer = setTimeout(attempt, 10000);
+  };
+  retryTimer = setTimeout(attempt, 10000);
+  window.addEventListener("online", () => { if (retryRunning) attempt(); }, { once: true });
+}
+
+function render(data, meta = { state: "live" }) {
   const { ticket, event, etransferEmail, orderTotal, canRequestCancel, cancelRequested, canGiveFeedback, feedback } = data;
+  const savedTime = meta.savedAt ? new Date(meta.savedAt).toLocaleTimeString("en-CA", { hour: "numeric", minute: "2-digit" }) : "";
+  const banner = meta.state === "offline" ? `<p class="offline-badge">${T.ticketOfflineBadge(savedTime)}</p>`
+    : meta.state === "checking" ? `<p class="offline-badge">${T.ticketChecking(savedTime)}</p>` : "";
   document.title = `${T.yourTicket} · ${event.name}`;
   const status = ticket.checkedIn ? "checkedin" : ticket.status;
   // A rubber-stamp look, like the member portal's "VERIFIED" stamp.
@@ -58,6 +129,7 @@ function render(data) {
 
   $("page").innerHTML = `
     <article class="ticket">
+      ${banner}
       <div class="ticket-event">${escapeHtml(event.name)}</div>
       <p class="ticket-when">${escapeHtml(formatDate(event.date))}${timeRange(event) ? "<br>" + escapeHtml(timeRange(event)) : ""}${event.location ? `<br>${escapeHtml(event.location)}` : ""}</p>
       <div id="qr" class="qr" aria-label="${T.qrLabel}"></div>
@@ -110,7 +182,24 @@ function render(data) {
   if ($("cancel-undo")) $("cancel-undo").addEventListener("click", () => askCancel(true));
 
   if (showQr) {
-    new QRCode($("qr"), { text: location.href, width: 344, height: 344, colorDark: "#2a2520", colorLight: "#ffffff", correctLevel: QRCode.CorrectLevel.M });
+    let drawn = false;
+    if (typeof QRCode !== "undefined") {
+      try {
+        new QRCode($("qr"), { text: location.href, width: 344, height: 344, colorDark: "#2a2520", colorLight: "#ffffff", correctLevel: QRCode.CorrectLevel.M });
+        drawn = true;
+      } catch (e) { /* fall back to the saved picture below */ }
+    }
+    // The QR library could not load (no signal): use the picture saved with the copy
+    if (!drawn && meta.qr) $("qr").innerHTML = `<img alt="${escapeHtml(T.qrLabel)}" src="${meta.qr}">`;
+    if (meta.state === "live" && meta.secret) {
+      const canvas = $("qr").querySelector("canvas");
+      const img = $("qr").querySelector("img");
+      let picture = "";
+      try { picture = canvas ? canvas.toDataURL("image/png") : (img && img.src.startsWith("data:") ? img.src : ""); } catch (e) { /* unsupported: skip */ }
+      writeCache(meta.secret, data, picture);
+    }
+  } else if (meta.state === "live" && meta.secret) {
+    writeCache(meta.secret, data, "");
   }
 }
 

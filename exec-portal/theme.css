@@ -542,3 +542,19 @@ body:not(.scanner-mode):not(.phone) .door-buttons { display: none; }
 .pending-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
 #pending-list { display: grid; gap: 10px; padding: 0; margin: 0 0 12px; }
 @media (max-width: 560px) { .pending-card .kv { grid-template-columns: 1fr 1fr; } }
+
+/* Help desk: "send to desk" alerts from the scanner phones */
+.desk-alerts { display: grid; gap: 10px; margin: 0 0 16px; }
+.desk-alert { display: flex; gap: 14px; align-items: center; justify-content: space-between; flex-wrap: wrap; border-radius: var(--radius); padding: 14px 18px; color: #fff; box-shadow: var(--shadow-1); }
+.desk-alert.orange { background: #b86a05; }
+.desk-alert.red { background: #b4231f; }
+.desk-alert .da-name { font: 600 22px var(--display); }
+.desk-alert .da-type { font-size: 14px; font-weight: 400; opacity: .85; }
+.desk-alert .da-why { margin-top: 2px; font-size: 15px; }
+.desk-alert .da-meta { margin-top: 4px; font-size: 12px; opacity: .8; }
+.desk-alert .da-actions { display: flex; gap: 12px; align-items: center; }
+.desk-alert .link { color: #fff; text-decoration: underline; }
+.desk-alert .primary { background: #fff; color: #2a2520; }
+.desk-alert.flash { animation: deskflash .6s ease-in-out 6; }
+@keyframes deskflash { 50% { box-shadow: 0 0 0 6px rgba(255, 255, 255, .85), var(--shadow-1); transform: scale(1.01); } }
+@media (prefers-reduced-motion: reduce) { .desk-alert.flash { animation: none; } }

@@ -23,6 +23,81 @@ async function openDoorTab() {
     if (SCANNER_MODE) await followLiveEvent();
     loadDoor(true);
   }, SCANNER_MODE ? 20000 : 6000);
+  clearInterval(deskAlertState.timer);
+  if (!SCANNER_MODE) { pollDeskAlerts(); deskAlertState.timer = setInterval(pollDeskAlerts, DESK_ALERT_POLL_MS); }
+}
+
+// ---- "Send to desk" alerts (help desk only) ------------------------------------------
+// A scanner phone got orange/red for a person: the desk screen flashes who and why within a few seconds.
+// The server keeps the last few in its cache; "Got it" only hides one on this screen.
+
+const DESK_ALERT_POLL_MS = 3000;
+const DESK_ALERT_FIRST_LOOK_MS = 2 * 60 * 1000;   // when the desk opens, ignore alerts older than this
+const DESK_ALERT_LIFE_MS = 5 * 60 * 1000;         // an alert fades off the screen by itself after this
+const deskAlertState = { eventId: "", seen: new Set(), active: [], primed: false, timer: null, drawn: "" };
+
+async function pollDeskAlerts() {
+  if (SCANNER_MODE || !doorState.eventId || $("tab-door").hidden || document.hidden) return;
+  if (deskAlertState.eventId !== doorState.eventId) {   // another event picked: start fresh
+    Object.assign(deskAlertState, { eventId: doorState.eventId, seen: new Set(), active: [], primed: false, drawn: "" });
+  }
+  const asked = deskAlertState.eventId;
+  const reply = await api("deskAlerts", { eventId: asked });
+  if (!reply.ok || asked !== deskAlertState.eventId) return;
+  const limit = deskAlertState.primed ? DESK_ALERT_LIFE_MS : DESK_ALERT_FIRST_LOOK_MS;
+  let isNew = false;
+  reply.alerts.slice().reverse().forEach((a) => {
+    if (deskAlertState.seen.has(a.id)) return;
+    deskAlertState.seen.add(a.id);
+    const age = reply.serverNow - a.atMs;
+    if (age > limit) return;
+    deskAlertState.active.unshift({ ...a, shownFrom: Date.now() - age });
+    isNew = true;
+  });
+  deskAlertState.primed = true;
+  if (isNew) { feedback("orange"); loadDoor(true); }   // sound, and refresh the lists so the person is in them
+  renderDeskAlerts(isNew);
+}
+
+function renderDeskAlerts(flash) {
+  const state = deskAlertState;
+  const insideNow = new Set(((doorState.data && doorState.data.tickets) || []).filter((t) => t.checkedInAt).map((t) => t.id));
+  state.active = state.active.filter((a) => Date.now() - a.shownFrom < DESK_ALERT_LIFE_MS && !insideNow.has(a.personId));
+  const box = $("desk-alerts");
+  const shape = state.active.map((a) => a.id).join(",");
+  if (shape !== state.drawn) {
+    state.drawn = shape;
+    box.hidden = !state.active.length;
+    box.innerHTML = state.active.map((a) => `
+      <div class="desk-alert ${a.color === "red" ? "red" : "orange"}${flash ? " flash" : ""}" data-alert="${escapeHtml(a.id)}" role="alert">
+        <div class="da-main">
+          <div class="da-name">${escapeHtml(a.name)}<span class="da-type"> · ${escapeHtml(a.ticketType || "")}</span></div>
+          <div class="da-why">${escapeHtml(a.reason)}</div>
+          <div class="da-meta" data-da-age></div>
+        </div>
+        <div class="da-actions">
+          <button type="button" class="primary small-button" data-da-find="${escapeHtml(a.name)}">${T.deskAlertFind}</button>
+          <button type="button" class="link" data-da-ok="${escapeHtml(a.id)}">${T.deskAlertGotIt}</button>
+        </div>
+      </div>`).join("");
+  }
+  box.querySelectorAll(".desk-alert").forEach((el) => {
+    const a = state.active.find((x) => x.id === el.dataset.alert);
+    if (a) setText(el.querySelector("[data-da-age]"), T.deskAlertMeta(a.by, Math.max(0, Math.round((Date.now() - a.shownFrom) / 1000))));
+  });
+}
+
+function onDeskAlertClick(ev) {
+  const ok = ev.target.closest("[data-da-ok]");
+  const find = ev.target.closest("[data-da-find]");
+  if (ok) {
+    deskAlertState.active = deskAlertState.active.filter((a) => a.id !== ok.dataset.daOk);
+    renderDeskAlerts(false);
+  }
+  if (find) {
+    $("manual-input").value = find.dataset.daFind;
+    onManualSubmit({ preventDefault() {} });   // the usual typed search: unpaid people get their Mark paid button there
+  }
 }
 
 /** Scanner phones have no picker: if the help desk switched doors to another event, move over to it. */
@@ -435,4 +510,5 @@ $("wi-cancel").addEventListener("click", () => { $("walkin-form").hidden = true;
 $("wi-types").addEventListener("change", updateWalkInMember);
 $("walkin-form").addEventListener("submit", onWalkInSubmit);
 $("manual-form").addEventListener("submit", onManualSubmit);
+$("desk-alerts").addEventListener("click", onDeskAlertClick);
 ["manual-results", "helpdesk-unpaid", "helpdesk-flagged", "recent-list", "all-checkins-list"].forEach((id) => $(id).addEventListener("click", onDoorListClick));

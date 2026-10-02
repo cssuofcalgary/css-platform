@@ -21,6 +21,44 @@ function setEntryOpen_(session, eventId, open) {
  * `code` can be a ticket link (…ticket.html?t=SECRET), a bare secret, or a ticket ID (TKT…).
  */
 function scan_(session, eventId, code, atDesk) {
+  const reply = scanCode_(session, eventId, code, atDesk);
+  try { noteDeskAlert_(session, eventId, reply.result, atDesk); } catch (e) { /* the alert is a bonus: never fail a scan over it */ }
+  return reply;
+}
+
+// ---- "Send to desk" alerts ----------------------------------------------------------
+// When a scanner phone gets an orange or red answer for a person, the help desk screen flashes who and why.
+// Kept in the script cache only (a few hours), best effort: the help-desk lists still show everybody.
+
+const DESK_ALERTS_KEEP = 8;
+const DESK_ALERT_SECONDS = 6 * 3600;
+const DESK_ALERT_SKIP = /entry is closed/i;   // nothing for the desk to do
+
+function noteDeskAlert_(session, eventId, result, atDesk) {
+  const fromScanner = session.role === "door" || REQ_SCANNER_;
+  if (!fromScanner || atDesk || !result || result.color === "green" || !result.person) return;
+  if (DESK_ALERT_SKIP.test(result.message)) return;
+  const key = "deskalerts_" + eventId;
+  const cache = CacheService.getScriptCache();
+  let list = [];
+  try { list = JSON.parse(cache.get(key) || "[]") || []; } catch (e) { list = []; }
+  const now = Date.now();
+  list = list.filter(function (a) { return a.personId !== result.person.id || now - a.atMs > 30000; });   // the same person scanned again: one alert
+  list.unshift({
+    id: Utilities.getUuid().slice(0, 8), atMs: now, color: result.color, name: result.person.name, personId: result.person.id,
+    ticketType: result.person.ticketType, reason: result.message, by: session.name
+  });
+  cache.put(key, JSON.stringify(list.slice(0, DESK_ALERTS_KEEP)), DESK_ALERT_SECONDS);
+}
+
+/** Help desk: the latest "send to desk" alerts for an event (cache only, so the screen can ask every few seconds). */
+function deskAlerts_(eventId) {
+  let list = [];
+  try { list = JSON.parse(CacheService.getScriptCache().get("deskalerts_" + eventId) || "[]") || []; } catch (e) { list = []; }
+  return { ok: true, serverNow: Date.now(), alerts: list };
+}
+
+function scanCode_(session, eventId, code, atDesk) {
   let key = ticketKey_(code);
   if (!key) return scanResult_("red", "Couldn't read that code.");
 
@@ -30,7 +68,8 @@ function scan_(session, eventId, code, atDesk) {
     const member = key.value ? findMemberById_(loadMembers_(), key.value) : null;
     if (!member) return scanResult_("red", "Member ID not found. Send to help desk.");
     const ticket = memberTicketForEvent_(member, eventId);
-    if (!ticket) return scanResult_("orange", member.name + " is a CSS Member, but has no ticket for this event. Send to help desk / walk-in.");
+    if (!ticket) return scanResult_("orange", member.name + " is a CSS Member, but has no ticket for this event. Send to help desk / walk-in.",
+      { id: member.id, name: member.name, ticketType: "Member pass", answers: {}, flag: "" });
     key = { kind: "id", value: ticket.id };
     matchedViaMember = member.name;
   }

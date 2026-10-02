@@ -84,7 +84,7 @@ function renderEvents() {
     const cover = e.imageUrl ? `<img class="ev-cover" src="${escapeHtml(e.imageUrl)}" alt="" loading="lazy">` : "";
     return `
     <li class="card event-row event-card" data-id="${e.id}">
-      <div class="ev-banner">${cover}${statusPill(e.status)}${e.entryOpen ? `<span class="live-pill">🟢 ${T.doorsOpen}</span>` : ""}</div>
+      <div class="ev-banner">${cover}${statusPill(e.status, e)}${e.entryOpen ? `<span class="live-pill">🟢 ${T.doorsOpen}</span>` : ""}</div>
       <div class="ev-info">
         <div class="name">${escapeHtml(e.name)}</div>
         <div class="sub">${escapeHtml(formatEventDate(e))}${e.location ? " · " + escapeHtml(e.location) : ""}</div>
@@ -128,11 +128,11 @@ async function onEventsListClick(event) {
   if (button.dataset.action === "delete") return deleteEventForGood(target, button);
 
   const status = { publish: "published", close: "closed", reopen: "published", archive: "archived", restore: "closed" }[button.dataset.action];
-  if (status === "published" && target.status === "draft" && !confirm(T.confirmPublish)) return;
-  if (button.dataset.action === "close" && !confirm(T.confirmClose(target.name))) return;
-  if (status === "archived" && !confirm(T.confirmArchive(target.name))) return;
+  if (status === "published" && target.status === "draft" && !(await askConfirm(T.confirmPublish))) return;
+  if (button.dataset.action === "close" && !(await askConfirm(T.confirmClose(target.name), T.closeRegistration))) return;
+  if (status === "archived" && !(await askConfirm(T.confirmArchive(target.name)))) return;
   const restoring = status === "closed" && target.status === "archived";
-  if (restoring && !confirm(T.confirmRestore(target.name))) return;
+  if (restoring && !(await askConfirm(T.confirmRestore(target.name)))) return;
   const label = button.textContent;
   button.disabled = true;
   if (status === "archived") button.textContent = T.archiving;
@@ -406,9 +406,41 @@ function handleEventError(reply, el) {
   el.innerHTML = pandaImg("error", "pl-inline") + pandaEsc(errorText(reply));   // the confused panda beside the message
 }
 
-function statusPill(status) {
-  const cls = { draft: "neutral", published: "good", closed: "warn" }[status] || "neutral";
-  const text = { draft: T.statusDraft, published: T.statusPublished, closed: T.statusClosed, archived: T.statusArchived }[status] || status;
+/**
+ * A confirm box drawn in the page. The browser's own confirm() returns false without showing anything once
+ * someone ticked "stop this page making dialogs" (and some phone browsers never show it), so the button looked dead.
+ */
+function askConfirm(message, yesLabel) {
+  return new Promise((resolve) => {
+    const dialog = document.createElement("dialog");
+    dialog.className = "edit-dialog";
+    dialog.innerHTML = `<form method="dialog" class="editor">
+      <p style="white-space:pre-line"></p>
+      <div class="button-row">
+        <button type="button" class="secondary" data-no>${escapeHtml(T.cancel)}</button>
+        <button type="button" class="primary" data-yes>${escapeHtml(yesLabel || "OK")}</button>
+      </div></form>`;
+    dialog.querySelector("p").textContent = message;
+    const done = (answer) => { dialog.close(); dialog.remove(); resolve(answer); };
+    dialog.querySelector("[data-yes]").addEventListener("click", () => done(true));
+    dialog.querySelector("[data-no]").addEventListener("click", () => done(false));
+    dialog.addEventListener("cancel", (ev) => { ev.preventDefault(); done(false); });
+    document.body.appendChild(dialog);
+    dialog.showModal();
+  });
+}
+
+/** True when the event says Published but its sign-up window has already ended (default: when the event starts). */
+function signupsEnded(e) {
+  if (e.status !== "published") return false;
+  const now = new Date().toLocaleString("sv-SE", { timeZone: "America/Edmonton" }).slice(0, 16).replace(" ", "T");
+  return now >= (e.registrationCloses || e.date + "T" + (e.startTime || "23:59"));
+}
+
+function statusPill(status, e) {
+  const ended = e && signupsEnded(e);
+  const cls = { draft: "neutral", published: ended ? "warn" : "good", closed: "warn" }[status] || "neutral";
+  const text = { draft: T.statusDraft, published: ended ? T.statusEnded : T.statusPublished, closed: T.statusClosed, archived: T.statusArchived }[status] || status;
   return `<span class="pill ${cls}">${text}</span>`;
 }
 

@@ -74,7 +74,7 @@ function renderOverviewEvents(upcoming) {
     <div class="event-row2" data-open-event="${e.id}" role="button" tabindex="0">
       <div class="date-chip"><i>${escapeHtml(month)}</i><b>${d.getDate()}</b></div>
       <div class="ev-main"><h3>${escapeHtml(e.name)}</h3><div class="meta">${escapeHtml(formatEventDate(e))}<br>${countsText(e)}</div></div>
-      <div class="ev-side">${statusPill(e.status)}<span class="manage">${escapeHtml(T.ovManage)}</span></div>
+      <div class="ev-side">${statusPill(e.status, e)}<span class="manage">${escapeHtml(T.ovManage)}</span></div>
     </div>`;
   }).join("");
 }
