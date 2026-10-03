@@ -24,9 +24,19 @@ async function openDoorTab() {
     loadDoor(true);
   }, SCANNER_MODE ? 20000 : 6000);
   clearInterval(deskAlertState.timer);
-  if (!SCANNER_MODE) mountPeekaboo($("desk-live"), T.deskLive);   // the Peekaboo panda: this screen keeps itself up to date
+  updateDoorPeekaboo();
   if (!SCANNER_MODE) { pollDeskAlerts(); deskAlertState.timer = setInterval(pollDeskAlerts, DESK_ALERT_POLL_MS); }
 }
+
+function updateDoorPeekaboo() {
+  const el = $("desk-live");
+  const live = !SCANNER_MODE && !document.hidden && !$("tab-door").hidden &&
+    !!doorState.refreshTimer && !!doorState.data?.event.entryOpen;
+  if (live) {
+    if (!el.firstChild) mountPeekaboo(el, T.deskLive);
+  } else clearPeekaboo(el);
+}
+document.addEventListener("visibilitychange", updateDoorPeekaboo);
 
 // ---- "Send to desk" alerts (help desk only) ------------------------------------------
 // A scanner phone got orange/red for a person: the desk screen flashes who and why within a few seconds.
@@ -114,6 +124,7 @@ async function followLiveEvent() {
 async function loadDoor(quiet) {
   const reply = await api("doorList", { eventId: doorState.eventId });
   if (!reply.ok) {
+    clearPeekaboo($("desk-live"));
     if (quiet && reply.error !== "NOT_LOGGED_IN") return;
     return handleEventError(reply, $("scan-result"));
   }
@@ -161,6 +172,7 @@ function syncList(ul, rows, emptyHtml) {
 
 function renderDoor() {
   const d = doorState.data;
+  updateDoorPeekaboo();
   setText($("live-inside"), String(d.counts.checkedIn));
   setText($("live-total"), String(d.counts.paid));
   setText($("live-sub"), d.counts.awaiting ? T.liveNotPaid(d.counts.awaiting) : "");

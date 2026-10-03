@@ -340,7 +340,7 @@ legend { font-size: 13px; font-weight: 600; }
 .edit-dialog::backdrop { background: rgba(20, 14, 8, .45); backdrop-filter: blur(3px); }
 .edit-dialog h2 { font: 600 20px var(--display); margin: 0 0 2px; }
 .portal-help { display: none !important; }
-.edit-dialog .button-row > button.primary:last-child { grid-column: 1 / -1; }
+.edit-dialog .button-row > button.primary:last-child:nth-child(n+3) { grid-column: 1 / -1; }
 @keyframes pop { from { transform: scale(.96); opacity: 0; } }
 
 /* ---------- toast + notices ---------- */
