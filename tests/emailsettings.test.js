@@ -103,5 +103,32 @@ ok(paid.confirmed === 3 && paid.emailsSent === 2 && paid.emailsWaiting === 1, "3
 ok(run("TBL.Orders[0].status") === "paid" && run("TBL.Tickets.every(function (t) { return t.status === 'paid'; })"), "the payment is kept even though one email didn't go");
 ok(paid.emailsLeftToday === 90, "the reply carries the remaining allowance");
 
+// ---- Preview editor: template text, shared labels and isolated unsaved changes.
+const templateSource = require('node:fs').readFileSync(require('node:path').join(__dirname, '../api/EmailTemplates.js'), 'utf8');
+run(templateSource.slice(templateSource.indexOf('function emailBrand_()'), templateSource.indexOf('// ---- Admin actions')));
+run('TBL.Emails = [];');
+const editedPreview = run(`previewEmail_("registration", {title:"Corrected heading",intro:"Hi {name}, welcome to **{event}**."},
+  {signerName:"TEST Signer",signerRole:"TEST Role",buttonColor:"#123456",labels:{amount:"Total due",message:"Payment code"}},true)`);
+ok(editedPreview.html.includes('data-email-edit="title"') && editedPreview.html.includes('data-email-edit="label-amount"') &&
+  editedPreview.html.includes('Corrected heading') && editedPreview.html.includes('TEST Signer'), 'editable preview marks wording, payment labels and signature');
+ok(editedPreview.html.includes('Total due') && editedPreview.html.includes('MGN-4408') && editedPreview.html.includes('pay@css.test'), 'label edits keep payment code and actual destination');
+ok(editedPreview.html.includes('Hi Alex Chen, welcome to <b>Mahjong Games Night</b>.'), 'fill-ins and bold still render correctly');
+ok(run('TBL.Emails.length') === 0 && run('EMAIL_EDIT_PREVIEW_ === false && EMAIL_OVERRIDE_ === null && EMAIL_BRAND_PREVIEW_ === null'), 'preview saves nothing and clears all rendering overrides');
+const normalPreview = run('previewEmail_("registration")');
+ok(!normalPreview.html.includes('data-email-edit') && !normalPreview.html.includes('TEST Signer') && !normalPreview.html.includes('Total due'), 'ordinary email stays free of editor markers and unsaved wording');
+run(`saveEmailTemplate_({name:"TEST Editor"},"registration",{title:"Saved correction",intro:"Hello {name}",closing:"-"});
+  saveEmailBrand_({name:"TEST Editor"},{labels:{amount:"Total due"}});`);
+const savedPreview = run('previewEmail_("registration")');
+ok(savedPreview.html.includes('Saved correction') && savedPreview.html.includes('Hello Alex Chen') && savedPreview.html.includes('Total due') &&
+  !savedPreview.html.includes("If your bank doesn't allow"), 'saved correction, labels and intentionally empty paragraph persist');
+const unsafePreview = run('previewEmail_("registration",{title:"<script>alert(1)</script>"},{signerName:"<img onerror=x>",labels:{amount:"<svg onload=x>"}},true)');
+ok(unsafePreview.html.includes('&lt;script&gt;') && unsafePreview.html.includes('&lt;img onerror=x&gt;') && !unsafePreview.html.includes('<svg onload=x>'), 'editable wording stays HTML escaped');
+ok(run('previewEmail_("waitlist").html').includes("You're on the waitlist") && run('previewEmail_("memberWelcome").html').includes("You're a CSS member!"), 'waitlist and membership previews use their own email templates');
+run('var originalTicketBuilder = buildTicketEmail_; buildTicketEmail_ = function(){throw new Error("TEST preview failure");};');
+let previewFailed = false;
+try { run('buildEmailPreview_("ticket",{title:"Unsaved"},{signerName:"TEST temporary"},true);'); } catch(e) { previewFailed = true; }
+run('buildTicketEmail_ = originalTicketBuilder;');
+ok(previewFailed && run('EMAIL_EDIT_PREVIEW_ === false && EMAIL_OVERRIDE_ === null && EMAIL_BRAND_PREVIEW_ === null'), 'failed preview clears overrides before any subsequent email');
+
 console.log(fails ? fails + " FAILED" : "ALL PASSED");
 process.exit(fails ? 1 : 0);

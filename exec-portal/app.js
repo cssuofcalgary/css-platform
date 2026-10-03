@@ -283,6 +283,7 @@ function showMember(m) {
   // Someone who signed up on the website and hasn't been confirmed yet: one tap to mark the payment received.
   state.member = m;
   loadMemberHistory(m);
+  loadMemberRedemptions(m);
   $("member-pay").hidden = m.paid || !m.memberId;
   $("member-edit-button").hidden = !m.memberId;
   $("member-resend-pass").hidden = !(m.memberId && m.email && m.paid);

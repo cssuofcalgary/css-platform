@@ -266,10 +266,10 @@ function route_(req) {
 
     case "previewEmail":
       requireAdmin_(req.token);
-      return previewEmail_(req.key, req.fields);
+      return previewEmail_(req.key, req.fields, req.brand, !!req.editable);
 
     case "sendTestEmail":
-      return sendTestEmail_(requireAdmin_(req.token), req.key, req.to, req.fields);
+      return sendTestEmail_(requireAdmin_(req.token), req.key, req.to, req.fields, req.brand);
 
     case "eventSummary":
       requireSession_(req.token);
@@ -282,6 +282,9 @@ function route_(req) {
     case "listRedemptions":
       requireSession_(req.token);
       return listRedemptions_(req);
+
+    case "deleteRedemption":
+      return deleteRedemption_(requireAdmin_(req.token), req.redemptionId);
 
     case "savePartner":
       return savePartner_(requireSession_(req.token), req.partner);

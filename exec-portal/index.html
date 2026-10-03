@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Fraunces:opsz,wght@9..144,500;9..144,600&family=JetBrains+Mono:wght@400;500&display=swap">
   <link rel="stylesheet" href="styles.css?v=1.7.0">
-  <link rel="stylesheet" href="theme.css?v=0.13.3">
+  <link rel="stylesheet" href="theme.css?v=0.13.5">
   <link rel="stylesheet" href="peekaboo.css?v=1.0.1">
   <link rel="stylesheet" href="forest.css?v=1.0.7">
 </head>
@@ -141,9 +141,13 @@
       <section id="partners-section" class="detail-block">
         <div class="row-between"><h3 class="section-title" data-t="partnersHeading"></h3><button id="partner-add" class="link" type="button" data-t="partnerAdd"></button></div>
         <ul id="partners-list" class="plain-list partner-list"></ul>
+        <button id="redeem-open" class="secondary small-button" type="button" data-t="redeemHeading" aria-expanded="false" aria-controls="redeem-panel"></button>
+        <div id="redeem-panel" hidden>
         <div class="row-between"><h4 class="section-title" data-t="redeemHeading"></h4><button id="redeem-csv" class="link" type="button" data-t="redeemCsv"></button></div>
         <p id="redeem-status" class="muted small" aria-live="polite"></p>
         <ul id="redeem-list" class="plain-list"></ul>
+        <div id="redeem-pages" class="row-between"></div>
+        </div>
       </section>
       </div>
 
@@ -154,6 +158,7 @@
           <div id="member-badges" class="badges"></div>
           <dl id="member-fields" class="fields"></dl>
           <div id="member-history" class="detail-block"></div>
+          <div id="member-redemptions" class="detail-block"></div>
           <div class="button-row">
             <button id="member-edit-button" class="secondary small-button" type="button" data-t="editMember"></button>
             <button id="member-resend-pass" class="secondary small-button" type="button" data-t="resendPass" hidden></button>
@@ -572,6 +577,12 @@
         <p id="em-fills" class="muted small portal-help"></p>
         <label for="em-subject" data-t="emSubject"></label>
         <input id="em-subject" maxlength="150" autocomplete="off">
+        <div class="row-buttons">
+          <label for="em-edit-field" data-t="emEdit"></label><select id="em-edit-field"></select>
+          <button id="em-edit-open" class="secondary" type="button" data-t="emEdit"></button>
+        </div>
+        <iframe id="em-frame" title="Editable email preview" sandbox="allow-same-origin" style="width:100%;height:680px;border:1px solid var(--border);border-radius:8px;background:#fff;"></iframe>
+        <div hidden>
         <label for="em-title" data-t="emHeading"></label>
         <input id="em-title" maxlength="100" autocomplete="off">
         <label for="em-subtitle" data-t="emSubheading"></label>
@@ -580,17 +591,20 @@
         <textarea id="em-intro" rows="3" maxlength="1500"></textarea>
         <label for="em-closing" data-t="emClosing"></label>
         <textarea id="em-closing" rows="3" maxlength="1500"></textarea>
+        </div>
         <p id="em-result" class="muted small"></p>
         <div class="row-buttons">
           <button id="em-save" class="primary" data-t="setSave"></button>
           <button id="em-preview" class="secondary" data-t="emPreview"></button>
           <button id="em-reset" class="secondary" data-t="emReset"></button>
         </div>
+        <details><summary data-t="emTest"></summary>
         <label for="em-test-to" data-t="emTestTo"></label>
         <input id="em-test-to" type="email" maxlength="120" autocomplete="off">
         <button id="em-test" class="secondary" data-t="emTest"></button>
-        <iframe id="em-frame" title="Email preview" hidden style="width:100%;height:640px;border:1px solid var(--line,#ccc);border-radius:8px;background:#fff;margin-top:8px;"></iframe>
+        </details>
 
+        <details><summary data-t="emBrandTitle"></summary>
         <h3 class="sub-title" data-t="emBrandTitle"></h3>
         <label for="em-signer" data-t="emSigner"></label>
         <input id="em-signer" maxlength="80" autocomplete="off">
@@ -603,6 +617,7 @@
           <button id="em-brand-save" class="primary" data-t="setSave"></button>
           <button id="em-brand-reset" class="secondary" data-t="emBrandReset"></button>
         </div>
+        </details>
       </div>
 
       <div class="card editor" id="set-sessions-card" data-pane="sessions">
@@ -948,12 +963,23 @@
     </form>
   </dialog>
 
+  <dialog id="em-edit-dialog" class="edit-dialog">
+    <form id="em-edit-form" class="editor">
+      <h2 id="em-edit-title"></h2>
+      <textarea id="em-edit-text" rows="6" aria-labelledby="em-edit-title"></textarea>
+      <div id="em-edit-tokens" class="row-buttons"></div>
+      <div class="button-row">
+        <button id="em-edit-cancel" type="button" class="secondary" data-t="cancel"></button>
+        <button type="submit" class="primary" data-t="emApply"></button>
+      </div>
+    </form>
+  </dialog>
   <script src="config.js?v=0.3.7"></script>
-  <script src="strings.js?v=1.11.3"></script>
+  <script src="strings.js?v=1.11.5"></script>
   <script src="mock.js?v=0.3.7"></script>
   <script src="panda.js?v=1.5.0"></script>
   <script src="peekaboo.js?v=1.0.0"></script>
-  <script src="app.js?v=1.7.0"></script>
+  <script src="app.js?v=1.7.1"></script>
   <script src="events.js?v=1.7.1"></script>
   <script src="emailstatus.js?v=1.0.1"></script>
   <script src="waitlist.js?v=1.5.0"></script>
@@ -963,9 +989,9 @@
   <script src="money.js?v=1.0.0"></script>
   <script src="activity.js?v=0.5.0"></script>
   <script src="settings.js?v=0.9.1"></script>
-  <script src="emails.js?v=0.3.7"></script>
+  <script src="emails.js?v=0.4.0"></script>
   <script src="mailall.js?v=0.3.7"></script>
-  <script src="partners.js?v=1.5.0"></script>
+  <script src="partners.js?v=1.6.0"></script>
   <script src="insights.js?v=1.0.0"></script>
   <script src="attendees.js?v=1.0.1"></script>
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>

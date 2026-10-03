@@ -118,6 +118,29 @@ const EMAIL_SAMPLE = {
 
 /** When set (a preview of unsaved edits), these override what is saved. */
 let EMAIL_OVERRIDE_ = null;
+let EMAIL_EDIT_PREVIEW_ = false;
+let EMAIL_BRAND_PREVIEW_ = null;
+const EMAIL_LABEL_DEFAULTS = { amount: "Amount", sendTo: "Send to", message: "Message", exactly: "(exactly)", when: "When", where: "Where" };
+
+function cleanEmailLabels_(input) {
+  const out = {};
+  Object.keys(EMAIL_LABEL_DEFAULTS).forEach(function (key) {
+    const value = String((input || {})[key] || "").trim().slice(0, 60);
+    out[key] = value || EMAIL_LABEL_DEFAULTS[key];
+  });
+  return out;
+}
+
+/** Selection markers are present only in the editor preview, never in delivered emails. */
+function mailEdit_(field, html, block) {
+  if (!EMAIL_EDIT_PREVIEW_) return html;
+  const tag = block ? "div" : "span";
+  return "<" + tag + " data-email-edit=\"" + field + "\">" + html + "</" + tag + ">";
+}
+
+function emailLabel_(key) {
+  return mailEdit_("label-" + key, esc_(emailBrand_().labels?.[key] || EMAIL_LABEL_DEFAULTS[key]));
+}
 
 function savedEmailFields_(key) {
   if (EMAIL_OVERRIDE_ && EMAIL_OVERRIDE_.key === key) return EMAIL_OVERRIDE_.fields;
@@ -149,10 +172,10 @@ function mailText_(key, vars) {
   const f = emailFields_(key);
   return {
     subject: fillText_(f.subject, vars).replace(/\*\*/g, ""),
-    title: mailInline_(fillText_(f.title, vars)),
-    subtitle: mailInline_(fillText_(f.subtitle, vars)),
-    intro: f.intro.trim() ? mailParas_(fillText_(f.intro, vars), "") : "",
-    closing: f.closing.trim() ? mailParas_(fillText_(f.closing, vars), "color:#6b6153;") : ""
+    title: mailEdit_("title", mailInline_(fillText_(f.title, vars))),
+    subtitle: mailEdit_("subtitle", mailInline_(fillText_(f.subtitle, vars))),
+    intro: mailEdit_("intro", f.intro.trim() ? mailParas_(fillText_(f.intro, vars), "") : "", true),
+    closing: mailEdit_("closing", f.closing.trim() ? mailParas_(fillText_(f.closing, vars), "color:#6b6153;") : "", true)
   };
 }
 
@@ -172,12 +195,16 @@ function mailParas_(text, style) {
 const EMAIL_BRAND_DEFAULTS = { signerName: "Gordon Chen", signerRole: "President — Chinese Students' Society (CSS)", buttonColor: "#824a24" };
 
 function emailBrand_() {
+  if (EMAIL_BRAND_PREVIEW_) return EMAIL_BRAND_PREVIEW_;
   const props = PropertiesService.getScriptProperties();
   const color = String(props.getProperty("EMAIL_BUTTON_COLOR") || "");
+  let labels = {};
+  try { labels = JSON.parse(props.getProperty("EMAIL_LABELS") || "{}"); } catch (e) { /* defaults */ }
   return {
     signerName: String(props.getProperty("PRESIDENT_NAME") || EMAIL_BRAND_DEFAULTS.signerName),
     signerRole: String(props.getProperty("EMAIL_SIGNER_ROLE") || EMAIL_BRAND_DEFAULTS.signerRole),
-    buttonColor: /^#[0-9a-fA-F]{6}$/.test(color) ? color : EMAIL_BRAND_DEFAULTS.buttonColor
+    buttonColor: /^#[0-9a-fA-F]{6}$/.test(color) ? color : EMAIL_BRAND_DEFAULTS.buttonColor,
+    labels: cleanEmailLabels_(labels)
   };
 }
 
@@ -191,7 +218,7 @@ function getEmailTemplates_() {
     EMAIL_FIELDS.forEach(function (f) { custom[f] = String(saved[f] || "").trim() ? String(saved[f]) : ""; });
     return { key: key, label: kind.label, when: kind.when, placeholders: kind.placeholders, defaults: kind.defaults, custom: custom };
   });
-  return { ok: true, kinds: kinds, brand: emailBrand_(), brandDefaults: EMAIL_BRAND_DEFAULTS };
+  return { ok: true, kinds: kinds, brand: emailBrand_(), brandDefaults: EMAIL_BRAND_DEFAULTS, labelDefaults: EMAIL_LABEL_DEFAULTS };
 }
 
 function cleanEmailFields_(fields) {
@@ -222,6 +249,7 @@ function saveEmailBrand_(session, input) {
   const updates = {};
   if (input.signerName !== undefined) updates.PRESIDENT_NAME = text(input.signerName, 80);
   if (input.signerRole !== undefined) updates.EMAIL_SIGNER_ROLE = text(input.signerRole, 120);
+  if (input.labels !== undefined) updates.EMAIL_LABELS = JSON.stringify(cleanEmailLabels_(input.labels));
   if (input.buttonColor !== undefined) {
     const c = text(input.buttonColor, 7);
     if (c && !/^#[0-9a-fA-F]{6}$/.test(c)) throw new ApiError_("BAD_REQUEST", "The colour should look like #824a24.");
@@ -233,9 +261,17 @@ function saveEmailBrand_(session, input) {
 }
 
 /** Builds an email with sample data. `fields` (optional) previews edits that aren't saved yet. */
-function buildEmailPreview_(key, fields) {
+function buildEmailPreview_(key, fields, brand, editable) {
   if (!EMAIL_KINDS[key]) throw new ApiError_("BAD_REQUEST", "Unknown email.");
   EMAIL_OVERRIDE_ = fields ? { key: key, fields: cleanEmailFields_(fields) } : null;
+  const currentBrand = emailBrand_();
+  if (brand) EMAIL_BRAND_PREVIEW_ = {
+    signerName: String(brand.signerName || EMAIL_BRAND_DEFAULTS.signerName).slice(0, 80),
+    signerRole: String(brand.signerRole || EMAIL_BRAND_DEFAULTS.signerRole).slice(0, 120),
+    buttonColor: /^#[0-9a-fA-F]{6}$/.test(brand.buttonColor) ? brand.buttonColor : currentBrand.buttonColor,
+    labels: cleanEmailLabels_(brand.labels || currentBrand.labels)
+  };
+  EMAIL_EDIT_PREVIEW_ = !!editable;
   try {
     const event = { name: EMAIL_SAMPLE.event, date: "2026-10-21", startTime: "18:00", endTime: "21:00", location: EMAIL_SAMPLE.where };
     const ticket = { id: "TKT8K2M4Q7X", secret: "0123456789abcdef0123456789abcdef", name: EMAIL_SAMPLE.name, email: "alex@example.com", ticketType: "Member price", price: 4 };
@@ -246,20 +282,33 @@ function buildEmailPreview_(key, fields) {
       case "reminder": return buildReminderEmail_(event, order, [ticket]);
       case "ticket": return buildTicketEmail_(event, ticket);
       case "findTickets": return buildMyTicketsEmail_([{ event: event, ticket: ticket }], "https://member.ucalgarycss.ca/");
+      case "waitlist": {
+        const t = mailText_(key, EMAIL_SAMPLE);
+        return { subject: t.subject, html: emailShell_({ title: t.title, subtitle: t.subtitle,
+          body: t.intro + mailBox_(mailRows_(whenWhereRows_(event))) + t.closing }), plain: "You're on the waitlist." };
+      }
+      case "memberWelcome": {
+        const t = mailText_(key, { name: EMAIL_SAMPLE.name, year: MEMBERSHIP_YEAR });
+        return { subject: t.subject, html: emailShell_({ title: t.title, subtitle: t.subtitle, body: t.intro + t.closing,
+          button: { label: "Open my member pass", url: "https://member.ucalgarycss.ca/" },
+          footerNote: "Save the pass to your phone's home screen: it works offline at the door." }), plain: "Your CSS membership is confirmed." };
+      }
       default: return buildMyPassEmail_({ name: EMAIL_SAMPLE.name }, "https://member.ucalgarycss.ca/");
     }
   } finally {
     EMAIL_OVERRIDE_ = null;
+    EMAIL_EDIT_PREVIEW_ = false;
+    EMAIL_BRAND_PREVIEW_ = null;
   }
 }
 
-function previewEmail_(key, fields) {
-  const mail = buildEmailPreview_(key, fields);
+function previewEmail_(key, fields, brand, editable) {
+  const mail = buildEmailPreview_(key, fields, brand, editable);
   return { ok: true, subject: mail.subject, html: mail.html };
 }
 
 /** Sends the sample email to an address the admin types (a test). Never more than 5 a day. */
-function sendTestEmail_(session, key, to, fields) {
+function sendTestEmail_(session, key, to, fields, brand) {
   const address = String(to || "").trim().toLowerCase();
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(address)) throw new ApiError_("BAD_REQUEST", "That email doesn't look right.");
   if (isTestAddress_(address)) throw new ApiError_("BAD_REQUEST", "Addresses ending in example.com are never emailed. Use a real one.");
@@ -268,7 +317,7 @@ function sendTestEmail_(session, key, to, fields) {
   const used = parseInt(props.getProperty(dayKey) || "0", 10);
   if (used >= 5) throw new ApiError_("TOO_MANY_TRIES", "That's 5 test emails today. Try again tomorrow, or use Preview.");
   if (!canSendMail_(address)) throw new ApiError_("SERVER_ERROR", "The daily email limit has been reached.");
-  const mail = buildEmailPreview_(key, fields);
+  const mail = buildEmailPreview_(key, fields, brand, false);
   sendStyled_(address, "[TEST] " + mail.subject, mail.html, mail.plain);
   props.setProperty(dayKey, String(used + 1));
   log_(session.name, "email.test", key, {});

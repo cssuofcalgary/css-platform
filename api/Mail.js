@@ -100,7 +100,7 @@ function emailShell_(o) {
     "<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\"><tr><td style=\"border-top:2px dashed #cdb877;font-size:0;line-height:0;\">&nbsp;</td></tr></table></td></tr>" +
     "<tr><td bgcolor=\"#f3ecda\" class=\"pad\" style=\"background-color:#f3ecda;padding:22px 32px 30px;border-left:1px solid #e7ddc0;border-right:1px solid #e7ddc0;\">" +
     "<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\"><tr><td style=\"vertical-align:bottom;\">" +
-    "<p style=\"margin:0;font-family:" + MAIL_SERIF + ";font-size:14px;color:#6b6153;line-height:1.65;\"><strong style=\"color:#2a2520;font-family:" + MAIL_MONO + ";font-size:13px;\">" + esc_(brand.signerName) + "</strong><br>" + esc_(brand.signerRole) + "<br>University of Calgary</p>" +
+    "<p style=\"margin:0;font-family:" + MAIL_SERIF + ";font-size:14px;color:#6b6153;line-height:1.65;\"><strong style=\"color:#2a2520;font-family:" + MAIL_MONO + ";font-size:13px;\">" + mailEdit_("signer", esc_(brand.signerName)) + "</strong><br>" + mailEdit_("role", esc_(brand.signerRole)) + "<br>University of Calgary</p>" +
     "<p style=\"margin:12px 0 0;\">" + linkHtml + "</p></td>" +
     "<td align=\"right\" style=\"vertical-align:bottom;width:85px;padding-left:16px;\"><img src=\"" + MAIL_IMG.bottomPanda + "\" width=\"80\" alt=\"\" style=\"display:block;border:0;height:auto;\"></td></tr></table></td></tr>" +
     "<tr><td bgcolor=\"#f3ecda\" style=\"height:6px;background-color:#f3ecda;border-bottom:3px solid #a8822e;border-left:1px solid #e7ddc0;border-right:1px solid #e7ddc0;border-radius:0 0 6px 6px;font-size:0;line-height:0;\">&nbsp;</td></tr>" +
@@ -137,7 +137,7 @@ function mailPara_(html) {
 }
 
 function whenWhereRows_(event) {
-  return [["When", esc_(eventWhenText_(event))], ["Where", esc_(event.location || "TBA")]];
+  return [[emailLabel_("when"), esc_(eventWhenText_(event))], [emailLabel_("where"), esc_(event.location || "TBA")]];
 }
 
 function sendStyled_(to, subject, html, plain) {
@@ -151,9 +151,9 @@ function sendStyled_(to, subject, html, plain) {
 
 function paymentBox_(order, config) {
   return mailBox_(mailRows_([
-    ["Amount", "<span style=\"font-size:18px;\">" + moneyText_(order.total) + "</span> (exactly)"],
-    ["Send to", esc_(config.etransferEmail)],
-    ["Message", "<span style=\"font-size:22px;letter-spacing:2px;\">" + esc_(order.code) + "</span>"]
+    [emailLabel_("amount"), "<span style=\"font-size:18px;\">" + moneyText_(order.total) + "</span> " + emailLabel_("exactly")],
+    [emailLabel_("sendTo"), esc_(config.etransferEmail)],
+    [emailLabel_("message"), "<span style=\"font-size:22px;letter-spacing:2px;\">" + esc_(order.code) + "</span>"]
   ]));
 }
 

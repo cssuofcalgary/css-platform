@@ -60,6 +60,33 @@ const lr = J('listRedemptions_({ limit: 2 })').v;
 ok(lr.total === 3 && lr.redemptions.length === 2 && lr.byPartner[first] === 3, 'exec list: newest first, page size, counts per partner');
 ok(J('listRedemptions_({ full: true })').v.redemptions.length === 3, 'full list for the CSV');
 
+// Pagination, member isolation and removal through the protected API route.
+run(`TBL.Redemptions = Array.from({ length: 23 }, function (_, i) {
+  return { id: "RDtest" + String(i).padStart(2, "0"), time: new Date(2026, 0, i + 1).toISOString(),
+    memberId: i % 2 ? "CSS0022222" : "CSS0011234", memberName: "TEST Member", partnerName: "TEST Cafe", offer: "10%" };
+});
+var redemptionAudit = [];
+function log_(who, action, target, details) { redemptionAudit.push({ who: who, action: action, target: target, details: details }); }
+CacheService.getScriptCache().put("session_test-exec", JSON.stringify({name:"TEST Exec",role:"exec",epoch:currentEpoch_()}));
+CacheService.getScriptCache().put("session_test-admin", JSON.stringify({name:"TEST Settings",role:"admin",epoch:currentEpoch_()}));`);
+const page1 = J('listRedemptions_({ limit: 10 })').v;
+const page2 = J('listRedemptions_({ limit: 10, offset: 10 })').v;
+const page3 = J('listRedemptions_({ limit: 10, offset: 20 })').v;
+ok(page1.redemptions.length === 10 && page2.redemptions.length === 10 && page3.redemptions.length === 3 &&
+  new Set([...page1.redemptions, ...page2.redemptions, ...page3.redemptions].map(x => x.id)).size === 23,
+  '10 per page, no missing or repeated redemption IDs');
+const memberRows = J('listRedemptions_({ memberId: "css0011234", limit: 10 })').v;
+ok(memberRows.total === 12 && memberRows.redemptions.every(x => x.memberId === 'CSS0011234'), 'member history only includes that member');
+ok(J('route_({action:"deleteRedemption",redemptionId:"RDtest22"})').err === 'NOT_LOGGED_IN', 'removal needs sign-in');
+ok(J('route_({action:"deleteRedemption",token:"test-exec",redemptionId:"RDtest22"})').err === 'ADMIN_ONLY', 'normal exec cannot remove a redemption');
+ok(run('TBL.Redemptions.length') === 23, 'refused removals leave records untouched');
+r = J('route_({action:"deleteRedemption",token:"test-admin",redemptionId:"RDtest22"})');
+ok(r.v && r.v.ok && run('TBL.Redemptions.length') === 22, 'settings access removes only the selected redemption');
+ok(J('listRedemptions_({ full:true })').v.byPartner['TEST Cafe'] === 22 &&
+  J('listRedemptions_({memberId:"CSS0011234"})').v.total === 11, 'counts, member history and export omit removed redemption');
+ok(run('redemptionAudit.some(x=>x.action === "partner.redemption.delete" && x.target === "RDtest22" && x.details.partnerName === "TEST Cafe")'), 'Activity keeps removed record details');
+ok(J('route_({action:"deleteRedemption",token:"test-admin",redemptionId:"RDmissing"})').err === 'NOT_FOUND' && run('TBL.Redemptions.length') === 22, 'missing record removal leaves other records untouched');
+
 r = J(`deletePartner_(${JSON.stringify(S)}, "${id}")`);
 ok(r.v && r.v.ok && J(`listPartners_()`).v.partners.every((p) => p.id !== id), "admin delete removes it");
 run(`TBL.Partners = [];`);

@@ -155,14 +155,33 @@ function memberRedeem_(req) {
 
 /** Exec: the redemption log, newest first (a page, or everything with full: true), and the all-time count per partner. */
 function listRedemptions_(req) {
-  const rows = readRows_("Redemptions").slice().sort(function (a, b) { return String(b.time).localeCompare(String(a.time)); });
+  const all = readRows_("Redemptions");
+  const memberId = String(req.memberId || "").trim().toUpperCase();
+  const rows = all.filter(function (r) { return !memberId || r.memberId === memberId; })
+    .sort(function (a, b) { return String(b.time).localeCompare(String(a.time)) || String(b.id).localeCompare(String(a.id)); });
   const byPartner = {};
   rows.forEach(function (r) { byPartner[r.partnerName] = (byPartner[r.partnerName] || 0) + 1; });
   const limit = req.full ? 5000 : Math.min(200, Math.max(1, parseInt(req.limit, 10) || 25));
+  const offset = req.full ? 0 : Math.max(0, parseInt(req.offset, 10) || 0);
   return {
     ok: true, total: rows.length, byPartner: byPartner,
-    redemptions: rows.slice(0, limit).map(function (r) {
-      return { time: r.time, memberId: r.memberId, memberName: r.memberName, partnerName: r.partnerName, offer: r.offer };
+    redemptions: rows.slice(offset, offset + limit).map(function (r) {
+      return { id: r.id, time: r.time, memberId: r.memberId, memberName: r.memberName, partnerName: r.partnerName, offer: r.offer };
     })
   };
+}
+
+/** Settings access: remove an incorrect or test redemption, retaining its details in Activity. */
+function deleteRedemption_(session, id) {
+  return withLock_(function () {
+    const row = readRows_("Redemptions").filter(function (r) { return r.id === id; })[0];
+    if (!row) throw new ApiError_("NOT_FOUND", "That redemption no longer exists.");
+    log_(session.name, "partner.redemption.delete", row.id, {
+      memberId: row.memberId, memberName: row.memberName, partnerName: row.partnerName, offer: row.offer, time: row.time
+    });
+    deleteTabRows_({ sheet: table_("Redemptions"), header: headerFor_("Redemptions") }, { [String(row.id)]: true });
+    delete DB_.rows["Redemptions"];
+    bumpTableVersion_("Redemptions");
+    return { ok: true };
+  });
 }

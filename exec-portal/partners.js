@@ -1,7 +1,7 @@
 // CSS Exec Portal — partner deals (member perks), on the Members tab. Any exec can add, edit and switch partners on or off;
 // only the admin sees Delete. Members see the active ones on their pass page.
 
-const partnerState = { list: [], editing: null, counts: {} };
+const partnerState = { list: [], editing: null, counts: {}, page: 0, redemptionRequest: 0, memberPage: 0, memberRequest: 0 };
 
 async function loadPartners() {
   const reply = await api("listPartners");
@@ -12,14 +12,76 @@ async function loadPartners() {
 }
 
 async function loadRedemptions() {
-  const reply = await api("listRedemptions", { limit: 25 });
-  if (!reply.ok) return;
+  const request = ++partnerState.redemptionRequest;
+  const reply = await api("listRedemptions", { limit: 10, offset: partnerState.page * 10 });
+  if (request !== partnerState.redemptionRequest) return;
+  if (!reply.ok) { $("redeem-status").textContent = errorText(reply); return; }
+  if (partnerState.page && partnerState.page * 10 >= reply.total) {
+    partnerState.page = Math.max(0, Math.ceil(reply.total / 10) - 1);
+    return loadRedemptions();
+  }
   partnerState.counts = reply.byPartner || {};
   renderPartners();   // the "N redeemed" counts
-  $("redeem-status").textContent = reply.total ? (reply.total > reply.redemptions.length ? T.redeemShowing(reply.redemptions.length, reply.total) : "") : T.redeemNone;
-  $("redeem-list").innerHTML = reply.redemptions.map((r) =>
-    `<li>${escapeHtml(T.redeemLine(r.memberName || r.memberId, r.partnerName, shortTime(r.time)))}</li>`).join("");
+  $("redeem-status").textContent = reply.total ? T.redeemRange(partnerState.page * 10 + 1, partnerState.page * 10 + reply.redemptions.length, reply.total) : T.redeemNone;
+  $("redeem-list").innerHTML = redemptionRows(reply.redemptions);
+  $("redeem-pages").innerHTML = redemptionPages(partnerState.page, reply.total);
 }
+
+function redemptionRows(rows) {
+  return rows.map((r) => `<li class="row-between">
+    <span>${escapeHtml(T.redeemLine(r.memberName || r.memberId, r.partnerName, shortTime(r.time)))}</span>
+    ${state.role === "admin" && r.id ? `<button type="button" class="link danger" data-redemption-remove="${escapeHtml(r.id)}" data-member-name="${escapeHtml(r.memberName || r.memberId)}" data-partner-name="${escapeHtml(r.partnerName)}">${T.remove}</button>` : ""}
+  </li>`).join("");
+}
+
+function redemptionPages(page, total) {
+  if (total <= 10) return "";
+  return `<button type="button" class="secondary small-button" data-redemption-page="-1" ${page ? "" : "disabled"}>${T.redeemPrevious}</button>
+    <span>${T.redeemPage(page + 1, Math.ceil(total / 10))}</span>
+    <button type="button" class="secondary small-button" data-redemption-page="1" ${(page + 1) * 10 < total ? "" : "disabled"}>${T.redeemNext}</button>`;
+}
+
+async function loadMemberRedemptions(member, page = 0) {
+  const box = $("member-redemptions");
+  const request = ++partnerState.memberRequest;
+  box.innerHTML = "";
+  if (!member?.memberId) return;
+  partnerState.memberPage = page;
+  const reply = await api("listRedemptions", { memberId: member.memberId, limit: 10, offset: page * 10 });
+  if (request !== partnerState.memberRequest || state.member?.memberId !== member.memberId) return;
+  if (!reply.ok) { box.textContent = errorText(reply); return; }
+  if (page && page * 10 >= reply.total) return loadMemberRedemptions(member, Math.max(0, Math.ceil(reply.total / 10) - 1));
+  box.innerHTML = `<h3 class="section-title">${T.redeemHeading}</h3>
+    ${reply.total ? `<ul class="plain-list">${redemptionRows(reply.redemptions)}</ul>` : `<p class="muted small">${T.redeemNone}</p>`}
+    <div class="row-between">${redemptionPages(page, reply.total)}</div>`;
+}
+
+async function handleRedemptionAction(event) {
+  const button = event.target.closest("[data-redemption-page], [data-redemption-remove]");
+  if (!button || button.disabled) return;
+  const memberView = !!button.closest("#member-redemptions");
+  if (button.dataset.redemptionPage) {
+    const change = Number(button.dataset.redemptionPage);
+    if (memberView) return loadMemberRedemptions(state.member, partnerState.memberPage + change);
+    partnerState.page = Math.max(0, partnerState.page + change);
+    return loadRedemptions();
+  }
+  if (!(await askConfirm(T.redeemRemoveConfirm(button.dataset.memberName, button.dataset.partnerName), T.remove))) return;
+  button.disabled = true;
+  const reply = await api("deleteRedemption", { redemptionId: button.dataset.redemptionRemove });
+  if (!reply.ok) { button.disabled = false; return showToast(errorText(reply)); }
+  await loadRedemptions();
+  if (state.member && !$("member-view").hidden) await loadMemberRedemptions(state.member, partnerState.memberPage);
+  showToast(T.redeemRemoved, "success");
+}
+$("redeem-open").addEventListener("click", () => {
+  const panel = $("redeem-panel");
+  panel.hidden = !panel.hidden;
+  $("redeem-open").setAttribute("aria-expanded", String(!panel.hidden));
+  if (!panel.hidden) loadRedemptions();
+});
+$("redeem-panel").addEventListener("click", handleRedemptionAction);
+$("member-redemptions").addEventListener("click", handleRedemptionAction);
 
 async function downloadRedemptions() {
   const reply = await api("listRedemptions", { full: true });
