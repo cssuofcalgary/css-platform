@@ -185,6 +185,13 @@ function healthCheck_(session) {
   });
   run("Weekly backup (data + membership)", backupStatus_);
   run("Archive", archiveStatus_);
+  // A warning, not a failure of the system: the door sign-in works without a password, so anyone with the scanner link can sign in
+  // as a volunteer while entry is open. Shown here; it does not trigger the nightly alert email.
+  const doorPassword = !!PropertiesService.getScriptProperties().getProperty("SCANNER_PASSWORD");
+  checks.push({
+    name: "Door password", ok: doorPassword, warning: true,
+    detail: doorPassword ? "Set" : "Not set: anyone with the scanner link can sign in as a door volunteer while entry is open. Set one in Settings → Security."
+  });
   run("Email allowance", function () {
     const left = MailApp.getRemainingDailyQuota();
     if (left < 15) throw new Error("Only " + left + " emails left today.");

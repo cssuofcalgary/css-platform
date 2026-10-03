@@ -84,6 +84,9 @@ function route_(req) {
     case "myTickets":
       return myTickets_(req);
 
+    case "memberProfile":
+      return memberProfile_(req);
+
     case "openMyAccess":
       return openMyAccess_(req);
 
@@ -348,7 +351,7 @@ function warmCaches_(doorOnly) {
 function startSession_(name, role) {
   const token = Utilities.getUuid();
   CacheService.getScriptCache().put("session_" + token,
-    JSON.stringify({ name: name, role: role, since: new Date().toISOString(), epoch: currentEpoch_() }), SESSION_SECONDS);
+    JSON.stringify({ name: name, role: role, sid: Utilities.getUuid().replace(/-/g, "").slice(0, 12), since: new Date().toISOString(), epoch: currentEpoch_() }), SESSION_SECONDS);
   return token;
 }
 

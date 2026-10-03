@@ -101,6 +101,13 @@ The old system (`../CSS Ticketing System/`: Google Forms, the old scanner and pa
 ## Last resort
 Everything is plain JavaScript with comments. Any developer (or a future AI) can start from `README.md`.
 
+## A member's pass won't scan at the door
+Open the Door tab → **Scan log**. The entry shows what the scanner read and how it was understood: "Looked for member ID CSS… : not there" means that ID isn't on the Membership sheet; "no ticket for this event matched by member ID, email or UCID" means the member has no ticket under any of those (they may have registered with another email: find them under Payments and use **Edit** to add their member ID). Copy the log as text if you need help.
+
+## Registration problems
+- Someone says they registered and sees nothing: search their email on Payments. A failed registration leaves an order cancelled with the note "registration failed"; they can simply register again.
+- An order with its tickets missing or unpaid: Payments shows "needs repair" next to the order count; press **Repair**.
+
 ## Things added in October 2026 (what to do if…)
 
 | You see | Why | Fix |

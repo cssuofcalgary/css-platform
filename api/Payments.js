@@ -91,7 +91,8 @@ function listOrders_(eventId, opts) {
     counts: counts,
     money: money,
     reminderHours: REMINDER_AFTER_HOURS,
-    spotsTaken: spotsTaken_(event),
+    spotsTaken: spotsTaken_(event),   // places used up under the capacity rule (may include tickets waiting for payment)
+    paidTickets: tickets.filter(function (t) { return t.status === "paid"; }).length,   // tickets that really are paid
     unsentEmails: tickets.filter(function (t) { return t.status === "paid" && ticketUnsent_(t); }).length,
     emailsLeftToday: emailsLeftToday_(),
     waitlist: waitlistSummary_(event)

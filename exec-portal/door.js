@@ -189,9 +189,12 @@ function renderDoor() {
   syncList($("helpdesk-unpaid"), unpaid.map((t) => ({ key: t.id, html: personRow(t, true) })), nobody);
   syncList($("helpdesk-flagged"), flagged.map((t) => ({ key: t.id, html: personRow(t, false) })), nobody);
 
-  const recent = d.tickets.filter((t) => t.checkedInAt).sort((a, b) => b.checkedInAt.localeCompare(a.checkedInAt)).slice(0, 10);
-  setText($("recent-title"), T.recentTitle(d.counts.checkedIn));
-  syncList($("recent-list"), recent.map((t) => ({ key: t.id, html: `
+  // A door volunteer sees no list of recent check-ins (the help desk does); the Scan log button stays.
+  const volunteer = state.role === "door";
+  $("recent-box").hidden = volunteer;
+  const recent = volunteer ? [] : d.tickets.filter((t) => t.checkedInAt).sort((a, b) => b.checkedInAt.localeCompare(a.checkedInAt)).slice(0, 10);
+  if (!volunteer) setText($("recent-title"), T.recentTitle(d.counts.checkedIn));
+  if (!volunteer) syncList($("recent-list"), recent.map((t) => ({ key: t.id, html: `
     <li class="card door-person">
       <div>
         <div class="name"><strong>${escapeHtml(t.name)}</strong> · ${escapeHtml(t.ticketType)}</div>
@@ -274,7 +277,53 @@ async function checkCode(code, atDesk) {
     return showResult({ color: "red", message: errorText(reply) });
   }
   showResult(reply.result);
-  if (reply.result.color === "green" && reply.result.person) markInsideLocally(reply.result.person.id);
+  if (reply.result.color === "green" && reply.result.person) {
+    markInsideLocally(reply.result.person.id);
+    if (!atDesk) rememberLastCheckIn(reply.result.person);
+  }
+}
+
+// ---- Undo last check-in (door volunteers) -------------------------------------------------------
+// A volunteer has no list of recent check-ins, so they get one button: take back the check-in they just made. The server allows it
+// only for their own sign-in, under 10 minutes, while entry is open (the same rule as here); the help desk undoes anything else.
+
+const UNDO_LAST_MS = 10 * 60 * 1000;
+
+function rememberLastCheckIn(person) {
+  if (state.role !== "door") return;
+  doorState.lastCheckIn = { id: person.id, name: person.name, at: Date.now() };
+  updateUndoLast();
+}
+
+function updateUndoLast() {
+  const button = $("undo-last");
+  const last = doorState.lastCheckIn;
+  const show = state.role === "door" && !!last && Date.now() - last.at < UNDO_LAST_MS;
+  button.hidden = !show;
+  if (show) button.textContent = T.undoLast(last.name);
+  clearTimeout(doorState.undoTimer);
+  if (show) doorState.undoTimer = setTimeout(updateUndoLast, UNDO_LAST_MS - (Date.now() - last.at) + 500);
+}
+
+async function undoLastCheckIn() {
+  const last = doorState.lastCheckIn;
+  if (!last) return;
+  if (!(await askConfirm(T.confirmUndo(last.name), T.undoLastYes))) return;
+  const button = $("undo-last");
+  button.disabled = true;
+  const reply = await api("undoCheckIn", { ticketId: last.id });
+  button.disabled = false;
+  if (!reply.ok) {
+    if (reply.error === "NOT_LOGGED_IN") { stopCamera(); signOutLocally(); return showLogin(errorText(reply)); }
+    if (reply.error === "UNDO_LIMITED") { doorState.lastCheckIn = null; updateUndoLast(); }
+    return showResult({ color: "red", message: errorText(reply) });
+  }
+  doorState.lastCheckIn = null;
+  updateUndoLast();
+  if (doorState.data) { doorState.data.counts.checkedIn = Math.max(0, doorState.data.counts.checkedIn - 1); renderDoor(); }
+  doorState.lastCode = "";   // the same ticket may be scanned again straight away
+  showToast(T.undoneLast(last.name));
+  loadDoor(true);
 }
 
 /** Finds a ticket in the list the phone already has (by link, secret or ticket ID). */
@@ -506,6 +555,7 @@ $("all-checkins-close").addEventListener("click", () => $("all-checkins-dialog")
 $("door-event").addEventListener("change", () => { doorState.eventId = $("door-event").value; doorState.picked = true; showIdle(); loadDoor(); });
 $("entry-toggle").addEventListener("click", toggleEntry);
 $("scan-result").addEventListener("click", onResultTap);
+$("undo-last").addEventListener("click", undoLastCheckIn);
 $("camera-toggle").addEventListener("click", toggleCamera);
 $("walkin-button").addEventListener("click", openWalkIn);
 $("wi-cancel").addEventListener("click", () => { $("walkin-form").hidden = true; });

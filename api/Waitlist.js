@@ -133,7 +133,7 @@ function listWaitlist_(eventId) {
 function offerWaitlistSpot_(session, entryId, force, siteUrl) {
   rememberSiteUrl_(siteUrl);
   const members = membersQuietly_();
-  const made = withIntakeLock_(function () {
+  const made = withIntakeAndScriptLock_(function () {
     const entry = readRows_("Waitlist").filter(function (w) { return w.id === entryId; })[0];
     if (!entry) throw new ApiError_("NOT_FOUND", "That waitlist entry no longer exists.");
     if (entry.status !== "waiting") throw new ApiError_("BAD_REQUEST", "This person is already " + entry.status + ".");

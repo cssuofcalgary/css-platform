@@ -94,7 +94,7 @@ const EMAIL_KINDS = {
       title: "You're on the waitlist",
       subtitle: "{event}",
       intro: "Hi {name}, **{event}** is full right now, so we've put you on the waitlist.\n\nIf a spot opens up we'll email you with how to confirm it. You don't need to do anything else, and there is nothing to pay yet.",
-      closing: "Please don't come to the event unless we've confirmed a spot for you."
+      closing: "Thanks for your patience."
     }
   },
   findPass: {

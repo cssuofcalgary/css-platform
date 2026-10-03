@@ -8,12 +8,20 @@
 
 const MAX_TICKETS_PER_ORDER = 10;
 
-/** Public: someone registers themselves (and maybe friends) for an event. */
+/**
+ * Public: someone registers themselves (and maybe friends) for an event. The event site and the member portal both come
+ * through here, so there is one set of rules.
+ *
+ * `req.member` = { memberId, k } is sent by the member portal when the device holds the member's private pass key. A valid
+ * key proves the person is that member: their details are filled in from the Membership sheet and the member price is
+ * not questioned. Without a key a typed member ID is only a claim, and gets checked against the name (see membershipFlag_).
+ */
 function register_(req) {
   if (req.website) throw new ApiError_("BAD_REQUEST", "Please try again.");   // hidden field only bots fill in
 
   // A page that retries (slow network, "busy") sends the same requestId each time, so a retry can never create a second registration.
-  const requestId = /^[A-Za-z0-9-]{8,64}$/.test(String(req.requestId || "")) ? "regreq_" + req.requestId : "";
+  const rawRid = /^[A-Za-z0-9-]{8,64}$/.test(String(req.requestId || "")) ? String(req.requestId) : "";
+  const requestId = rawRid ? "regreq_" + rawRid : "";
   if (requestId) {
     const seen = CacheService.getScriptCache().get(requestId);
     if (seen) return JSON.parse(seen);
@@ -22,19 +30,14 @@ function register_(req) {
   const event = findEvent_(function (e) { return e.slug === String(req.slug || "").toLowerCase(); });
   if (!event || !registrationOpen_(event)) throw new ApiError_("CLOSED", "Registration for this event is closed.");
 
-  const people = Array.isArray(req.people) ? req.people : [];
-  if (!people.length) throw new ApiError_("BAD_REQUEST", "Add at least one person.");
-  if (people.length > MAX_TICKETS_PER_ORDER) throw new ApiError_("BAD_REQUEST", "Up to " + MAX_TICKETS_PER_ORDER + " tickets per registration.");
-
-  const payer = cleanPerson_(people[0], event, 0);
-  const others = people.slice(1).map(function (p, i) { return cleanPerson_(p, event, i + 1); });
-  const everyone = [payer].concat(others);
-  const etransferName = String(req.etransferName || "").trim().slice(0, 80);
-  throttle_(payer.email);
+  const rawPeople = Array.isArray(req.people) ? req.people : [];
+  if (!rawPeople.length) throw new ApiError_("BAD_REQUEST", "Add at least one person.");
+  if (rawPeople.length > MAX_TICKETS_PER_ORDER) throw new ApiError_("BAD_REQUEST", "Up to " + MAX_TICKETS_PER_ORDER + " tickets per registration.");
 
   const members = loadMembers_();
-  everyone.forEach(function (p) { p.flag = membershipFlag_(p, members); });
-  const needsReview = everyone.some(function (p) { return !!p.flag; });   // SEC-01: taken before the duplicate-email note below, which is only a warning
+  const memberRec = verifiedMemberFromKey_(req.member, members);
+  const prep = prepareRegistration_(rawPeople, event, members, memberRec);
+  throttle_(prep.everyone[0].email);
 
   // Everything slow happens BEFORE the lock, where many requests can run side by side: open the tabs, and read
   // who is already registered (a duplicate email is only a warning, so a snapshot a moment old is fine).
@@ -43,101 +46,114 @@ function register_(req) {
   const snapshotTickets = readRows_("Tickets");
   const snapshotOrders = readRows_("Orders");
 
+  // A free order makes paid tickets straight away, which uses up room just like Mark paid does, so it also takes the
+  // main lock (always after the intake lock, never the other way round). Orders that wait for payment don't need it.
+  const lockFn = prep.isFree ? withIntakeAndScriptLock_ : withIntakeLock_;
   let logEntry = null;
-  const done = withIntakeLock_(function () {
+  const done = lockFn(function () {
     if (requestId) {   // the first attempt may have finished while this one waited for the lock
       const seen = CacheService.getScriptCache().get(requestId);
       if (seen) return { repeat: JSON.parse(seen) };
     }
-    const tickets = snapshotTickets;
-    if (event.capacity && event.capacityRule === "paid") {
+
+    // The event as it is RIGHT NOW: it may have been closed, archived or edited while this request waited.
+    delete DB_.rows["Events"];
+    const ev = findEvent_(function (e) { return e.id === event.id; });
+    if (!ev || ev.archivedAt || !registrationOpen_(ev)) throw new ApiError_("CLOSED", "Registration for this event is closed.");
+    let plan = prep;
+    if (String(ev.updatedAt || "") !== String(event.updatedAt || "")) {   // edited meanwhile: prices, ticket types and questions again from the current event
+      plan = prepareRegistration_(rawPeople, ev, members, memberRec);
+      if (plan.isFree && !prep.isFree) throw new ApiError_("TEMPORARY", "The event was just changed. Please try again.");
+    }
+    const everyone = plan.everyone;
+    const needsReview = plan.needsReview;
+
+    delete DB_.rows["Orders"]; delete DB_.rows["Tickets"];   // counted and checked on fresh data, inside the lock
+
+    // A retry of a registration that was only half written (the script stopped between the order and its tickets) finishes it.
+    const prior = rawRid ? readRows_("Orders").filter(function (o) { return o.requestId === rawRid && !isFailedOrder_(o); })[0] : null;
+    if (prior) {
+      const resumed = resumeRegistration_(prior, plan, ev);
+      const reply = registrationReply_(prior, resumed.tickets, etransferEmailNow);
+      if (requestId) { try { CacheService.getScriptCache().put(requestId, JSON.stringify(reply), 600); } catch (e) { /* fine */ } }
+      if (resumed.madeAny) logEntry = ["Public: " + prior.payerName, "order.resumed", prior.code, { event: ev.name, tickets: resumed.tickets.length }];
+      return { reply: reply, order: prior, created: resumed.tickets, noEmail: !resumed.madeAny };
+    }
+
+    if (ev.capacity && ev.capacityRule === "paid") {
       // SEC-02: "paid" counts only confirmed tickets, but sign-ups must not pile up without limit.
       // Hard stop once paid tickets reach capacity; ceiling of 125% on paid + awaiting.
-      delete DB_.rows["Tickets"];   // counted on fresh data, inside the lock
       let paid = 0, awaiting = 0;
       readRows_("Tickets").forEach(function (t) {
-        if (t.eventId !== event.id) return;
+        if (t.eventId !== ev.id) return;
         if (t.status === "paid") paid++;
         else if (t.status === "awaiting") awaiting++;
       });
-      if (paid >= event.capacity) throw new ApiError_("SOLD_OUT", "Sorry, this event is full.");
-      if (paid + awaiting + everyone.length > Math.floor(event.capacity * 1.25)) {
+      if (paid >= ev.capacity) throw new ApiError_("SOLD_OUT", "Sorry, this event is full.");
+      if (paid + awaiting + everyone.length > Math.floor(ev.capacity * 1.25)) {
         throw new ApiError_("SOLD_OUT", "Registration queue is full. Please check back later.");
       }
+      if (plan.isFree && paid + everyone.length > ev.capacity) {
+        throw new ApiError_("SOLD_OUT", ev.capacity - paid > 0 ? "Only " + (ev.capacity - paid) + " spot(s) left." : "Sorry, this event is full.");
+      }
     }
-    if (event.capacity && event.capacityRule === "all") {
-      delete DB_.rows["Tickets"];   // a hard limit must be counted on fresh data, inside the lock
-      const taken = spotsTaken_(event);
-      if (taken + everyone.length > event.capacity) {
-        throw new ApiError_("SOLD_OUT", event.capacity - taken > 0
-          ? "Only " + (event.capacity - taken) + " spot(s) left."
+    if (ev.capacity && ev.capacityRule === "all") {
+      const taken = spotsTaken_(ev);
+      if (taken + everyone.length > ev.capacity) {
+        throw new ApiError_("SOLD_OUT", ev.capacity - taken > 0
+          ? "Only " + (ev.capacity - taken) + " spot(s) left."
           : "Sorry, this event is full.");
       }
     }
+    const tickets = snapshotTickets;
     everyone.forEach(function (p) {
       const already = tickets.some(function (t) {
-        return t.eventId === event.id && t.email.toLowerCase() === p.email && (t.status === "awaiting" || t.status === "paid");
+        return t.eventId === ev.id && t.email.toLowerCase() === p.email && (t.status === "awaiting" || t.status === "paid");
       });
       if (already) p.flag = joinFlags_(p.flag, "Already registered with this email");
     });
 
     const now = new Date().toISOString();
-    const total = everyone.reduce(function (sum, p) { return sum + p.price; }, 0);
-    const isFree = total === 0 && !needsReview;   // a $0 order with a membership flag stays "awaiting" until an exec checks it
+    const total = plan.total;
+    const isFree = plan.isFree;   // a $0 order with a membership flag stays "awaiting" until an exec checks it
     const order = {
       id: newId_("OR"),
-      code: issueOrderCode_(event, snapshotOrders),
-      eventId: event.id,
-      payerName: payer.name,
-      payerEmail: payer.email,
-      etransferName: etransferName,
+      code: issueOrderCode_(ev, snapshotOrders),
+      eventId: ev.id,
+      payerName: everyone[0].name,
+      payerEmail: everyone[0].email,
+      etransferName: String(req.etransferName || "").trim().slice(0, 80),
       total: total,
       status: isFree ? "paid" : "awaiting",
       createdAt: now,
       paidAt: isFree ? now : "",
       paidBy: isFree ? "Free event" : "",
-      notes: total === 0 && needsReview ? "Requires exec verification of member status" : ""
+      notes: total === 0 && needsReview ? "Requires exec verification of member status" : "",
+      requestId: rawRid
     };
     insertRow_("Orders", order);
 
-    const created = everyone.map(function (p) {
-      const ticket = {
-        id: newTicketId_(),
-        secret: Utilities.getUuid().replace(/-/g, ""),
-        orderId: order.id,
-        eventId: event.id,
-        name: p.name,
-        email: p.email,
-        ucid: p.ucid,
-        memberId: p.memberId,
-        ticketType: p.ticketTypeName,
-        price: p.price,
-        answers: p.answers,
-        flag: p.flag,
-        status: order.status,
-        checkedInAt: "",
-        checkedInBy: "",
-        createdAt: now
-      };
-      return ticket;
-    });
-    insertRows_("Tickets", created);
-    logEntry = ["Public: " + payer.name, "order.create", order.code, { event: event.name, tickets: created.length, total: total }];   // written after the lock is released
+    const created = ticketRowsFor_(order, everyone, now);
+    try {
+      insertRows_("Tickets", created);
+    } catch (err) {
+      // The order is written but its tickets are not (or only some are). Never leave that behind: close the order
+      // and anything that was written, then tell the page to try again (same requestId).
+      abandonOrder_(order, err);
+      throw (err instanceof ApiError_ ? err : new ApiError_("TEMPORARY", "We couldn't save your registration. Please try again in a moment."));
+    }
+    logEntry = ["Public: " + everyone[0].name, "order.create", order.code, { event: ev.name, tickets: created.length, total: total, member: !!memberRec }];   // written after the lock is released
 
-    const reply = {
-      ok: true,
-      order: { code: order.code, total: total, status: order.status },
-      needsReview: total === 0 && needsReview,
-      etransferEmail: etransferEmailNow,
-      tickets: created.map(function (t) { return { name: t.name, ticketType: t.ticketType, price: t.price, flag: t.flag }; })
-    };
+    const reply = registrationReply_(order, created, etransferEmailNow);
     if (requestId) { try { CacheService.getScriptCache().put(requestId, JSON.stringify(reply), 600); } catch (e) { /* fine */ } }
-    return { reply: reply, order: order, created: created };
+    return { reply: reply, order: order, created: created, ev: ev };
   });
   if (done.repeat) return done.repeat;
   if (logEntry) log_.apply(null, logEntry);
+  if (done.noEmail) return done.reply;
 
   // Email after the lock is released, so a slow send never holds up scans or other registrations.
+  const evForMail = done.ev || event;
   if (done.order.status === "paid") {
     // Free event (RSVP): everyone gets their QR ticket straight away, instead of a "payment needed" style email.
     const sent = sendPendingTicketEmails_(done.order.id);
@@ -145,9 +161,110 @@ function register_(req) {
   } else if (done.reply.needsReview) {
     done.reply.emailSent = false;   // $0 and waiting for an exec to check membership: no ticket and no payment email yet
   } else {
-    done.reply.emailSent = sendRegistrationEmail_(event, done.order, done.created);
+    done.reply.emailSent = sendRegistrationEmail_(evForMail, done.order, done.created);
   }
   return done.reply;
+}
+
+/** The member a device proves it is (pass key from the emailed link), or null. A wrong or missing key is simply "not verified". */
+function verifiedMemberFromKey_(creds, members) {
+  if (!creds || !creds.memberId || !creds.k) return null;
+  const id = String(creds.memberId).trim().toUpperCase();
+  if (!linkKeyOk_("pass", id, creds.k)) return null;
+  return (members || loadMembers_()).filter(function (m) { return m.memberId === id; })[0] || null;
+}
+
+/** A verified member's details come from the Membership sheet (the page's copy is only a preview). */
+function fillFromMember_(raw, member) {
+  const p = Object.assign({}, raw || {});
+  if (!String(p.name || "").trim()) p.name = member.name;
+  if (!String(p.email || "").trim()) p.email = member.email;
+  p.memberId = member.memberId;
+  p.ucid = member.ucid;
+  return p;
+}
+
+/** Cleans every person, applies the member checks, and works out the total. Throws the same friendly errors as before. */
+function prepareRegistration_(rawPeople, event, members, memberRec) {
+  const people = rawPeople.slice();
+  if (memberRec) people[0] = fillFromMember_(people[0], memberRec);
+  const everyone = people.map(function (p, i) { return cleanPerson_(p, event, i); });
+  everyone.forEach(function (p, i) {
+    const verified = i === 0 && !!memberRec;
+    p.flag = membershipFlag_(p, members, verified ? memberRec : null);
+  });
+  const total = everyone.reduce(function (sum, p) { return sum + p.price; }, 0);
+  const needsReview = everyone.some(function (p) { return !!p.flag; });   // SEC-01: taken before the duplicate-email note, which is only a warning
+  return { everyone: everyone, total: total, needsReview: needsReview, isFree: total === 0 && !needsReview };
+}
+
+/** The ticket rows for some people on an order. All of them start in the order's status. */
+function ticketRowsFor_(order, people, now) {
+  return people.map(function (p) {
+    return {
+      id: newTicketId_(),
+      secret: Utilities.getUuid().replace(/-/g, ""),
+      orderId: order.id,
+      eventId: order.eventId,
+      name: p.name,
+      email: p.email,
+      ucid: p.ucid,
+      memberId: p.memberId,
+      ticketType: p.ticketTypeName,
+      price: p.price,
+      answers: p.answers,
+      flag: p.flag,
+      status: order.status,
+      checkedInAt: "",
+      checkedInBy: "",
+      createdAt: now
+    };
+  });
+}
+
+/** What the page needs after registering. `page` is each person's ticket page (payment status first, then the QR once paid). */
+function registrationReply_(order, tickets, etransferEmail) {
+  const needsReview = Number(order.total) === 0 && /Requires exec verification/.test(order.notes || "");
+  return {
+    ok: true,
+    order: { code: order.code, total: Number(order.total) || 0, status: order.status },
+    needsReview: needsReview,
+    etransferEmail: etransferEmail,
+    tickets: tickets.map(function (t) {
+      return { name: t.name, ticketType: t.ticketType, price: Number(t.price) || 0, flag: t.flag, page: needsReview ? "" : "ticket.html?t=" + t.secret };
+    })
+  };
+}
+
+/** An order closed because its tickets could not be written (see abandonOrder_). */
+function isFailedOrder_(o) {
+  return o.status === "cancelled" && /^registration failed/.test(String(o.notes || ""));
+}
+
+/**
+ * The registration's order exists but not (all of) its tickets: write the missing ones. People are matched by email and name,
+ * so a retry of the same request fills only the gaps and never doubles anyone.
+ */
+function resumeRegistration_(prior, plan, ev) {
+  const have = readRows_("Tickets").filter(function (t) { return t.orderId === prior.id; });
+  const same = function (t, p) { return String(t.email || "").toLowerCase() === p.email && normalizeName_(t.name) === normalizeName_(p.name); };
+  const missing = plan.everyone.filter(function (p) { return !have.some(function (t) { return same(t, p); }); });
+  if (!missing.length) return { tickets: have, madeAny: false };
+  const made = ticketRowsFor_(prior, missing, new Date().toISOString());
+  insertRows_("Tickets", made);   // if this fails too, it propagates and the next retry resumes again
+  return { tickets: have.concat(made), madeAny: true };
+}
+
+/** Close an order whose tickets could not be saved: anything that was written is cancelled too, so nothing half-finished stays live. */
+function abandonOrder_(order, err) {
+  try {
+    delete DB_.rows["Tickets"];
+    readRows_("Tickets").filter(function (t) { return t.orderId === order.id; }).forEach(function (t) {
+      updateRow_("Tickets", t.id, { status: "cancelled" }, t._row);
+    });
+    updateRow_("Orders", order.id, { status: "cancelled", notes: "registration failed, no tickets were issued (" + String(err && err.message || err).slice(0, 80) + ")" });
+    log_("system", "order.failed", order.code, { reason: String(err && err.message || err).slice(0, 120) });
+  } catch (e) { /* if even this fails, a retry with the same requestId finds the order and finishes it */ }
 }
 
 /**
@@ -165,7 +282,7 @@ function addOrder_(session, eventId, input, force, siteUrl) {
   const etransferName = String(input.etransferName || "").trim().slice(0, 80);
   const note = String(input.notes || "").trim().slice(0, 200);
 
-  const order = withIntakeLock_(function () {
+  const order = withIntakeAndScriptLock_(function () {
     if (event.capacity && !force) {
       const taken = spotsTaken_(event);
       if (taken + 1 > event.capacity) {
@@ -216,11 +333,16 @@ function cleanPerson_(p, event, index, lenient) {
   const memberId = String(p.memberId || "").trim().toUpperCase().slice(0, 20);
 
   const answers = {};
+  const usedKeys = {};
   event.questions.forEach(function (q) {
+    // answers are stored under the wording; if an older event has two questions worded alike, the second gets "(2)" so neither is lost
+    let key = q.label, n = 2;
+    while (usedKeys[key]) key = q.label + " (" + (n++) + ")";
+    usedKeys[key] = true;
     const value = String((p.answers || {})[q.id] || "").trim().slice(0, 300);
     if (q.required && !value && !lenient) throw new ApiError_("BAD_REQUEST", "\"" + q.label + "\" is missing for " + name + ".");
     if (value && q.type === "choice" && q.options.indexOf(value) === -1) throw new ApiError_("BAD_REQUEST", "Pick one of the options for \"" + q.label + "\".");
-    if (value) answers[q.label] = value;
+    if (value) answers[key] = value;
   });
 
   return {
@@ -230,16 +352,34 @@ function cleanPerson_(p, event, index, lenient) {
   };
 }
 
-/** Member tickets: look the person up in the Membership sheet. Never blocks, only flags. */
-function membershipFlag_(person, members) {
+/**
+ * Member tickets: look the person up in the Membership sheet. Never blocks, only flags (the help desk checks flagged people).
+ * `verified` = the member record this device proved with its private pass key: then only "not paid yet" can still flag.
+ * A typed ID or UCID alone is just a claim, so it must also fit the name, and ID and UCID must point at the same member.
+ */
+function membershipFlag_(person, members, verified) {
   if (!person.needsMembership) return "";
+  if (verified) return verified.paid ? "" : "Member price, but membership isn't paid yet";
   if (!person.memberId && !person.ucid) return "Member price, but no member ID or UCID given";
-  const match = members.filter(function (m) {
-    return (person.memberId && m.memberId === person.memberId) || (person.ucid && m.ucid === person.ucid);
-  })[0];
+  const byId = person.memberId ? members.filter(function (m) { return m.memberId === person.memberId; })[0] : null;
+  const byUcid = person.ucid ? members.filter(function (m) { return m.ucid === person.ucid; })[0] : null;
+  const match = byId || byUcid;
   if (!match) return "Member price, but no membership found";
+  if (byId && byUcid && byId !== byUcid) return "Member price, but the member ID and UCID belong to different members";
+  if (byId && person.ucid && byId.ucid && byId.ucid !== person.ucid) return "Member price, but the UCID doesn't match that member ID";
+  if (!namesRelated_(person.name, match.name)) return "Member price, but the name doesn't match the member on file";
   if (!match.paid) return "Member price, but membership isn't paid yet";
   return "";
+}
+
+/** Do two names plausibly belong to one person? They share a word (nicknames, middle names and word order don't matter). */
+function namesRelated_(a, b) {
+  const x = normalizeName_(a), y = normalizeName_(b);
+  if (!x || !y) return true;   // nothing to compare: don't flag on a blank
+  if (x === y || x.indexOf(y) !== -1 || y.indexOf(x) !== -1) return true;
+  const words = function (t) { return t.split(" ").filter(function (w) { return w.length >= 2; }); };
+  const wy = words(y);
+  return words(x).some(function (w) { return wy.indexOf(w) !== -1; });
 }
 
 function joinFlags_(a, b) {

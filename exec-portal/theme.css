@@ -562,3 +562,9 @@ body:not(.scanner-mode):not(.phone) .door-buttons { display: none; }
 /* Help desk: the Peekaboo panda beside the counts (peekaboo.css animates it); not on scanner phones */
 .desk-live { margin-left: 6px; }
 body.scanner-mode .desk-live { display: none !important; }
+
+/* Door volunteers: the one "undo last check-in" button under the scan result */
+.undo-last { display: block; margin: -6px auto 14px; font-size: 14px; }
+
+/* Payments: the "tick orders" hint looks like a hint, not an error, until something is ticked */
+.bulk-bar.idle { background: var(--surface); color: var(--text-2); border: 1px solid var(--border); }

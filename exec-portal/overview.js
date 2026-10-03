@@ -60,7 +60,7 @@ async function openOverview() {
   const payData = payEvents.map((e, i) => ({ event: e, data: pays[i].ok ? pays[i] : null }));
   const doorData = doorEvents.map((e, i) => ({ event: e, data: doors[i].ok ? doors[i] : null }));
   renderOverviewTiles(upcoming, payData, doorData);
-  renderOverviewAttention(payData, doorData);
+  renderOverviewAttention(payData, doorData, upcoming.length);
   renderNavBadges(payData, doorData);
   if (state.role === "admin") loadOverviewActivity(mine);
 }
@@ -101,8 +101,9 @@ function attentionItem(kind, icon, title, note, go) {
     <svg class="go"><use href="#i-arrow"/></svg></button>`;
 }
 
-function renderOverviewAttention(payData, doorData) {
+function renderOverviewAttention(payData, doorData, totalUpcoming) {
   const items = [];
+  const failed = payData.some((p) => !p.data) || doorData.some((d) => !d.data);   // a request that failed is not the same as "nothing to do"
   payData.forEach(({ event, data }) => {
     if (!data) return;
     if (data.counts.overdue > 0) items.push(attentionItem("bad", "alert", `${event.name}: ${T.ovOverdue(data.counts.overdue)}`, T.ovOverdueNote, { tab: "payments", eventId: event.id }));
@@ -115,9 +116,11 @@ function renderOverviewAttention(payData, doorData) {
   doorData.forEach(({ event, data }) => {
     items.push(attentionItem("ok", "scan", T.ovDoorOpen(event.name), data ? T.ovDoorNote(data.counts.checkedIn, data.counts.paid) : "", { tab: "door", eventId: event.id }));
   });
+  const partial = failed ? `<div class="state err"><b>${escapeHtml(T.ovPartial)}</b><button class="secondary small-button" type="button" id="ov-retry">${escapeHtml(T.ovRetry)}</button></div>` : "";
+  const covered = totalUpcoming > payData.length ? `<p class="muted small">${escapeHtml(T.ovCoverage(payData.length, totalUpcoming))}</p>` : "";
   $("ov-attention").innerHTML = items.length
-    ? `<div class="eyebrow">${escapeHtml(T.ovAttention)}</div>${items.join("")}`
-    : `<div class="all-clear"><svg><use href="#i-check"/></svg>${escapeHtml(T.ovNothing)}</div>`;
+    ? `<div class="eyebrow">${escapeHtml(T.ovAttention)}</div>${items.join("")}${partial}${covered}`
+    : (failed ? partial : `<div class="all-clear"><svg><use href="#i-check"/></svg>${escapeHtml(totalUpcoming > payData.length ? T.ovNothingNext(payData.length) : T.ovNothing)}</div>${covered}`);
 }
 
 function renderNavBadges(payData, doorData) {

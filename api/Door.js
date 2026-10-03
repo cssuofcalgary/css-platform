@@ -162,6 +162,7 @@ function scanCode_(session, eventId, code, atDesk) {
 
     const now = new Date().toISOString();
     updateRow_("Tickets", ticket.id, { checkedInAt: now, checkedInBy: session.name }, ticket._row, true);   // row was just read fresh
+    rememberCheckIn_(ticket.id, session);
     logEntry = [session.name, atDesk ? "checkin.desk" : "checkin", ticket.id, { name: ticket.name, flag: ticket.flag || "" }];   // written after the lock is released
     if (matchedViaMember) return scanResult_("green", "Checked in! (Matched via Member Pass: " + matchedViaMember + "). Welcome!", person);
     return scanResult_("green", ticket.flag ? "Checked in at the help desk." : "Checked in. Welcome!", person);
@@ -170,12 +171,32 @@ function scanCode_(session, eventId, code, atDesk) {
   return result;
 }
 
-/** Exec: take back a check-in (scanned the wrong person, or scanned twice by mistake). */
+// A door volunteer can only take back their own recent mistake: the check-in must be by the same sign-in (session id, not just the
+// same typed name), under ten minutes old, for an event whose entry is open. Execs and the help desk can undo any check-in.
+const UNDO_WINDOW_MS = 10 * 60 * 1000;
+
+function rememberCheckIn_(ticketId, session) {
+  try {
+    CacheService.getScriptCache().put("ci_" + ticketId, JSON.stringify({ sid: session.sid || "", at: Date.now() }), Math.ceil(UNDO_WINDOW_MS / 1000) + 120);
+  } catch (e) { /* only a convenience: without it a volunteer must ask the help desk */ }
+}
+
+function assertVolunteerMayUndo_(session, ticket) {
+  const limited = new ApiError_("UNDO_LIMITED", "A door volunteer can only undo their own check-in from the last 10 minutes. Ask the help desk.");
+  let record = null;
+  try { record = JSON.parse(CacheService.getScriptCache().get("ci_" + ticket.id) || "null"); } catch (e) { record = null; }
+  if (!record || !session.sid || record.sid !== session.sid || Date.now() - record.at > UNDO_WINDOW_MS) throw limited;
+  const event = findEvent_(function (e) { return e.id === ticket.eventId; });
+  if (!event || !event.entryOpen) throw limited;
+}
+
+/** Take back a check-in (scanned the wrong person, or scanned twice by mistake). */
 function undoCheckIn_(session, ticketId) {
   return withLock_(function () {
     const ticket = readRows_("Tickets").filter(function (t) { return t.id === ticketId; })[0];
     if (!ticket) throw new ApiError_("NOT_FOUND", "Ticket not found.");
     if (!ticket.checkedInAt) return { ok: true, already: true };
+    if (session.role === "door") assertVolunteerMayUndo_(session, ticket);
     updateRow_("Tickets", ticket.id, { checkedInAt: "", checkedInBy: "" }, ticket._row);
     log_(session.name, "checkin.undo", ticket.id, { name: ticket.name, wasBy: ticket.checkedInBy, wasAt: ticket.checkedInAt });
     return { ok: true };
@@ -262,7 +283,7 @@ function doorList_(eventId, session, opts) {
   const unpaid = active.filter(function (t) { return t.status === "awaiting"; });
   const flagged = active.filter(function (t) { return t.status === "paid" && t.flag && !t.checkedInAt; });
   const inside = active.filter(function (t) { return t.checkedInAt; });
-  const recent = inside.slice().sort(function (a, b) { return String(b.checkedInAt).localeCompare(String(a.checkedInAt)); }).slice(0, DOOR_RECENT);
+  const recent = doorOnly ? [] : inside.slice().sort(function (a, b) { return String(b.checkedInAt).localeCompare(String(a.checkedInAt)); }).slice(0, DOOR_RECENT);
 
   // the small lists, each person once
   const seen = {}, tickets = [];

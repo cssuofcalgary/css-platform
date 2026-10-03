@@ -11,7 +11,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Silkscreen:wght@400;700&family=Source+Serif+4:ital,wght@0,400;0,600;0,700;1,600;1,700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="public.css?v=0.3.7">
+  <link rel="stylesheet" href="public.css?v=1.7.0">
 </head>
 <body>
   <div class="app-container">
@@ -24,6 +24,15 @@
       <img src="assets/top_panda.png" class="panda top-panda" alt="">
       <main id="page" class="card">
         <a class="back" href="./" data-t="allEvents"></a>
+
+        <section id="my-list" hidden>
+          <h1 class="page-title" data-t="myTicketsTitle"></h1>
+          <p id="my-hello" class="muted center"></p>
+          <ul id="my-cards" class="ticket-list"></ul>
+          <p class="center"><button type="button" id="my-forget" class="link-button" data-t="myTicketsForget"></button></p>
+        </section>
+
+        <div id="find-block">
         <h1 class="page-title" data-t="findTitle"></h1>
         <p class="muted center" data-t="findIntro"></p>
 
@@ -49,6 +58,7 @@
 
         <p id="find-result" class="notice" role="status" aria-live="polite" hidden></p>
         <p class="hint center" data-t="findHelp"></p>
+        </div>
       </main>
       <img src="assets/bottom_panda.png" class="panda bottom-panda" alt="">
     </div>
@@ -60,7 +70,7 @@
   </div>
 
   <script src="config.js?v=0.3.0"></script>
-  <script src="strings.js?v=0.5.0"></script>
-  <script src="tickets.js?v=0.3.7"></script>
+  <script src="strings.js?v=1.7.1"></script>
+  <script src="tickets.js?v=1.0.0"></script>
 </body>
 </html>

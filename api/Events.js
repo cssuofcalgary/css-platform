@@ -231,17 +231,32 @@ function registrationOpen_(event) {
 
 // ---- Helpers ----------------------------------------------------------------
 
+const MAX_TICKET_PRICE = 1000;
+const MAX_CAPACITY = 100000;
+
+/** "2099-02-31" fits the date pattern but is not a day on the calendar. */
+function isRealDate_(iso) {
+  const p = String(iso).split("-").map(Number);
+  const d = new Date(Date.UTC(p[0], p[1] - 1, p[2]));
+  return d.getUTCFullYear() === p[0] && d.getUTCMonth() === p[1] - 1 && d.getUTCDate() === p[2];
+}
+
 function cleanEventInput_(input) {
   const text = function (v, max) { return String(v === undefined || v === null ? "" : v).trim().slice(0, max || 200); };
   const name = text(input.name, 120);
   if (!name) throw new ApiError_("BAD_REQUEST", "The event needs a name.");
   const date = text(input.date, 10);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new ApiError_("BAD_REQUEST", "The event needs a date.");
+  if (!isRealDate_(date)) throw new ApiError_("BAD_REQUEST", "That date doesn't exist (" + date + "). Check the day and month.");
+  ["startTime", "endTime"].forEach(function (k) {
+    const v = text(input[k], 5);
+    if (v && !/^([01]\d|2[0-3]):[0-5]\d$/.test(v)) throw new ApiError_("BAD_REQUEST", "The " + (k === "startTime" ? "start" : "end") + " time doesn't look right (use hours and minutes, like 18:30).");
+  });
 
   const ticketTypes = (input.ticketTypes || []).map(function (t) {
     const price = Number(t.price);
     if (!text(t.name, 60)) throw new ApiError_("BAD_REQUEST", "Every ticket type needs a name.");
-    if (!(price >= 0)) throw new ApiError_("BAD_REQUEST", "Ticket prices must be 0 or more.");
+    if (!isFinite(price) || price < 0 || price > MAX_TICKET_PRICE) throw new ApiError_("BAD_REQUEST", "Ticket prices must be between $0 and $" + MAX_TICKET_PRICE + ".");
     return {
       id: text(t.id, 20) || newId_("TT"),
       name: text(t.name, 60),
@@ -260,8 +275,21 @@ function cleanEventInput_(input) {
     if (type === "choice" && options.length < 2) throw new ApiError_("BAD_REQUEST", "Choice questions need at least 2 options.");
     return { id: text(q.id, 20) || newId_("Q"), label: text(q.label, 150), type: type, options: options, required: !!q.required };
   });
+  // Answers are saved under the question's wording, so two questions worded the same would overwrite each other.
+  const seenLabels = {};
+  questions.forEach(function (q) {
+    const key = q.label.toLowerCase();
+    if (seenLabels[key]) throw new ApiError_("BAD_REQUEST", "Two questions are worded the same (\"" + q.label + "\"). Change one so each answer is saved separately.");
+    seenLabels[key] = true;
+  });
 
-  const capacity = text(input.capacity) === "" ? "" : Math.max(0, Math.floor(Number(input.capacity) || 0));
+  // A blank capacity means "no limit". Anything else must be a real number of places: 0, a negative or "not a number" would quietly mean no limit.
+  let capacity = "";
+  if (text(input.capacity) !== "") {
+    const n = Number(input.capacity);
+    if (!isFinite(n) || n < 1 || n > MAX_CAPACITY) throw new ApiError_("BAD_REQUEST", "Capacity must be a whole number from 1 to " + MAX_CAPACITY + ", or left blank for no limit.");
+    capacity = Math.floor(n);
+  }
   const prefix = text(input.codePrefix, 4).toUpperCase().replace(/[^A-Z0-9]/g, "") || initials_(name);
   const closes = text(input.registrationCloses, 16);
   if (closes && !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(closes)) throw new ApiError_("BAD_REQUEST", "Registration closing time doesn't look right.");

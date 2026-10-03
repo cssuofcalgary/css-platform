@@ -53,7 +53,7 @@ function nightlyJob(forceBackup) {
   }
 
   try {
-    healthCheck_().checks.forEach(function (c) { if (!c.ok) problems.push(c.name + ": " + c.detail); });
+    healthCheck_().checks.forEach(function (c) { if (!c.ok && !c.warning) problems.push(c.name + ": " + c.detail); });
   } catch (err) {
     problems.push("The health check itself failed: " + String(err && err.message || err));
   }

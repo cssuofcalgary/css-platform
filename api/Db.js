@@ -13,7 +13,7 @@ const TABLES = {
            "ticketTypes", "questions", "codePrefix", "createdBy", "createdAt", "updatedBy", "updatedAt",
            "registrationCloses", "archivedAt", "archiveYear", "summary", "waitlist"],
   Orders: ["id", "code", "eventId", "payerName", "payerEmail", "etransferName", "total", "status",
-           "createdAt", "paidAt", "paidBy", "notes", "remindedAt", "cancelRequestedAt", "cancelRequestedBy"],
+           "createdAt", "paidAt", "paidBy", "notes", "remindedAt", "cancelRequestedAt", "cancelRequestedBy", "requestId"],
   Tickets: ["id", "secret", "orderId", "eventId", "name", "email", "ucid", "memberId", "ticketType",
             "price", "answers", "flag", "status", "checkedInAt", "checkedInBy", "createdAt", "emailedAt"],
   Emails: ["id", "subject", "title", "subtitle", "intro", "closing", "updatedBy", "updatedAt"],
@@ -406,6 +406,15 @@ function withIntakeLock_(fn) {
   const lock = LockService.getUserLock();
   if (!lock.tryLock(25000)) throw new ApiError_("BUSY", "The system is busy. Try again in a moment.");
   try { return fn(); } finally { lock.releaseLock(); }
+}
+
+/**
+ * For anything that MAKES PAID TICKETS (a free registration, a registration added by Finance, a waitlist offer): the intake
+ * lock first, then the main lock that Mark paid and refunds use, so a last spot can't be handed out twice at the same moment.
+ * Always in this order (intake, then main), and the main lock is never held while waiting for the intake lock.
+ */
+function withIntakeAndScriptLock_(fn) {
+  return withIntakeLock_(function () { return withLock_(fn); });
 }
 
 function withLock_(fn) {

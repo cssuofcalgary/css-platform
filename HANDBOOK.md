@@ -172,6 +172,20 @@ Settings has six sections down the left. Pick one to open it:
 
 The **light/dark switch** is next to the gear. It remembers your choice on that device.
 
+## Registering from the member portal
+Members can register for events from their pass page (**Upcoming events**): their name, email and UCID are filled in, and they can add friends. It is the same registration as the events site, so a member can also just use the Instagram link. A free event gives tickets straight away; a paid one shows the e-transfer details and "waiting for payment", and the ticket works once Finance marks it paid.
+If someone types a member ID that isn't theirs (the name doesn't match, or the ID and UCID belong to different people) the ticket gets a flag. A free member ticket then waits on the Payments list until an exec checks it, and a paid one is flagged for the help desk.
+
+## Fixing mistakes on Payments
+- **Marked paid, but a ticket was left unpaid** ("needs repair" under the order count): press **Repair**. It finishes the job and sends any missing emails.
+- **Cancelled or refunded the wrong order:** open the **Closed** list and press **Restore**. It goes back to "waiting for payment" and has to be paid again. If the event is full it asks you first.
+
+## The scan log
+On the Door tab, under the recent check-ins, **Scan log** lists the last scans for the event: what the scanner read, what the system answered, and why. **Copy as text** copies it so you can paste it to whoever is helping. Scanner phones have a Scan log button too.
+
+## Door volunteers and undo
+A volunteer can undo only their own check-in, within 10 minutes, while entry is open. Anything else is done from the help desk. **Settings → System health** warns if there is no door password: set one under Settings → Security, otherwise anyone with the scanner link can sign in as a volunteer while entry is open.
+
 ## Good to know
 - Everything you do is saved in a change log with your name.
 - You never need to open Google Sheets or Google Drive. If you think you have to, ask the President first.

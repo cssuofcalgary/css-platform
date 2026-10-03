@@ -38,6 +38,7 @@ function renderFinanceExtras(shown) {
   const pickable = shown.filter((o) => o.status === "awaiting");
   const bar = $("bulk-bar");
   bar.hidden = !pickable.length && !selected.length;
+  bar.classList.toggle("idle", !selected.length);   // plain until something is ticked: the hint is an instruction, not a warning
   const total = selected.reduce((sum, o) => sum + o.total, 0);
   bar.innerHTML = `
     <span class="bulk-info">${selected.length ? T.bulkSelected(selected.length, money(total)) : T.bulkHint}</span>

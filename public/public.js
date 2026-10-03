@@ -101,7 +101,7 @@ function registerBlock(e) {
   return `
     ${e.spotsLeft !== null && e.spotsLeft <= 20 ? `<p class="spots">${T.spotsLeft(e.spotsLeft)}</p>` : ""}
     <button class="register" id="open-register">${T.register}</button>
-    <p class="muted small">${T.payNote}${e.registrationCloses ? " " + T.closesAt(formatDateTime(e.registrationCloses)) : ""}</p>`;
+    <p class="muted small">${e.ticketTypes.some((t) => Number(t.price) > 0) ? T.payNote + " " : ""}${e.registrationCloses ? T.closesAt(formatDateTime(e.registrationCloses)) : ""}</p>`;
 }
 
 function formatDateTime(local) {
@@ -138,7 +138,7 @@ function showRegisterForm(e) {
       </section>
 
       ${hasPrice ? `
-      <section class="card-block">
+      <section class="card-block" id="etransfer-block">
         <label for="etransfer-name">${T.etransferName}</label>
         <input id="etransfer-name" autocomplete="off" maxlength="80">
         <p class="hint">${T.etransferNameHint}</p>
@@ -172,7 +172,7 @@ function showWaitlistForm(e) {
     <form id="register-form" class="register-form" novalidate>
       <section class="person card-block" data-person="0">
         <h2>${T.yourDetails}</h2>
-        ${personFields(e, 0)}
+        ${personFields(e, 0, true)}
       </section>
       <span id="total" hidden></span>
       <input type="text" name="website" id="website" class="hp" tabindex="-1" autocomplete="off" aria-hidden="true">
@@ -215,7 +215,7 @@ async function onWaitlistSubmit(ev) {
   window.scrollTo(0, 0);
 }
 
-function personFields(e, i) {
+function personFields(e, i, waitlist) {
   const id = (name) => `p${i}-${name}`;
   const single = e.ticketTypes.length === 1;
   return `
@@ -224,7 +224,7 @@ function personFields(e, i) {
 
     <label for="${id("email")}">${T.email} <span class="req">*</span></label>
     <input id="${id("email")}" data-f="email" type="email" inputmode="email" autocomplete="${i ? "off" : "email"}" maxlength="120" required>
-    <p class="hint">${i ? T.guestEmailHint : T.emailHint}</p>
+    <p class="hint">${waitlist ? T.waitlistEmailHint : i ? T.guestEmailHint : T.emailHint}</p>
 
     <label for="${id("ucid")}">${T.ucid}</label>
     <input id="${id("ucid")}" data-f="ucid" inputmode="numeric" maxlength="12">
@@ -305,6 +305,10 @@ function updateTotal() {
     if (type) total += Number(type.price) || 0;
   });
   $("total").textContent = money(total);
+  // Nothing owed: no e-transfer details to ask for, and the button says it is just a registration
+  if ($("etransfer-block")) $("etransfer-block").hidden = total === 0;
+  const button = $("submit");
+  if ($("etransfer-block") && button && !button.disabled) button.textContent = total > 0 ? T.submitPaid : T.submitFree;   // only on the registration form of an event that charges
 }
 
 function readPeople() {
@@ -361,6 +365,7 @@ async function onSubmit(ev) {
   }
   button.disabled = false;
   button.textContent = T.submit;
+  updateTotal();
 
   if (!reply.ok) {
     error.textContent = reply.error === "NETWORK" ? T.error : (reply.message || T.error);
@@ -378,7 +383,7 @@ function showPaymentScreen(reply) {
     <article class="done">
       ${pandaImg(!review && free ? "success" : "almost")}
       <h1 class="page-title">${review ? T.reviewTitle : free ? T.registeredFree : T.almostDone}</h1>
-      ${review ? `<p class="lead">${T.reviewNote}</p>` : free ? `<p>${T.freeNote}</p>` : `
+      ${review ? `<p class="lead">${T.reviewNote}</p>` : free ? `<p class="lead">${T.freeTicketsNote}</p>` : `
         <p class="lead">${T.sendEtransfer}</p>
         <div class="pay-box">
           <div class="pay-row"><span>${T.amount}</span><div><strong class="big">${money(reply.order.total)}</strong> <small class="muted">${T.exactly}</small></div></div>
@@ -388,11 +393,13 @@ function showPaymentScreen(reply) {
             <button class="copy" data-copy="${escapeAttr(reply.order.code)}">${T.copy}</button></div></div>
         </div>
         <p class="muted small">${T.noMessageNote}</p>
-        <p>${T.confirmNote}</p>`}
+        <p>${T.confirmNote}</p>
+        <p class="status-line"><strong>${T.statusHeading}:</strong> ${T.statusWaiting}</p>
+        <p class="muted small">${T.statusPageNote}</p>`}
 
-      <h2 class="small-heading">${T.ticketsHeading}</h2>
+      <h2 class="small-heading">${free && !review ? T.myTicketsTitle : T.ticketsHeading}</h2>
       <ul class="ticket-list">${reply.tickets.map((t) => `
-        <li><span>${escapeHtml(t.name)} · ${escapeHtml(t.ticketType)}</span><strong>${money(t.price)}</strong></li>`).join("")}
+        <li><span>${escapeHtml(t.name)} · ${escapeHtml(t.ticketType)}${t.page ? `<br><a class="ticket-open" href="${escapeAttr(new URL(t.page, location.href).href)}">${free ? T.openTicket : T.statusLink}</a>` : ""}</span><strong>${money(t.price)}</strong></li>`).join("")}
       </ul>
       ${review ? "" : flagged.map((t) => `<p class="flag-note">${escapeHtml(T.flagNote(t.name))}</p>`).join("")}
       ${reply.emailSent ? `<p class="muted small">${T.emailedCopy}</p>` : ""}

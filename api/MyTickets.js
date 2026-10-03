@@ -50,7 +50,7 @@ function findMyTickets_(req) {
   addresses.forEach(function (to) {
     if (!lookupBudget_()) return;
     const items = groups[to].map(function (t) { return { event: events[t.eventId], ticket: t }; });
-    if (sendMyTicketsEmail_(to, items, ticketsLink_(to))) { sent++; lookupSpend_(); }
+    if (sendMyTicketsEmail_(to, items, allTicketsLinkFor_(to))) { sent++; lookupSpend_(); }
   });
   if (sent > 0) lookupDone_(key);
   log_("public", "tickets.lookup", "", { by: byEmail ? "email" : "ucid", emails: sent });
@@ -176,9 +176,39 @@ function memberPassLink_(member) {
   return MEMBER_PORTAL_URL + "?member=" + encodeURIComponent(member.memberId) + "&k=" + linkKey_("pass", member.memberId);
 }
 
-/** Link to the tickets of someone who isn't (or may not be) a member, by the email on their tickets. */
+/**
+ * Link to the tickets of a guest (anyone who isn't a member), by the email on their tickets. Guests stay on the event site:
+ * tickets.html shows their tickets. (Older links that point at the member portal keep working there.)
+ */
 function ticketsLink_(email) {
-  return MEMBER_PORTAL_URL + "?tickets=" + encodeURIComponent(String(email).toLowerCase()) + "&k=" + linkKey_("tix", email);
+  const stored = PropertiesService.getScriptProperties().getProperty("PUBLIC_SITE_URL");
+  const base = allowedSiteUrl_(stored) ? String(stored).replace(/\/?$/, "/") : SITE_URL_DEFAULT;
+  return base + "tickets.html?e=" + encodeURIComponent(String(email).toLowerCase()) + "&k=" + linkKey_("tix", email);
+}
+
+/** The member (with a pass) whose email this is, if any: members read their tickets in the member portal, guests on the event site. */
+function memberForEmail_(email) {
+  const to = String(email || "").toLowerCase();
+  if (!to) return null;
+  return loadMembers_().filter(function (m) { return m.memberId && String(m.email || "").toLowerCase() === to; })[0] || null;
+}
+
+/** Where "see all my tickets" in an email goes: the member portal for a member, the event site for a guest. */
+function allTicketsLinkFor_(email) {
+  const member = memberForEmail_(email);
+  return member ? memberPassLink_(member) + "&view=tickets" : ticketsLink_(email);
+}
+
+/**
+ * For the member portal's registration form: the signed-in device (pass key) gets the details to pre-fill. The key proves
+ * it is this member, so the profile is only ever returned to the member's own link.
+ */
+function memberProfile_(req) {
+  const memberId = String(req.memberId || "").trim().toUpperCase();
+  if (!memberId || !linkKeyOk_("pass", memberId, req.k)) throw new ApiError_("NOT_ALLOWED", "This link isn't valid. Ask for a new one.");
+  const member = loadMembers_().filter(function (m) { return m.memberId === memberId; })[0];
+  if (!member) throw new ApiError_("NOT_FOUND", "Member not found.");
+  return { ok: true, member: { memberId: member.memberId, name: member.name, email: member.email, ucid: member.ucid, paid: !!member.paid } };
 }
 
 /**

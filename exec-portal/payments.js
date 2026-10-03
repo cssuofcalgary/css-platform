@@ -60,8 +60,8 @@ function renderOrders() {
   const data = payState.data;
   if (!data) return;
   const awaiting = data.counts.awaiting;
-  $("pay-summary").textContent = T.paySummary(data.spotsTaken, data.event.capacity ? ` / ${data.event.capacity}` : "", awaiting) +
-    T.payMoney(money(data.money.received), money(data.money.received + data.money.awaiting));
+  $("pay-summary").textContent = T.paySummary(data.paidTickets, data.event.capacity ? ` / ${data.event.capacity}` : "", awaiting) +
+    T.payMoney(dollars(data.money.received), dollars(data.money.received + data.money.awaiting));
 
   $("pay-unsent").hidden = !data.unsentEmails;
   $("pay-unsent").innerHTML = data.unsentEmails
@@ -115,7 +115,7 @@ function orderCard(o) {
         ${o.status === "refunded" || o.status === "cancelled" ? `<button class="link" data-act="restore">${T.restoreOrder}</button>` : ""}
         ${o.status === "paid" ? `<button class="link" data-act="resend">${T.resend}</button>` : ""}
         ${o.cancelRequestedAt ? `<button class="link" data-act="dismiss">${T.dismissRequest}</button>` : ""}
-        ${o.status === "paid" || o.status === "awaiting" ? `<button class="link danger" data-act="refund">${T.refund}</button>` : ""}
+        ${o.status === "paid" || o.status === "awaiting" ? `<button class="link danger" data-act="refund">${o.status === "paid" ? T.recordRefund : T.cancelOrder}</button>` : ""}
         <span class="order-result"></span>
       </div>
     </li>`;
@@ -128,8 +128,8 @@ function renderPayTiles() {
   const overdue = d.counts.overdue;
   const cap = d.event.capacity ? ` / ${d.event.capacity}` : "";
   $("pay-tiles").innerHTML =
-    statTile(T.tileReceived, money(d.money.received), T.tilePaidCount(d.spotsTaken)) +
-    statTile(T.tileStillToCome, money(d.money.awaiting), T.tileOrdersAwaiting(awaiting)) +
+    statTile(T.tileReceived, dollars(d.money.received), T.tilePaidCount(d.paidTickets)) +
+    statTile(T.tileStillToCome, dollars(d.money.awaiting), T.tileOrdersAwaiting(awaiting)) +
     statTile(T.tileOverdue, overdue, T.tileOverdueNote(d.reminderHours || 48), overdue > 0) +
     statTile(T.tileSpots, `${d.spotsTaken}${cap}`, d.event.capacity ? T.tileSpotsNote(Math.max(d.event.capacity - d.spotsTaken, 0)) : "");
 }
