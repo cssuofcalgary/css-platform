@@ -284,3 +284,6 @@ label.radio:has(input:checked) { border-style: solid; border-color: var(--primar
 .my-ticket .when { color: var(--ink-soft, #6b6153); font-size: 14px; }
 .my-ticket .state { font-weight: 600; white-space: nowrap; }
 .my-ticket .state.wait { color: #a1502f; }
+
+/* "Keep this page" reminder when an event doesn't email confirmations or tickets */
+.keep-note { padding: 10px 14px; border-radius: 10px; background: color-mix(in srgb, var(--accent, #c8202f) 8%, transparent); border: 1px dashed color-mix(in srgb, var(--accent, #c8202f) 40%, transparent); }

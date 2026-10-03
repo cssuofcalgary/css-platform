@@ -9,8 +9,8 @@
   <link rel="icon" href="assets/css-logo.png" type="image/png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Fraunces:opsz,wght@9..144,500;9..144,600&family=JetBrains+Mono:wght@400;500&display=swap">
-  <link rel="stylesheet" href="styles.css?v=1.6.1">
-  <link rel="stylesheet" href="theme.css?v=0.11.2">
+  <link rel="stylesheet" href="styles.css?v=1.7.0">
+  <link rel="stylesheet" href="theme.css?v=0.12.0">
   <link rel="stylesheet" href="peekaboo.css?v=1.0.1">
 </head>
 <body>
@@ -88,6 +88,7 @@
       <button id="nav-burger" class="burger" type="button" aria-label="Menu"><svg><use href="#i-menu"/></svg></button>
       <div class="crumb"><span class="crumb-root">CSS</span> / <b id="crumb"></b></div>
       <select id="global-event" class="global-event" aria-label="Event" hidden></select>
+      <button id="mail-pill" class="mail-pill" type="button" hidden></button>
     </header>
 
     <main class="content">
@@ -214,6 +215,7 @@
           <button type="button" class="on" data-step="p-basics" data-t="edBasics"></button>
           <button type="button" data-step="p-when" data-t="edSchedule"></button>
           <button type="button" data-step="p-cap" data-t="edCapacity"></button>
+          <button type="button" data-step="p-emails" data-t="evEmails"></button>
           <button type="button" data-step="p-tix" data-t="evTickets"></button>
           <button type="button" data-step="p-reg" data-t="edRegistration"></button>
           <button type="button" data-step="p-pub" data-t="edPublishing"></button>
@@ -274,6 +276,18 @@
             </div>
           </section>
 
+          <section class="card panel" id="p-emails">
+            <header><h3 data-t="evEmails"></h3><p data-t="evEmailsHint"></p></header>
+            <div class="inner">
+              <label class="check-row"><input id="ev-mail-registration" type="checkbox"> <span data-t="evMailRegistration"></span></label>
+              <p class="muted small field-hint" data-t="evMailRegistrationHint"></p>
+              <label class="check-row"><input id="ev-mail-tickets" type="checkbox"> <span data-t="evMailTickets"></span></label>
+              <p class="muted small field-hint" data-t="evMailTicketsHint"></p>
+              <label class="check-row"><input id="ev-mail-reminders" type="checkbox"> <span data-t="evMailReminders"></span></label>
+              <p class="muted small field-hint" data-t="evMailRemindersHint"></p>
+            </div>
+          </section>
+
           <section class="card panel" id="p-tix">
             <header><h3 data-t="evTickets"></h3><p data-t="edTicketsHint"></p></header>
             <div class="inner">
@@ -322,14 +336,17 @@
           <p id="pay-summary" class="muted small"></p>
           <span class="button-row">
             <button id="mail-all-button" class="secondary small-button" data-t="mailAll"></button>
+            <button id="find-payment-button" class="secondary small-button" data-t="btnFindPayment"></button>
             <button id="add-order-button" class="secondary small-button" data-t="addOrder"></button>
           </span>
         </div>
         <div id="pay-unsent" class="notice-box" hidden></div>
+        <div id="pay-refunds" class="notice-box" hidden></div>
         <div id="pay-overdue" class="notice-box" hidden></div>
         <div class="chips" id="pay-filters">
           <button class="chip active" data-filter="awaiting" data-t="filterAwaiting"></button>
           <button class="chip" data-filter="overdue"></button>
+          <button class="chip" data-filter="sorting" hidden></button>
           <button class="chip" data-filter="cancelreq" hidden></button>
           <button class="chip" data-filter="waitlist" hidden></button>
           <button class="chip" data-filter="paid" data-t="filterPaid"></button>
@@ -616,6 +633,99 @@
     </div>
   </div>
 
+  <!-- Record a payment / find the order for a payment -->
+  <dialog id="pay-dialog" class="edit-dialog wide">
+    <form id="pay-form" class="editor" novalidate>
+      <h2 id="pay-title"></h2>
+      <p id="pay-intro" class="muted small"></p>
+      <div class="grid-2">
+        <div><label for="pay-amount" data-t="payAmountLabel"></label><input id="pay-amount" inputmode="decimal" autocomplete="off"></div>
+        <div><label for="pay-sender" data-t="paySenderLabel"></label><input id="pay-sender" maxlength="80" autocomplete="off"></div>
+      </div>
+      <div id="pay-find-box" hidden>
+        <label for="pay-code" data-t="payCodeLabel"></label>
+        <input id="pay-code" maxlength="20" autocomplete="off">
+        <div class="button-row single"><button type="button" id="pay-find" class="secondary" data-t="payFindButton"></button></div>
+        <div id="pay-groups"></div>
+      </div>
+      <ul id="pay-orders" class="results"></ul>
+      <p id="pay-compare" class="notice-box" hidden></p>
+      <div id="pay-choices"></div>
+      <p id="pay-error" class="error" role="alert" hidden></p>
+      <div class="button-row">
+        <button type="button" id="pay-cancel" class="secondary" data-t="cancel"></button>
+        <button type="submit" id="pay-save" class="primary" data-t="paySubmit"></button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Cancel a registration / invalidate tickets -->
+  <dialog id="invalidate-dialog" class="edit-dialog wide">
+    <form id="invalidate-form" class="editor" novalidate>
+      <h2 id="inv-title"></h2>
+      <p id="inv-intro" class="muted small"></p>
+      <p id="inv-partpaid" class="notice-box" hidden></p>
+      <ul id="inv-tickets" class="results"></ul>
+      <p><button type="button" id="inv-all" class="link" data-t="invSelectAll"></button></p>
+      <div id="inv-refund-box" hidden>
+        <label for="inv-refund" data-t="invRefundLabel"></label>
+        <input id="inv-refund" inputmode="decimal" autocomplete="off">
+        <p class="muted small" data-t="invRefundHint"></p>
+      </div>
+      <label for="inv-reason" data-t="invReasonLabel"></label>
+      <input id="inv-reason" maxlength="200" autocomplete="off">
+      <p id="inv-error" class="error" role="alert" hidden></p>
+      <div class="button-row">
+        <button type="button" id="inv-cancel" class="secondary" data-t="cancel"></button>
+        <button type="submit" id="inv-save" class="primary danger-button"></button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Record that money was returned -->
+  <dialog id="refund-dialog" class="edit-dialog">
+    <form id="refund-form" class="editor" novalidate>
+      <h2 id="rf-title"></h2>
+      <p id="rf-owed"><strong></strong></p>
+      <p id="rf-intro" class="muted small"></p>
+      <div class="grid-2">
+        <div><label for="rf-amount" data-t="rfAmount"></label><input id="rf-amount" inputmode="decimal" autocomplete="off"></div>
+        <div><label for="rf-method" data-t="rfMethod"></label>
+          <select id="rf-method"><option value="e-transfer">E-transfer</option><option value="cash">Cash</option><option value="other">Something else</option></select></div>
+      </div>
+      <div class="grid-2">
+        <div><label for="rf-date" data-t="rfDate"></label><input id="rf-date" type="date"></div>
+        <div><label for="rf-by" data-t="rfBy"></label><input id="rf-by" maxlength="60" autocomplete="off"></div>
+      </div>
+      <label for="rf-note" data-t="rfNote"></label>
+      <input id="rf-note" maxlength="200" autocomplete="off">
+      <p id="rf-error" class="error" role="alert" hidden></p>
+      <div class="button-row">
+        <button type="button" id="rf-cancel" class="secondary" data-t="cancel"></button>
+        <button type="button" id="rf-unknown" class="secondary" data-t="rfUnknown" hidden></button>
+        <button type="button" id="rf-notowed" class="secondary" data-t="rfNotOwed" hidden></button>
+        <button type="submit" id="rf-save" class="primary" data-t="rfSave"></button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Email sending: what is left and what is waiting -->
+  <dialog id="mail-dialog" class="edit-dialog">
+    <div class="editor">
+      <h2 data-t="mailTitle"></h2>
+      <p id="mail-left"></p>
+      <p id="mail-waiting"></p>
+      <p id="mail-checked" class="muted small"></p>
+      <p class="muted small" data-t="mailExplain"></p>
+      <p id="mail-result" class="muted small" aria-live="polite"></p>
+      <div class="button-row">
+        <button type="button" id="mail-refresh" class="secondary" data-t="mailRefresh"></button>
+        <button type="button" id="mail-send" class="secondary" data-t="mailSend" hidden></button>
+        <button type="button" id="mail-close" class="primary" data-t="close"></button>
+      </div>
+    </div>
+  </dialog>
+
   <!-- Everyone checked in (help desk) -->
   <dialog id="scanlog-dialog" class="edit-dialog wide">
     <div class="editor">
@@ -854,16 +964,18 @@
   </dialog>
 
   <script src="config.js?v=0.3.7"></script>
-  <script src="strings.js?v=1.9.0"></script>
+  <script src="strings.js?v=1.11.0"></script>
   <script src="mock.js?v=0.3.7"></script>
   <script src="panda.js?v=1.5.0"></script>
   <script src="peekaboo.js?v=1.0.0"></script>
-  <script src="app.js?v=1.6.2"></script>
-  <script src="events.js?v=1.6.2"></script>
+  <script src="app.js?v=1.7.0"></script>
+  <script src="events.js?v=1.7.0"></script>
+  <script src="emailstatus.js?v=1.0.0"></script>
   <script src="waitlist.js?v=1.5.0"></script>
-  <script src="payments.js?v=1.7.0"></script>
+  <script src="payments.js?v=1.9.0"></script>
   <script src="edit.js?v=0.9.6"></script>
-  <script src="finance.js?v=1.2.0"></script>
+  <script src="finance.js?v=1.4.0"></script>
+  <script src="money.js?v=1.0.0"></script>
   <script src="activity.js?v=0.5.0"></script>
   <script src="settings.js?v=0.9.1"></script>
   <script src="emails.js?v=0.3.7"></script>

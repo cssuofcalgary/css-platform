@@ -32,7 +32,7 @@ function findMyTickets_(req) {
   });
 
   const matches = readRows_("Tickets").filter(function (t) {
-    if (t.status !== "paid" || !events[t.eventId] || !t.email) return false;
+    if ((t.status !== "paid" && t.status !== "awaiting") || !events[t.eventId] || !t.email) return false;   // unpaid ones too: their link shows how to pay
     if (byEmail) return String(t.email).toLowerCase() === email;
     return t.ucid === ucid && nameEndsWith_(t.name, lastName);
   });
@@ -213,14 +213,23 @@ function memberProfile_(req) {
 
 /**
  * The member portal asks for tickets with {memberId, k} (a member's pass link) or {email, k}
- * (a tickets link). Upcoming published events only; paid tickets, plus unpaid ones marked as waiting.
+ * (a tickets link). Upcoming published events only: paid tickets, unpaid ones marked as waiting, and cancelled ones
+ * (so "where did my ticket go?" has an answer).
+ *
+ * A ticket belongs to the ATTENDEE, not the person who paid, so a friend's purchase shows up here when it carries the
+ * member's email. A ticket is only added to a member's account when that is clear:
+ *   - the ticket's email is the member's email, or
+ *   - it names the member's ID or UCID AND the name on it fits the member's name.
+ * An ID or UCID typed next to a different name is NOT added; it is counted in `possible` so the screen can say so.
  */
+const LISTED_STATUS_ = { paid: true, awaiting: true, refunded: true, cancelled: true };
+
 function myTickets_(req) {
   const today = Utilities.formatDate(new Date(), "America/Edmonton", "yyyy-MM-dd");
   const events = {};
   allEvents_().forEach(function (e) { if (e.status === "published" && e.date >= today) events[e.id] = e; });
 
-  let match, name = "";
+  let match, name = "", memberEmail = "";
   if (req.memberId) {
     const memberId = String(req.memberId).trim().toUpperCase();
     if (!linkKeyOk_("pass", memberId, req.k)) throw new ApiError_("NOT_ALLOWED", "This link isn't valid. Ask for a new one.");
@@ -229,33 +238,42 @@ function myTickets_(req) {
     name = member.name;
     const ucid = String(member.ucid || "").replace(/\D/g, "");
     const mail = String(member.email || "").toLowerCase();
+    memberEmail = member.email || "";
     match = function (t) {
-      return t.memberId === memberId || (ucid.length >= 6 && String(t.ucid || "").replace(/\D/g, "") === ucid) || (mail && String(t.email || "").toLowerCase() === mail);
+      if (mail && String(t.email || "").toLowerCase() === mail) return "yes";
+      const named = t.memberId === memberId || (ucid.length >= 6 && String(t.ucid || "").replace(/\D/g, "") === ucid);
+      if (!named) return "";
+      return namesRelated_(t.name, member.name) ? "yes" : "maybe";   // someone else's name next to this member's number: not added, only counted
     };
   } else if (req.ucid) {
     const ucid = String(req.ucid).replace(/\D/g, "");
     if (ucid.length < 6 || !linkKeyOk_("tixu", ucid, req.k)) throw new ApiError_("NOT_ALLOWED", "This link isn't valid. Ask for a new one.");
-    match = function (t) { return String(t.ucid || "").replace(/\D/g, "") === ucid; };
+    match = function (t) { return String(t.ucid || "").replace(/\D/g, "") === ucid ? "yes" : ""; };
   } else {
     const email = String(req.email || "").trim().toLowerCase();
     if (!email || !linkKeyOk_("tix", email, req.k)) throw new ApiError_("NOT_ALLOWED", "This link isn't valid. Ask for a new one.");
-    match = function (t) { return String(t.email || "").toLowerCase() === email; };
+    match = function (t) { return String(t.email || "").toLowerCase() === email ? "yes" : ""; };
   }
 
   const orders = {};
   readRows_("Orders").forEach(function (o) { orders[o.id] = o; });
+  let possible = 0;
   const tickets = readRows_("Tickets").filter(function (t) {
-    return (t.status === "paid" || t.status === "awaiting") && events[t.eventId] && match(t);
+    if (!events[t.eventId] || !LISTED_STATUS_[t.status]) return false;
+    if (isFailedOrder_(orders[t.orderId] || {})) return false;   // a registration that never completed
+    const m = match(t);
+    if (m === "maybe") possible++;
+    return m === "yes";
   }).map(function (t) {
     const e = events[t.eventId];
     return {
-      id: t.id, secret: t.secret, name: t.name, ticketType: t.ticketType, status: t.status, checkedIn: !!t.checkedInAt,
+      id: t.id, secret: t.secret, name: t.name, ticketType: t.ticketType, status: t.status === "refunded" ? "cancelled" : t.status, checkedIn: !!t.checkedInAt,
       orderCode: (orders[t.orderId] || {}).code || "",
       event: { name: e.name, date: e.date, startTime: e.startTime, endTime: e.endTime, location: e.location, slug: e.slug }
     };
   }).sort(function (a, b) { return a.event.date.localeCompare(b.event.date) || a.name.localeCompare(b.name); });
   if (!name && tickets.length) name = String(tickets[0].name || "");
-  return { ok: true, name: name, tickets: tickets, site: siteInfo_() };
+  return { ok: true, name: name, tickets: tickets, possible: possible, emailHint: memberEmail ? maskEmail_(String(memberEmail).toLowerCase()) : "", site: siteInfo_() };
 }
 
 // ---- UCID + last name: straight into the portal --------------------------------------------

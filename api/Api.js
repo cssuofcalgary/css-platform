@@ -194,6 +194,29 @@ function route_(req) {
       return { ok: true, emailsSent: result.sent, emailsWaiting: result.waiting, emailsLeftToday: emailsLeftToday_() };
     }
 
+    case "invalidateTickets":
+      return invalidateTickets_(requireSession_(req.token), req);
+
+    case "restoreTickets":
+      return restoreTickets_(requireSession_(req.token), req);
+
+    case "applyTransfer":
+      return applyTransfer_(requireSession_(req.token), req);
+
+    case "findTransfer":
+      requireSession_(req.token);
+      return findTransfer_(req);
+
+    case "recordRefund":
+      return recordRefund_(requireSession_(req.token), req);
+
+    case "cancelRefund":
+      return cancelRefund_(requireSession_(req.token), req.refundId, req.reason);
+
+    case "emailStatus":
+      requireSession_(req.token);
+      return emailStatus_();
+
     case "restoreOrder":
       return restoreOrder_(requireSession_(req.token), req.orderId, !!req.force);
 

@@ -34,21 +34,32 @@ function listOrders_(eventId, opts) {
   tickets.forEach(function (t) { (byOrder[t.orderId] = byOrder[t.orderId] || []).push(t); });
   const all = eventRows_("Orders", event);
 
-  const counts = { all: all.length, awaiting: 0, overdue: 0, paid: 0, closed: 0, cancelRequests: 0, needsRepair: 0 };
-  const money = { received: 0, awaiting: 0 };
+  const refunds = refundsByOrder_(event.id);
+  const counts = { all: all.length, awaiting: 0, overdue: 0, paid: 0, closed: 0, cancelRequests: 0, needsRepair: 0, needsSorting: 0, refundsOwed: 0 };
+  const money = { received: 0, awaiting: 0, refundsOwed: 0 };
+  const sortingIds = {};
   all.forEach(function (o) {
     const total = Number(o.total) || 0;
-    if (o.status === "awaiting") { counts.awaiting++; money.awaiting += total; if (reminderDue_(o)) counts.overdue++; if (o.cancelRequestedAt) counts.cancelRequests++; }
+    const views = refunds[o.id] || [];
+    const owedBack = views.reduce(function (sum, v) { return sum + v.remaining; }, 0);
+    if (owedBack > 0) { counts.refundsOwed++; money.refundsOwed += owedBack; sortingIds[o.id] = true; }
+    if (o.status === "awaiting") {
+      counts.awaiting++; money.awaiting += Math.max(0, total - receivedOf_(o)); if (reminderDue_(o)) counts.overdue++; if (o.cancelRequestedAt) counts.cancelRequests++;
+      if (receivedOf_(o) > 0) sortingIds[o.id] = true;   // part-paid: waiting for the rest
+    }
     else if (o.status === "paid") { counts.paid++; money.received += total; if ((byOrder[o.id] || []).some(function (t) { return t.status === "awaiting"; })) counts.needsRepair++; }
     else counts.closed++;
   });
+  counts.needsSorting = Object.keys(sortingIds).length;
+  money.refundsOwed = Math.round(money.refundsOwed * 100) / 100;
 
-  const filter = ["awaiting", "overdue", "cancelreq", "paid", "closed", "all"].indexOf(opts.filter) !== -1 ? opts.filter : "awaiting";
+  const filter = ["awaiting", "overdue", "cancelreq", "sorting", "paid", "closed", "all"].indexOf(opts.filter) !== -1 ? opts.filter : "awaiting";
   const q = String(opts.q || "").trim().toLowerCase();
   const shown = all.filter(function (o) {
     if (filter === "awaiting" && o.status !== "awaiting") return false;
     if (filter === "overdue" && !reminderDue_(o)) return false;
     if (filter === "cancelreq" && !(o.status === "awaiting" && o.cancelRequestedAt)) return false;
+    if (filter === "sorting" && !sortingIds[o.id]) return false;
     if (filter === "paid" && o.status !== "paid") return false;
     if (filter === "closed" && o.status !== "refunded" && o.status !== "cancelled") return false;
     if (!q) return true;
@@ -68,6 +79,8 @@ function listOrders_(eventId, opts) {
     return {
       id: o.id, code: o.code, payerName: o.payerName, payerEmail: o.payerEmail,
       etransferName: o.etransferName, total: Number(o.total) || 0, status: o.status,
+      received: receivedOf_(o), stillDue: o.status === "awaiting" ? Math.round(Math.max(0, (Number(o.total) || 0) - receivedOf_(o)) * 100) / 100 : 0,
+      refund: { state: refundState_(o, refunds[o.id] || []), records: refunds[o.id] || [], remaining: Math.round((refunds[o.id] || []).reduce(function (sum, v) { return sum + v.remaining; }, 0) * 100) / 100 },
       createdAt: o.createdAt, paidAt: o.paidAt, paidBy: o.paidBy, notes: o.notes, remindedAt: o.remindedAt || "",
       cancelRequestedAt: o.status === "awaiting" ? (o.cancelRequestedAt || "") : "", cancelRequestedBy: o.cancelRequestedBy || "",
       needsRepair: o.status === "paid" && (byOrder[o.id] || []).some(function (t) { return t.status === "awaiting"; }),
@@ -93,6 +106,8 @@ function listOrders_(eventId, opts) {
     reminderHours: REMINDER_AFTER_HOURS,
     spotsTaken: spotsTaken_(event),   // places used up under the capacity rule (may include tickets waiting for payment)
     paidTickets: tickets.filter(function (t) { return t.status === "paid"; }).length,   // tickets that really are paid
+    emails: eventMails_(event),
+    refundsOwed: { count: counts.refundsOwed, amount: money.refundsOwed },
     unsentEmails: tickets.filter(function (t) { return t.status === "paid" && ticketUnsent_(t); }).length,
     emailsLeftToday: emailsLeftToday_(),
     waitlist: waitlistSummary_(event)
@@ -104,12 +119,25 @@ function emailsLeftToday_() {
   try { return MailApp.getRemainingDailyQuota(); } catch (e) { return -1; }
 }
 
+/**
+ * The small email indicator at the top of the portal: how many emails Google will still let this account send, and how many
+ * paid tickets (for events that haven't happened yet) are waiting for their email. "left" is -1 when Google doesn't say.
+ * The limit is Google's and is counted over a rolling day, so this never claims a reset time.
+ */
+function emailStatus_() {
+  const today = Utilities.formatDate(new Date(), "America/Edmonton", "yyyy-MM-dd");
+  const live = {};
+  allEvents_().forEach(function (e) { if (!e.archivedAt && e.date >= today) live[e.id] = true; });
+  const waiting = readRows_("Tickets").filter(function (t) { return t.status === "paid" && live[t.eventId] && ticketUnsent_(t); }).length;
+  return { ok: true, left: emailsLeftToday_(), waiting: waiting, checkedAt: new Date().toISOString() };
+}
+
 /** Finance: the e-transfer arrived. `force` = go over capacity anyway (Finance was warned). */
 function markOrderPaid_(session, orderId, force, siteUrl) {
   rememberSiteUrl_(siteUrl);
   const result = withLock_(function () { return markPaidLocked_(session, orderId, force); });
   const sent = sendPendingTicketEmails_(result.order.id);
-  return { ok: true, alreadyPaid: result.already, repaired: result.repaired || 0, emailsSent: sent.sent, emailsWaiting: sent.waiting };
+  return { ok: true, alreadyPaid: result.already, repaired: result.repaired || 0, confirmed: result.confirmed || 0, emailsSent: sent.sent, emailsWaiting: sent.waiting, notEmailed: sent.notEmailed || 0, emailsLeftToday: emailsLeftToday_() };
 }
 
 /** The part of "mark paid" that changes data. Call it while holding the lock. */
@@ -121,7 +149,7 @@ function markPaidLocked_(session, orderId, force) {
     const stuck = readRows_("Tickets").filter(function (t) { return t.orderId === order.id && t.status === "awaiting"; });
     stuck.forEach(function (t) { updateRow_("Tickets", t.id, { status: "paid" }, t._row); });
     if (stuck.length) log_(session.name, "order.repaired", order.code, { tickets: stuck.length });
-    return { already: true, repaired: stuck.length, order: order };
+    return { already: true, repaired: stuck.length, confirmed: 0, order: order };
   }
   if (order.status !== "awaiting") throw new ApiError_("BAD_REQUEST", "This order was " + order.status + ". It can't be marked paid.");
 
@@ -138,7 +166,7 @@ function markPaidLocked_(session, orderId, force) {
   updateRow_("Orders", order.id, { status: "paid", paidAt: now, paidBy: session.name }, order._row);
   tickets.forEach(function (t) { updateRow_("Tickets", t.id, { status: "paid" }, t._row); });
   log_(session.name, "order.paid", order.code, { total: order.total, tickets: tickets.length, overCapacity: !!force });
-  return { already: false, order: order };
+  return { already: false, confirmed: tickets.length, order: order };
 }
 
 /**
@@ -158,7 +186,7 @@ function markOrdersPaid_(session, orderIds, siteUrl) {
     return ids.map(function (id) {
       try {
         const r = markPaidLocked_(session, id, false);
-        return { orderId: id, code: r.order.code, ok: true, already: r.already, repaired: r.repaired || 0 };
+        return { orderId: id, code: r.order.code, ok: true, already: r.already, repaired: r.repaired || 0, confirmed: r.confirmed || 0 };
       } catch (err) {
         if (!(err instanceof ApiError_)) throw err;
         const o = readRows_("Orders").filter(function (x) { return x.id === id; })[0];
@@ -167,13 +195,14 @@ function markOrdersPaid_(session, orderIds, siteUrl) {
     });
   });
 
-  let sent = 0, waiting = 0;
+  let sent = 0, waiting = 0, notEmailed = 0, confirmed = 0;
   outcomes.forEach(function (o) {
     if (!o.ok || (o.already && !o.repaired)) return;
+    confirmed += o.confirmed || 0;
     const r = sendPendingTicketEmails_(o.orderId);
-    sent += r.sent; waiting += r.waiting;
+    sent += r.sent; waiting += r.waiting; notEmailed += r.notEmailed || 0;
   });
-  return { ok: true, results: outcomes, emailsSent: sent, emailsWaiting: waiting };
+  return { ok: true, results: outcomes, confirmed: confirmed, emailsSent: sent, emailsWaiting: waiting, notEmailed: notEmailed, emailsLeftToday: emailsLeftToday_() };
 }
 
 /**
@@ -185,6 +214,7 @@ function sendReminders_(session, eventId, dryRun) {
   if (!event) throw new ApiError_("NOT_FOUND", "Event not found.");
   const today = Utilities.formatDate(new Date(), "America/Edmonton", "yyyy-MM-dd");
   if (event.date < today) throw new ApiError_("BAD_REQUEST", "This event is over. No reminders needed.");
+  if (!eventMails_(event).reminders) throw new ApiError_("BAD_REQUEST", "Payment reminders are turned off for this event. To use them, edit the event and tick \"Send payment reminders\" under Emails.");
 
   const isDue = reminderDue_;
 
@@ -225,31 +255,6 @@ function sendReminders_(session, eventId, dryRun) {
   return { ok: true, sent: sent, failed: failed.length };
 }
 
-/** Refund (paid) or cancel (not paid yet). The spot opens up again; nothing is deleted. */
-function refundOrder_(session, orderId, reason) {
-  return withLock_(function () {
-    const order = readRows_("Orders").filter(function (o) { return o.id === orderId; })[0];
-    if (!order) throw new ApiError_("NOT_FOUND", "Order not found.");
-    if (order.status !== "paid" && order.status !== "awaiting") throw new ApiError_("BAD_REQUEST", "This order is already " + order.status + ".");
-
-    const newStatus = order.status === "paid" ? "refunded" : "cancelled";
-    const note = String(reason || "").trim().slice(0, 200);
-    const tickets = readRows_("Tickets").filter(function (t) { return t.orderId === order.id; });
-    const checkedIn = tickets.filter(function (t) { return t.checkedInAt; }).length;
-    if (checkedIn) throw new ApiError_("BAD_REQUEST", checkedIn + " ticket(s) in this order already checked in.");
-
-    updateRow_("Orders", order.id, {
-      status: newStatus,
-      notes: [order.notes, newStatus + " by " + session.name + (note ? ": " + note : "")].filter(Boolean).join(" | ")
-    }, order._row);
-    tickets.forEach(function (t) {
-      if (t.status === "paid" || t.status === "awaiting") updateRow_("Tickets", t.id, { status: newStatus }, t._row);
-    });
-    log_(session.name, "order." + newStatus, order.code, { total: order.total, reason: note });
-    return { ok: true, status: newStatus };
-  });
-}
-
 /**
  * Finance: put a cancelled or refunded order back to "awaiting" (it must be paid again). Same room rules as a new
  * registration: refused when the event has no room, unless Finance confirms (`force`). Nothing is emailed.
@@ -258,6 +263,13 @@ function restoreOrder_(session, orderId, force) {
   return withLock_(function () {
     const order = readRows_("Orders").filter(function (o) { return o.id === orderId; })[0];
     if (!order) throw new ApiError_("NOT_FOUND", "Order not found.");
+    return restoreLocked_(session, order, force);
+  });
+}
+
+/** The part of "restore" that changes data. Call it while holding the lock. */
+function restoreLocked_(session, order, force) {
+  {
     if (order.status !== "cancelled" && order.status !== "refunded") throw new ApiError_("BAD_REQUEST", "Only a cancelled or refunded order can be restored. This one is " + order.status + ".");
     const event = findEvent_(function (e) { return e.id === order.eventId; });
     if (!event) throw new ApiError_("NOT_FOUND", "Event not found.");
@@ -277,15 +289,25 @@ function restoreOrder_(session, orderId, force) {
       }
     }
 
+    // A refund that is still owed and has not been touched means the money was never returned: putting the order back
+    // is an undo, so it goes back to PAID and that refund is cancelled. Once any money went back, the order is unpaid again.
+    const open = readRows_("Refunds").filter(function (r) { return r.orderId === order.id && r.status === "owed"; });
+    const returnedSome = open.some(function (r) { return refundView_(r).returned > 0; });
+    const undoPaid = order.status === "refunded" && open.length > 0 && !returnedSome;
+
     const was = order.status;
+    const back = undoPaid ? "paid" : "awaiting";
     updateRow_("Orders", order.id, {
-      status: "awaiting", remindedAt: "", cancelRequestedAt: "", cancelRequestedBy: "",
-      notes: [order.notes, "restored from " + was + " by " + session.name].filter(Boolean).join(" | ")
+      status: back, remindedAt: "", cancelRequestedAt: "", cancelRequestedBy: "",
+      notes: [order.notes, "restored from " + was + " by " + session.name + (undoPaid ? " (the money was never returned, so it is paid again)" : "")].filter(Boolean).join(" | ")
     }, order._row);
-    tickets.forEach(function (t) { updateRow_("Tickets", t.id, { status: "awaiting" }, t._row); });
-    log_(session.name, "order.restored", order.code, { was: was, tickets: tickets.length, overLimit: !!force });
-    return { ok: true, status: "awaiting", restored: tickets.length };
-  });
+    tickets.forEach(function (t) { updateRow_("Tickets", t.id, { status: back }, t._row); });
+    if (undoPaid) {
+      open.forEach(function (r) { updateRow_("Refunds", r.id, { status: "waived", reason: [r.reason, "order restored by " + session.name].filter(Boolean).join(" | "), closedAt: new Date().toISOString() }, r._row); });
+    }
+    log_(session.name, "order.restored", order.code, { was: was, tickets: tickets.length, overLimit: !!force, paidAgain: undoPaid });
+    return { ok: true, status: back, restored: tickets.length };
+  }
 }
 
 /** Sends ticket emails for paid tickets that haven't had one yet (one order, or all). */
@@ -325,10 +347,15 @@ function sendPendingTicketEmails_(orderId, limit, again) {
 
   const events = {};
   allEvents_().forEach(function (e) { events[e.id] = e; });
-  let sent = 0;
+  let sent = 0, notEmailed = 0;
   claimed.forEach(function (t) {
     const event = events[t.eventId];
     if (!event) { updateRow_("Tickets", t.id, { emailedAt: "" }, t._row); return; }   // nothing to send: let it go
+    if (!again && !eventMails_(event).tickets) {   // this event doesn't email tickets: a choice, so it isn't left waiting
+      updateRow_("Tickets", t.id, { emailedAt: TICKET_EMAIL_OFF_NOTE }, t._row);
+      notEmailed++;
+      return;
+    }
     if (isTestAddress_(t.email)) {
       updateRow_("Tickets", t.id, { emailedAt: "test address, not sent" }, t._row);
       return;
@@ -344,7 +371,7 @@ function sendPendingTicketEmails_(orderId, limit, again) {
   const waiting = readRows_("Tickets").filter(function (t) {
     return t.status === "paid" && ticketUnsent_(t) && (!orderId || t.orderId === orderId);
   }).length;
-  return { sent: sent, waiting: waiting };
+  return { sent: sent, waiting: waiting, notEmailed: notEmailed };
 }
 
 /** Finance: email the tickets of an order again (lost email, typo fixed…). */
@@ -523,6 +550,7 @@ function getTicket_(secret) {
     site: siteInfo_(),
     etransferEmail: getConfig_().etransferEmail,
     orderTotal: Number(order.total) || 0,
+    orderReceived: order.status === "awaiting" ? receivedOf_(order) : 0,   // part-paid: the page says how much is still to send
     canGiveFeedback: ticket.status === "paid" && !!ticket.checkedInAt,
     feedback: feedbackOfTicket_(ticket),
     canRequestCancel: ticket.status === "awaiting" && order.status === "awaiting",

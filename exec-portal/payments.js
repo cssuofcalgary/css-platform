@@ -105,17 +105,18 @@ function orderCard(o) {
           ${Object.entries(t.answers || {}).map(([k, v]) => ` · ${escapeHtml(k)}: ${escapeHtml(v)}`).join("")}
           ${t.status === "paid" ? ` · <a class="link" target="_blank" rel="noopener" href="${ticketUrl(t)}">${T.openTicket}</a>` : ""}
           ${t.status === "paid" || t.status === "awaiting" ? ` · <button class="link" data-edit-ticket="${t.id}">${T.editPerson}</button>` : ""}
-          ${t.checkedInAt ? ` · ${T.checkedInMark}` : ""}${t.emailedAt && !t.emailedAt.startsWith("test") && !t.emailedAt.startsWith("claim:") ? ` · ${T.emailedMark}` : ""}
+          ${t.checkedInAt ? ` · ${T.checkedInMark}` : ""}${stoppedTicketMark(o, t)}${t.emailedAt && !t.emailedAt.startsWith("test") && !t.emailedAt.startsWith("claim:") ? ` · ${T.emailedMark}` : ""}
           ${t.flag ? `<br><span class="flag">${escapeHtml(t.flag)}</span>` : ""}</li>`).join("")}
       </ul>
+      <div class="o-money">${moneyLines(o)}</div>
       <div class="o-total"><span class="order-total">${money(o.total)}</span><span class="pill ${statusClass}">${statusText}</span></div>
       <div class="order-actions o-actions">
-        ${o.status === "awaiting" ? `<button class="primary" data-act="paid">${T.markPaid(money(o.total))}</button>` : ""}
+        ${o.status === "awaiting" ? `<button class="primary" data-act="pay">${o.received > 0 ? T.btnRecordRest(dollars(o.stillDue)) : T.markPaid(money(o.total))}</button>` : ""}
         ${o.needsRepair ? `<button class="primary" data-act="repair">${T.repairOrder}</button>` : ""}
         ${o.status === "refunded" || o.status === "cancelled" ? `<button class="link" data-act="restore">${T.restoreOrder}</button>` : ""}
         ${o.status === "paid" ? `<button class="link" data-act="resend">${T.resend}</button>` : ""}
         ${o.cancelRequestedAt ? `<button class="link" data-act="dismiss">${T.dismissRequest}</button>` : ""}
-        ${o.status === "paid" || o.status === "awaiting" ? `<button class="link danger" data-act="refund">${o.status === "paid" ? T.recordRefund : T.cancelOrder}</button>` : ""}
+        ${o.status === "paid" || o.status === "awaiting" ? `<button class="link danger" data-act="invalidate">${o.status === "paid" ? T.btnInvalidate : T.btnCancelReg}</button>` : ""}
         <span class="order-result"></span>
       </div>
     </li>`;
@@ -155,16 +156,13 @@ async function onOrdersClick(event) {
   const siteUrl = new URL(PUBLIC_SITE_URL, location.href).href;
   let reply;
 
-  if (button.dataset.act === "paid") {
-    const who = order.etransferName || order.payerName;
-    if (!confirm(T.confirmPaid(money(order.total), order.code, who))) return;
-    button.disabled = true;
-    reply = await api("markOrderPaid", { orderId: order.id, siteUrl });
-    if (!reply.ok && reply.error === "OVER_CAPACITY" && confirm(T.overCapacity(reply.message))) {
-      reply = await api("markOrderPaid", { orderId: order.id, siteUrl, force: true });
-    }
-    if (reply.ok) result.textContent = T.markedPaid(reply.emailsSent, reply.emailsWaiting);
-  }
+  // These open their own windows (money.js): recording a payment, invalidating tickets, recording a refund.
+  const act = button.dataset.act;
+  if (act === "pay") return openPayDialog(order);
+  if (act === "invalidate") return openInvalidateDialog(order);
+  if (act === "recordrefund") return openRefundDialog(order);
+  if (act === "histrefund") return markAlreadyReturned(order);
+  if (act === "putback") return putTicketBack(order, button.dataset.ticket);
 
   if (button.dataset.act === "repair") {
     button.disabled = true;
@@ -180,15 +178,7 @@ async function onOrdersClick(event) {
       if (!(await askConfirm(T.restoreOverLimit(reply.message), T.restoreOrder))) { button.disabled = false; return; }
       reply = await api("restoreOrder", { orderId: order.id, force: true });
     }
-    if (reply.ok) result.textContent = T.restoredOrder;
-  }
-
-  if (button.dataset.act === "refund") {
-    if (!confirm(T.confirmRefund(order.code, order.payerName))) return;
-    const reason = prompt(T.refundPrompt(order.code, order.status));
-    if (reason === null) return;
-    button.disabled = true;
-    reply = await api("refundOrder", { orderId: order.id, reason });
+    if (reply.ok) result.textContent = reply.status === "paid" ? T.restoredPaid : T.restoredOrder;
   }
 
   if (button.dataset.act === "dismiss") {
@@ -207,7 +197,7 @@ async function onOrdersClick(event) {
     button.disabled = false;
     return handleEventError(reply, result);
   }
-  setTimeout(loadOrders, button.dataset.act === "refund" || button.dataset.act === "restore" ? 0 : 1800);
+  setTimeout(loadOrders, button.dataset.act === "restore" ? 0 : 1800);
   eventsState.loaded = false;   // counts on the Events tab changed
 }
 

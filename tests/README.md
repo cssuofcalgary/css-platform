@@ -13,6 +13,9 @@ These run the API code (`api/*.js`) in Node with a fake Google (in-memory tables
 | `registration.test.js` | registering (event site and member portal): ticket pages in the reply, member verification, name and ID checks, retries, a failed ticket write, resuming, the event read again inside the lock, locks, capacity |
 | `hardening.test.js` | event input checks (real dates, capacity, prices, times), questions worded alike, paid-ticket count |
 | `doorundo.test.js` | a door volunteer can undo only their own check-in from the last 10 minutes, Health warns about a blank door password |
+| `emailsettings.test.js` | per-event email settings and their defaults, what counts as "waiting", the email indicator, reminders on/off, the "N confirmed, X emailed, Y waiting" numbers |
+| `money.test.js` | invalidating one person or a whole order, refunds owed and returned, putting tickets back, and every awkward e-transfer (short, too much, several orders, cancelled order, full event, finding the order) |
+| `mytickets.test.js` | My tickets: tickets belong to the attendee, ambiguous ones are not added, cancelled ones are shown as cancelled |
 
 ```
 node tests/core.test.js
@@ -24,7 +27,10 @@ node tests/payfix.test.js
 node tests/registration.test.js
 node tests/doorundo.test.js
 node tests/hardening.test.js
+node tests/emailsettings.test.js
+node tests/money.test.js
+node tests/mytickets.test.js
 ```
 
-Each prints PASS/FAIL lines and exits with an error if anything fails. Run all nine before a deploy.
+Each prints PASS/FAIL lines and exits with an error if anything fails. Run all twelve before a deploy.
 The fake Google replaces the spreadsheet, cache expiry and locks, so a pass here does not prove real Google concurrency or production settings: check Settings → System health after a deploy.

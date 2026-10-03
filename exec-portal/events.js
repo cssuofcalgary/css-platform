@@ -201,6 +201,9 @@ function openEditor(existing, isEdit = !!existing, title) {
   $("ev-capacity").value = e.capacity ?? "";
   $("ev-capacity-rule").value = e.capacityRule || "paid";
   $("ev-waitlist").checked = !!e.waitlist;
+  $("ev-mail-registration").checked = !!e.mailRegistration;
+  $("ev-mail-tickets").checked = e.mailTickets !== false;   // a new event starts with the defaults: ticket on, registration email off, reminders off
+  $("ev-mail-reminders").checked = !!e.mailReminders;
   $("ev-code-prefix").value = e.codePrefix || "";
   $("ev-closes").value = e.registrationCloses || "";
   $("ev-image-file").value = "";
@@ -370,6 +373,9 @@ async function saveEvent(publish) {
     capacity: $("ev-capacity").value,
     capacityRule: $("ev-capacity-rule").value,
     waitlist: $("ev-waitlist").checked,
+    mailRegistration: $("ev-mail-registration").checked,
+    mailTickets: $("ev-mail-tickets").checked,
+    mailReminders: $("ev-mail-reminders").checked,
     codePrefix: $("ev-code-prefix").value,
     registrationCloses: $("ev-closes").value
   };

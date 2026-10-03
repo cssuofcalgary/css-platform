@@ -64,7 +64,7 @@ function readCache(secret) {
 
 function writeCache(secret, data, qr) {
   try {
-    const keep = { ticket: data.ticket, event: data.event, etransferEmail: data.etransferEmail, orderTotal: data.orderTotal };   // no cancel or feedback: those need a connection
+    const keep = { ticket: data.ticket, event: data.event, etransferEmail: data.etransferEmail, orderTotal: data.orderTotal, orderReceived: data.orderReceived };   // no cancel or feedback: those need a connection
     localStorage.setItem(CACHE_PREFIX + secret, JSON.stringify({ savedAt: Date.now(), data: keep, qr: qr || (readCache(secret) || {}).qr || "" }));
     const all = Object.keys(localStorage).filter((k) => k.startsWith(CACHE_PREFIX)).map((k) => {
       let at = 0; try { at = JSON.parse(localStorage.getItem(k)).savedAt || 0; } catch (e) { /* unreadable: oldest */ }
@@ -110,7 +110,7 @@ function scheduleRetry(secret, cached) {
 }
 
 function render(data, meta = { state: "live" }) {
-  const { ticket, event, etransferEmail, orderTotal, canRequestCancel, cancelRequested, canGiveFeedback, feedback } = data;
+  const { ticket, event, etransferEmail, orderTotal, orderReceived, canRequestCancel, cancelRequested, canGiveFeedback, feedback } = data;
   const savedTime = meta.savedAt ? new Date(meta.savedAt).toLocaleTimeString("en-CA", { hour: "numeric", minute: "2-digit" }) : "";
   const banner = meta.state === "offline" ? `<p class="offline-badge">${T.ticketOfflineBadge(savedTime)}</p>`
     : meta.state === "checking" ? `<p class="offline-badge">${T.ticketChecking(savedTime)}</p>` : "";
@@ -120,7 +120,7 @@ function render(data, meta = { state: "live" }) {
   const look = {
     paid: { stamp: T.stampConfirmed, cls: "", note: T.ticketConfirmed },
     checkedin: { stamp: T.stampCheckedIn, cls: "", note: T.ticketCheckedIn },
-    awaiting: { stamp: T.stampPending, cls: "pending", note: T.ticketAwaiting(money(orderTotal), etransferEmail, ticket.orderCode) },
+    awaiting: { stamp: T.stampPending, cls: "pending", note: orderReceived > 0 && orderReceived < orderTotal ? T.ticketPartPaid(money(orderReceived), money(Math.round((orderTotal - orderReceived) * 100) / 100), etransferEmail, ticket.orderCode) : T.ticketAwaiting(money(orderTotal), etransferEmail, ticket.orderCode) },
     refunded: { stamp: T.stampVoid, cls: "void", note: T.ticketRefunded },
     cancelled: { stamp: T.stampVoid, cls: "void", note: T.ticketCancelled }
   }[status] || { stamp: "", cls: "", note: "" };

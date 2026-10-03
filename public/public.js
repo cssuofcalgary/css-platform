@@ -377,13 +377,14 @@ async function onSubmit(ev) {
 
 function showPaymentScreen(reply) {
   const free = reply.order.status === "paid";
+  const emails = reply.emails || { confirmation: true, ticket: true };   // an older server doesn’t say: assume the old behaviour
   const review = !!reply.needsReview;   // $0 order held until an exec checks membership
   const flagged = reply.tickets.filter((t) => t.flag && t.flag.indexOf("Member price") === 0);
   $("page").innerHTML = `
     <article class="done">
       ${pandaImg(!review && free ? "success" : "almost")}
       <h1 class="page-title">${review ? T.reviewTitle : free ? T.registeredFree : T.almostDone}</h1>
-      ${review ? `<p class="lead">${T.reviewNote}</p>` : free ? `<p class="lead">${T.freeTicketsNote}</p>` : `
+      ${review ? `<p class="lead">${T.reviewNote}</p>` : free ? `<p class="lead">${T.freeTicketsNote}</p>${emails.ticket ? "" : `<p class="keep-note"><strong>${T.freeNoEmailNote}</strong></p>`}` : `
         <p class="lead">${T.sendEtransfer}</p>
         <div class="pay-box">
           <div class="pay-row"><span>${T.amount}</span><div><strong class="big">${money(reply.order.total)}</strong> <small class="muted">${T.exactly}</small></div></div>
@@ -393,7 +394,8 @@ function showPaymentScreen(reply) {
             <button class="copy" data-copy="${escapeAttr(reply.order.code)}">${T.copy}</button></div></div>
         </div>
         <p class="muted small">${T.noMessageNote}</p>
-        <p>${T.confirmNote}</p>
+        <p>${emails.ticket ? T.confirmNote : T.confirmNoteLink}</p>
+        ${emails.confirmation ? "" : `<p class="keep-note"><strong>${T.keepPageNote}</strong></p>`}
         <p class="status-line"><strong>${T.statusHeading}:</strong> ${T.statusWaiting}</p>
         <p class="muted small">${T.statusPageNote}</p>`}
 

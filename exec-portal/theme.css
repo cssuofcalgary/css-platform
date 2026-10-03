@@ -568,3 +568,20 @@ body.scanner-mode .desk-live { display: none !important; }
 
 /* Payments: the "tick orders" hint looks like a hint, not an error, until something is ticked */
 .bulk-bar.idle { background: var(--surface); color: var(--text-2); border: 1px solid var(--border); }
+
+/* Email indicator in the top bar */
+.mail-pill { margin-left: auto; font: inherit; font-size: 12px; font-weight: 600; padding: 5px 12px; border-radius: 99px; border: 1px solid var(--border); background: var(--surface); color: var(--text-2, inherit); cursor: pointer; white-space: nowrap; }
+.mail-pill:hover { border-color: var(--accent); }
+.mail-pill.warn { background: var(--warn-bg); color: var(--warn-text); border-color: transparent; }
+.field-hint { margin: 2px 0 10px 30px; }
+
+/* Money on the Payments tab: refund owed, part-payment, record-payment windows */
+.refund-owed { display: block; background: var(--bad-bg); color: var(--bad-text); border-radius: 8px; padding: 8px 12px; }
+.refund-owed button { margin-left: 8px; }
+.refund-unrecorded { display: block; font-size: 13px; }
+.pay-order { margin: 6px 0; font-weight: 500; align-items: flex-start; }
+.pay-order input { margin-top: 2px; flex: none; }
+.radio-group { margin: 6px 0 10px; }
+.radio-group .check-row { margin: 8px 0; font-weight: 500; align-items: flex-start; }
+.radio-group input { margin-top: 2px; flex: none; }
+.danger-button { background: var(--bad-text) !important; }

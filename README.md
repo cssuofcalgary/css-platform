@@ -3,7 +3,7 @@
 The Chinese Students' Society's own event, ticket and membership platform: a mini Luma/Eventbrite built on free Google tools.
 **Execs:** you want `HANDBOOK.md`. **Something broke:** `RUNBOOK.md`.
 
-Status: **API 0.14.0** (the `API_VERSION` in `api/Config.js`; the Apps Script deployment label says the same). Events, registration, payments, door and the redesigned Exec Portal are live. Membership sign-up (`member.ucalgarycss.ca/create`), the Members tab's Pending list, Add member and Mark paid were added 2026-09-30. Roadmap and what is left: the vault note "CSS Platform - Roadmap".
+Status: **API 0.15.0** (the `API_VERSION` in `api/Config.js`; the Apps Script deployment label says the same). Events, registration, payments, door and the redesigned Exec Portal are live. Membership sign-up (`member.ucalgarycss.ca/create`), the Members tab's Pending list, Add member and Mark paid were added 2026-09-30. Roadmap and what is left: the vault note "CSS Platform - Roadmap".
 The old system (`../CSS Ticketing System/`) keeps running until this one is proven. Nothing here touches it.
 
 ---
@@ -173,7 +173,14 @@ Also added in Oct 2026: Orders `cancelRequestedAt`, `cancelRequestedBy` (a ticke
 | `markOrdersPaid` `{orderIds[], siteUrl}` | yes | Marks up to 10 orders paid in one call (the page sends them in groups of 8). Orders that would go over capacity are **skipped and reported**, never forced. Replies `results[]` (ok / error per order) + emails sent |
 | `sendReminders` `{eventId, dryRun?}` | yes | Emails the payer of every order still unpaid after `REMINDER_AFTER_HOURS` (48, in `Config.js`), and again only after another 48 h. `dryRun` returns `due`, `toEmail`, `emailsLeftToday` without sending. Orders are claimed under the lock first, so two people pressing the button can't double-email. Refuses for events that are already over |
 | `addOrder` `{eventId, order: {person: {name, email, ucid?, memberId?, ticketTypeId, answers?}, etransferName?, notes?}, force?, siteUrl}` | yes | Finance adds someone who paid without registering: a paid order + ticket, ticket emailed. Membership checked (flags, never blocks). `OVER_CAPACITY` unless `force`. Custom questions aren't required here |
-| `refundOrder` `{orderId, reason}` | yes | Paid → refunded, awaiting → cancelled. Spot reopens. Refuses if anyone already checked in |
+| `invalidateTickets` `{orderId, ticketIds[], refundAmount?, reason?}` | yes | Stops some or all tickets of an order. Paid tickets become **refunded** (their QR codes are rejected at once), unpaid ones **cancelled**. Writes the money owed back as a row in the Refunds table (default: the tickets' price; `refundAmount` may be less, or 0). A ticket already checked in can't be stopped. The order total drops to the tickets still valid; `received` keeps what arrived |
+| `refundOrder` `{orderId, reason}` | yes | The old whole-order button: invalidates every live ticket in the order |
+| `recordRefund` `{refundId or orderId, amount?, method, date?, by?, note?, unknown?}` | yes | Writes down money handed back (e-transfer / cash / other, date not in the future, who). May be less than owed: the rest stays owed. For an order refunded before this existed, `unknown: true` records "returned, date and method unknown" |
+| `cancelRefund` `{refundId, reason}` | yes | "Not owed after all": kept on record as cancelled, with the reason |
+| `restoreTickets` `{orderId, ticketIds[], force?}` | yes | Puts invalidated or cancelled tickets back (only before their refund was returned); the refund owed shrinks or is cancelled |
+| `applyTransfer` `{orderIds[], amount, senderName?, over?, short?, late?, full?, siteUrl}` | yes | Records an e-transfer against 1–10 orders and compares it with what is due. Exact: paid. Too little: `short` = `wait` (stays unpaid, shows what is still due) or `accept` (paid in full). Too much: `over` = `refund` (written as money owed back) or `keep`. A cancelled order: `late` = `restore` or `refund`. Event full (`OVER_CAPACITY`, nothing written): `full` = `confirm` or `refund`. The choice is required, never guessed |
+| `findTransfer` `{amount?, name?, code?}` | yes | Read-only: unpaid (and cancelled) orders that could be the one a payment belongs to, scored by code, amount and name, plus pairs/triples of the same person's orders that add up to the amount |
+| `emailStatus` | yes | `{left, waiting, checkedAt}`: emails Google still allows, and paid tickets (events not yet over) waiting for their email. The portal's top-bar indicator |
 | `resendTickets` `{orderId, siteUrl}` | yes | Emails the paid tickets again |
 | `sendPendingEmails` | yes | Sends ticket emails that were held back by the daily limit |
 | `setEntryOpen` `{eventId, open}` | yes | Scanners only check people in while entry is open |
@@ -252,7 +259,7 @@ GitHub Pages updates the live site in about a minute. **When you change a `.js`/
 - Payments, Attendees and Door load one small page / summary first and fetch more on demand (see the API table).
 
 ## Tests
-`tests/` has offline tests that run every `api/*.js` file in Node with a fake Google (in-memory tables, no email sent): `node tests/core.test.js`, `waitlist.test.js`, `partners.test.js`, `emailclaim.test.js`, `deskalert.test.js`, `payfix.test.js`, `registration.test.js`, `doorundo.test.js`, `hardening.test.js`. Run all nine before every deploy. See `tests/README.md`.
+`tests/` has offline tests that run every `api/*.js` file in Node with a fake Google (in-memory tables, no email sent): `node tests/core.test.js`, `waitlist.test.js`, `partners.test.js`, `emailclaim.test.js`, `deskalert.test.js`, `payfix.test.js`, `registration.test.js`, `doorundo.test.js`, `hardening.test.js`, `emailsettings.test.js`, `money.test.js`, `mytickets.test.js`. Run all twelve before every deploy. See `tests/README.md`.
 
 ## Deploying
 In `api/`: `clasp push`, then `clasp deploy -i <deployment ID> -d "label"` (the same ID keeps the same URL), then `git push origin main` in the repo root. A deploy only publishes what was pushed, so always push first. Google can serve the old version for up to a minute afterwards. The web pages (`public/`, `exec-portal/`) go live from GitHub through Vercel in a minute or two; bump the `?v=` numbers in `index.html` when a file changes so browsers fetch it.

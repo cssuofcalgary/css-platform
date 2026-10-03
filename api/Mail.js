@@ -33,6 +33,24 @@ function canSendMail_(to) {
   try { return MailApp.getRemainingDailyQuota() > 0; } catch (e) { return false; }
 }
 
+/**
+ * Which emails an event sends (set in the event editor, "Emails"). A never-chosen setting uses the defaults:
+ *   registration = a "we got your registration" email after signing up (off),
+ *   tickets      = the ticket email once payment is confirmed, or straight away for a free event (on),
+ *   reminders    = the Payments tab's "Send reminders" button works for this event (off).
+ * Turning one off is a choice, not a failure: nothing is queued for later.
+ */
+function eventMails_(event) {
+  return {
+    registration: !!(event && event.mailRegistration),
+    tickets: !event || event.mailTickets !== false,
+    reminders: !!(event && event.mailReminders)
+  };
+}
+
+/** What a ticket's emailedAt says when its event doesn't email tickets. Not "waiting": nothing will be sent later. */
+const TICKET_EMAIL_OFF_NOTE = "not emailed (turned off for this event)";
+
 // ---- The shared look ------------------------------------------------------------------
 
 /**

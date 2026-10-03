@@ -74,7 +74,7 @@ function register_(req) {
     const prior = rawRid ? readRows_("Orders").filter(function (o) { return o.requestId === rawRid && !isFailedOrder_(o); })[0] : null;
     if (prior) {
       const resumed = resumeRegistration_(prior, plan, ev);
-      const reply = registrationReply_(prior, resumed.tickets, etransferEmailNow);
+      const reply = registrationReply_(prior, resumed.tickets, etransferEmailNow, ev);
       if (requestId) { try { CacheService.getScriptCache().put(requestId, JSON.stringify(reply), 600); } catch (e) { /* fine */ } }
       if (resumed.madeAny) logEntry = ["Public: " + prior.payerName, "order.resumed", prior.code, { event: ev.name, tickets: resumed.tickets.length }];
       return { reply: reply, order: prior, created: resumed.tickets, noEmail: !resumed.madeAny };
@@ -144,7 +144,7 @@ function register_(req) {
     }
     logEntry = ["Public: " + everyone[0].name, "order.create", order.code, { event: ev.name, tickets: created.length, total: total, member: !!memberRec }];   // written after the lock is released
 
-    const reply = registrationReply_(order, created, etransferEmailNow);
+    const reply = registrationReply_(order, created, etransferEmailNow, ev);
     if (requestId) { try { CacheService.getScriptCache().put(requestId, JSON.stringify(reply), 600); } catch (e) { /* fine */ } }
     return { reply: reply, order: order, created: created, ev: ev };
   });
@@ -160,8 +160,10 @@ function register_(req) {
     done.reply.emailSent = sent.sent > 0;
   } else if (done.reply.needsReview) {
     done.reply.emailSent = false;   // $0 and waiting for an exec to check membership: no ticket and no payment email yet
-  } else {
+  } else if (eventMails_(evForMail).registration) {
     done.reply.emailSent = sendRegistrationEmail_(evForMail, done.order, done.created);
+  } else {
+    done.reply.emailSent = false;   // this event doesn't email a confirmation; the page shows the payment details and the ticket link instead
   }
   return done.reply;
 }
@@ -223,10 +225,13 @@ function ticketRowsFor_(order, people, now) {
 }
 
 /** What the page needs after registering. `page` is each person's ticket page (payment status first, then the QR once paid). */
-function registrationReply_(order, tickets, etransferEmail) {
+function registrationReply_(order, tickets, etransferEmail, event) {
   const needsReview = Number(order.total) === 0 && /Requires exec verification/.test(order.notes || "");
+  const mails = eventMails_(event);
   return {
     ok: true,
+    // What this event will email, so the page can say so (and tell people to keep the page when nothing is emailed).
+    emails: { confirmation: !needsReview && order.status !== "paid" && mails.registration, ticket: !needsReview && mails.tickets },
     order: { code: order.code, total: Number(order.total) || 0, status: order.status },
     needsReview: needsReview,
     etransferEmail: etransferEmail,
@@ -313,7 +318,7 @@ function addOrder_(session, eventId, input, force, siteUrl) {
   });
 
   const sent = sendPendingTicketEmails_(order.id);
-  return { ok: true, code: order.code, total: order.total, emailsSent: sent.sent, emailsWaiting: sent.waiting, flag: person.flag };
+  return { ok: true, code: order.code, total: order.total, emailsSent: sent.sent, emailsWaiting: sent.waiting, notEmailed: sent.notEmailed || 0, flag: person.flag };
 }
 
 // ---- Checks -----------------------------------------------------------------

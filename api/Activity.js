@@ -10,7 +10,7 @@ const ACTIVITY_LIMITS = [50, 100, 200];   // what the "show" dropdown offers
 
 /** Groups the filter chips use. */
 const ACTIVITY_GROUPS = {
-  payments: ["order.paid", "order.refunded", "order.cancelled", "order.create", "order.manual", "order.delete", "member.paid", "member.signup", "member.add", "tickets.resend", "reminders.send"],
+  payments: ["order.paid", "order.refunded", "order.cancelled", "order.create", "order.manual", "order.delete", "member.paid", "member.signup", "member.add", "tickets.resend", "reminders.send", "order.payment", "payment.refund", "refund.returned", "refund.cancelled", "tickets.restored", "order.restored"],
   door: ["checkin", "checkin.desk", "checkin.undo", "walkin", "entry.open", "entry.close", "entry.autoclose"],
   system: ["backup"],
   edits: ["ticket.edit"],
@@ -61,8 +61,14 @@ function activitySummary_(r, events) {
   const eventName = events[r.target] || "";
   switch (r.action) {
     case "order.paid": return "marked " + r.target + " paid (" + money(d.total) + ", " + d.tickets + " ticket" + (d.tickets === 1 ? "" : "s") + ")" + (d.overCapacity ? ", over capacity" : "");
-    case "order.refunded": return "refunded " + r.target + " (" + money(d.total) + ")" + (d.reason ? ": " + d.reason : "");
-    case "order.cancelled": return "cancelled " + r.target + (d.reason ? ": " + d.reason : "");
+    case "order.refunded": return (d.whole === false ? "invalidated " + d.tickets + " ticket" + (d.tickets === 1 ? "" : "s") + " of " : "refunded ") + r.target + " (" + money(d.total) + ")" + (d.owed ? ", " + money(d.owed) + " to return" : "") + (d.reason ? ": " + d.reason : "");
+    case "order.cancelled": return (d.whole === false ? "cancelled " + d.tickets + " ticket" + (d.tickets === 1 ? "" : "s") + " of " : "cancelled ") + r.target + (d.reason ? ": " + d.reason : "");
+    case "order.payment": return "recorded a payment of " + money(d.amount) + (d.sender ? " from " + d.sender : "") + " for " + r.target + (d.short ? " (short " + money(d.due - d.amount) + ", " + (d.short === "wait" ? "waiting for the rest" : "accepted as paid") + ")" : "") + (d.over ? " (" + money(d.amount - d.due) + " extra, " + (d.over === "refund" ? "to return" : "kept") + ")" : "");
+    case "payment.refund": return "a payment of " + money(d.amount) + " for " + r.target + " is to be returned (" + d.why + ")";
+    case "refund.returned": return "recorded " + money(d.amount) + " returned for " + r.target + (d.method && d.method !== "unknown" ? " by " + d.method : "") + (d.remaining ? ", " + money(d.remaining) + " still owed" : "");
+    case "refund.cancelled": return "cancelled a " + money(d.owed) + " refund for " + r.target + (d.reason ? ": " + d.reason : "");
+    case "tickets.restored": return "put " + d.tickets + " ticket" + (d.tickets === 1 ? "" : "s") + " of " + r.target + " back";
+    case "order.restored": return "restored " + r.target + (d.paidAgain ? " (paid again)" : " (unpaid again)");
     case "order.create": return "registered online: " + r.target + " for " + (d.event || "an event") + " (" + d.tickets + " ticket" + (d.tickets === 1 ? "" : "s") + ", " + money(d.total) + ")";
     case "order.manual": return "added " + d.name + " as paid: " + r.target + " (" + d.type + ", " + money(d.total) + ")";
     case "tickets.lookup": return "a member used Find my tickets (" + (d.by === "ucid" ? "UCID" : "email") + ", " + (d.emails || 0) + " email" + (d.emails === 1 ? "" : "s") + " sent)";

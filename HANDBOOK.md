@@ -63,12 +63,26 @@ The Events list shows how many people have **paid** and how many are **awaiting 
    - Amount wrong? Don't mark it paid. Reply to them.
    - "Over capacity" warning? The event is full of paid tickets. Only continue if you really want to go over.
 4. Filters: **Awaiting** (still to pay), **Waiting too long** (unpaid for over 2 days), **Paid**, **Refunded / cancelled**, **All**. The line at the top shows **money received of money expected**, handy for matching the bank.
-   - **Send reminders** (yellow bar): emails everyone who's waited over 2 days. It tells you how many first and asks before sending. Nobody is reminded more than once every 2 days.
+   - **Send reminders** (yellow bar): emails everyone who's waited over 2 days. It tells you how many first and asks before sending. Nobody is reminded more than once every 2 days. Reminders are never sent by themselves, and the button only works for events where **Allow "Send reminders"** is ticked under Emails in the event editor.
    - **Mark several paid:** tick the boxes next to orders (or **Select all shown**), check the amounts in the pop-up, and confirm once. Orders that would go over capacity are skipped and listed.
    - **+ Add paid registration:** someone paid (e-transfer or cash) without registering online. Enter their name, email, ticket type; they're added as paid and emailed their ticket. For a group, add each person separately.
 5. ⚠ yellow notes = something to check at the door (membership not found, duplicate email).
 
-**Refund / cancel:** opens the spot again. For a paid order, send the money back by e-transfer yourself; the system only records it. Nothing is ever deleted.
+**Money is three separate steps, because the system never moves money itself:**
+1. **Cancel registration…** (an unpaid order): nothing was paid, so nothing is owed back.
+2. **Invalidate tickets…** (a paid order): tick the people whose tickets should stop working. Their QR codes are rejected at the door the moment you confirm. The window pre-fills the refund amount (what those tickets cost); change it to keep a fee, or enter 0 for no refund. You can invalidate one person of a group and leave the others valid. A person already checked in can't be invalidated: undo their check-in first. Afterwards the order shows a red **Refund owed $X**.
+3. **Record refund:** send the money back yourself (e-transfer or cash), then press **Record refund** and enter the amount, how, the date, and who did it. If you only returned part, the rest stays owed. **Not owed after all…** cancels the refund with a reason.
+Made a mistake? **Put back** next to an invalidated ticket works until its refund was returned; **Restore** on a closed order puts the whole order back (paid again if the money was never returned).
+Orders refunded before refunds were tracked show a grey "return not recorded" line, not an alert. **Money already returned** records it with the date unknown.
+The **Refunds owed** bar and the **Needs sorting** filter list everything still to return or still to collect.
+
+**When the money isn't exactly right:** press **Mark paid** (or **Record the rest**). A window asks what actually arrived and the name on the transfer, then compares it with the order:
+- **Exactly right:** it's marked paid.
+- **Too little:** choose *keep waiting for the rest* (the order stays unpaid and shows "$5 still to come", and the ticket page tells the person) or *accept it as paid in full*.
+- **Too much:** choose *refund the extra* (it becomes a refund owed) or *keep it* (written on the order).
+- **A cancelled order was paid:** put it back and confirm it, or refund the payment.
+- **The event is full:** confirm anyway, or refund the payment and cancel the registration.
+**A payment I can't match** (next to Add paid registration) is for transfers with no code, the wrong code, someone else's name, or one transfer for several orders: enter the amount, the name and any code, and it suggests orders; tick the right one(s) and continue.
 **Resend tickets:** someone lost their email, or it went to spam.
 **Ticket ↗:** opens that person's ticket (handy at the help desk).
 **Delete order** *(admin only, inside Edit)*: removes ONE order and its tickets for good. For test purchases and dummy data. It asks first and **can't be undone** (the nightly backup still has a copy). For a real payment, use **Refund / cancel** instead so there is a record.
@@ -171,6 +185,19 @@ Settings has six sections down the left. Pick one to open it:
 **Backups and alerts:** every **Sunday** the system copies the data sheet and the Membership sheet into the Drive folder "CSS Platform Backups" (in the CSS Gmail's Drive), keeps the last 4 of each, and bins older ones (Drive bin). To take one now: in Apps Script run `installJobs`. Every night it also runs the health check. If a check fails, it emails the CSS Gmail (once a day at most). To restore, open the newest backup and copy the tabs you need back into "CSS Platform Data". Entry also closes by itself 4 hours after an event ends.
 
 The **light/dark switch** is next to the gear. It remembers your choice on that device.
+
+## Emails: what each event sends, and the allowance
+Every email uses part of Gmail's daily limit (about 100), so each event chooses what it sends, under **Emails** in the event editor:
+- **Email a confirmation when someone registers** (default off): one email per registration with the payment details. A free event never sends it.
+- **Email each ticket when payment is confirmed** (default on): the ticket with its QR code. On a free event it goes out as soon as someone registers, so a free signup never gets two emails.
+- **Allow "Send reminders"** (default off): switches on the Payments tab's reminder button for that event.
+Whatever you choose, the page people see after signing up always shows their ticket link and, on a paid event, how much to send, where, and their payment code, and tells them to keep the page when no confirmation email is coming. **My tickets** on the events page can email them their links again.
+Turning an email off is a choice, not a failure: nothing is queued for later. Tickets that weren't emailed because it is off say so in their record, and **Resend tickets** on an order still sends them when you want to.
+The pill at the top right shows how many emails Google still allows and how many ticket emails are waiting (click it for details). Google counts the limit over a rolling day, so the portal never promises a reset time. When it runs out, sign-ups and payments still work; the tickets just wait and every ticket still opens from its own link. When Google allows more, press **Send waiting emails** in that pill (or **Send now** on Payments). After Mark paid it says, for example, "10 tickets confirmed. 6 emailed; 4 waiting to send."
+
+## My tickets in the member portal
+A member who opened their pass from their emailed link has a key on that device, so **My tickets** opens straight away with no search. On a new device or after the browser cleared its data, they enter their UCID and last name once, or ask for the link by email.
+A ticket belongs to the person attending, not the person who paid, so a ticket someone else bought shows up when they used the member's email. A ticket that only carries a member's UCID or ID next to a different name is **not** added; the member is told there is one and asked to contact us. Cancelled tickets stay visible as "Cancelled" so nobody wonders where theirs went. **Missing a ticket?** at the bottom explains all of this and links to a search with another email or UCID.
 
 ## Registering from the member portal
 Members can register for events from their pass page (**Upcoming events**): their name, email and UCID are filled in, and they can add friends. It is the same registration as the events site, so a member can also just use the Instagram link. A free event gives tickets straight away; a paid one shows the e-transfer details and "waiting for payment", and the ticket works once Finance marks it paid.

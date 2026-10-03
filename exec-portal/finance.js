@@ -20,6 +20,13 @@ function renderFinanceExtras(shown) {
   const overdue = data.counts.overdue;
   const chip = document.querySelector('#pay-filters [data-filter="overdue"]');
   chip.textContent = T.filterOverdue(overdue);
+  const sortChip = document.querySelector('#pay-filters [data-filter="sorting"]');
+  sortChip.textContent = T.filterNeedsSorting(data.counts.needsSorting || 0);
+  sortChip.hidden = !data.counts.needsSorting && payState.filter !== "sorting";
+  const owedBox = $("pay-refunds");
+  const ro = data.refundsOwed || { count: 0, amount: 0 };
+  owedBox.hidden = !ro.count;
+  owedBox.innerHTML = ro.count ? `<span>${T.refundsNotice(ro.count, dollars(ro.amount))}</span> <button class="link" id="show-refunds">${T.showThem}</button>` : "";
   const cancelChip = document.querySelector('#pay-filters [data-filter="cancelreq"]');
   cancelChip.textContent = T.filterCancelReq(data.counts.cancelRequests || 0);
   cancelChip.hidden = !data.counts.cancelRequests && payState.filter !== "cancelreq";
@@ -31,7 +38,9 @@ function renderFinanceExtras(shown) {
   const box = $("pay-overdue");
   box.hidden = !overdue;
   box.innerHTML = overdue
-    ? `<span>${T.overdueNotice(overdue, data.reminderHours || 48)}</span><button class="link" id="send-reminders">${T.sendReminders}</button>` : "";
+    ? `<span>${T.overdueNotice(overdue, data.reminderHours || 48)}</span>` + (data.emails && !data.emails.reminders
+      ? ` <span class="muted">${T.remindersOffNote}</span>`
+      : `<button class="link" id="send-reminders">${T.sendReminders}</button>`) : "";
 
   // Bulk bar: tick orders, mark them all paid in one go
   const selected = data.orders.filter((o) => payState.selected.has(o.id));
@@ -89,17 +98,19 @@ async function markSelectedPaid() {
   const siteUrl = new URL(PUBLIC_SITE_URL, location.href).href;
   const done = [], skipped = [];
   let emails = 0, error = null;
+  const tally = { confirmed: 0, emailsSent: 0, emailsWaiting: 0, notEmailed: 0 };
   for (let i = 0; i < orders.length; i += BULK_CHUNK) {
     const ids = orders.slice(i, i + BULK_CHUNK).map((o) => o.id);
     const reply = await api("markOrdersPaid", { orderIds: ids, siteUrl });
     if (!reply.ok) { error = reply; break; }
     emails += reply.emailsSent;
+    tally.confirmed += reply.confirmed || 0; tally.emailsSent += reply.emailsSent || 0; tally.emailsWaiting += reply.emailsWaiting || 0; tally.notEmailed += reply.notEmailed || 0;
     reply.results.forEach((r) => (r.ok ? done : skipped).push(r));
   }
   payState.selected.clear();
   eventsState.loaded = false;
   if (error) showToast(`${T.bulkDone(done.length, emails)} ${errorText(error)}`);
-  else showToast(T.bulkDone(done.length, emails) + (skipped.length ? " " + T.bulkSkipped(skipped.map((r) => `${r.code}: ${r.message}`).join(" · ")) : ""));
+  else showToast(T.bulkPaidOutcome(done.length, tally) + (skipped.length ? " " + T.bulkSkipped(skipped.map((r) => `${r.code}: ${r.message}`).join(" · ")) : ""));
   loadOrders();
 }
 
@@ -169,6 +180,12 @@ function setAddError(text) {
 // ---- Wire up ----------------------------------------------------------------
 
 $("orders").addEventListener("change", onPick);
+$("pay-refunds").addEventListener("click", (e) => {
+  if (e.target.id !== "show-refunds") return;
+  payState.filter = "sorting";
+  document.querySelectorAll("#pay-filters .chip").forEach((c) => c.classList.toggle("active", c.dataset.filter === "sorting"));
+  loadOrders();
+});
 $("pay-overdue").addEventListener("click", (e) => { if (e.target.id === "send-reminders") sendReminders(); });
 $("bulk-bar").addEventListener("click", (e) => {
   if (e.target.id === "bulk-pay") markSelectedPaid();
