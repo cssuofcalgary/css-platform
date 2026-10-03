@@ -10,8 +10,9 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Fraunces:opsz,wght@9..144,500;9..144,600&family=JetBrains+Mono:wght@400;500&display=swap">
   <link rel="stylesheet" href="styles.css?v=1.7.0">
-  <link rel="stylesheet" href="theme.css?v=0.12.0">
+  <link rel="stylesheet" href="theme.css?v=0.13.2">
   <link rel="stylesheet" href="peekaboo.css?v=1.0.1">
+  <link rel="stylesheet" href="forest.css?v=1.0.7">
 </head>
 <body>
   <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
@@ -21,7 +22,7 @@
     <symbol id="i-card" viewBox="0 0 24 24"><rect x="3" y="5.5" width="18" height="13" rx="2.5"/><path d="M3 10h18M7 15h4"/></symbol>
     <symbol id="i-scan" viewBox="0 0 24 24"><path d="M4 8V5.5A1.5 1.5 0 015.5 4H8M16 4h2.5A1.5 1.5 0 0120 5.5V8M20 16v2.5a1.5 1.5 0 01-1.5 1.5H16M8 20H5.5A1.5 1.5 0 014 18.5V16M7 12h10"/></symbol>
     <symbol id="i-pulse" viewBox="0 0 24 24"><path d="M3 12h4l2.5-7 5 14L17 12h4"/></symbol>
-    <symbol id="i-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></symbol>
+    <symbol id="i-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M9.5 3h5l.6 2.4 1.7 1 2.4-.7 2.5 4.3-1.8 1.7v2l1.8 1.7-2.5 4.3-2.4-.7-1.7 1-.6 2.4h-5l-.6-2.4-1.7-1-2.4.7-2.5-4.3 1.8-1.7v-2L2.3 10l2.5-4.3 2.4.7 1.7-1Z"/></symbol>
     <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></symbol>
     <symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 4l9 16H3L12 4zM12 10v4M12 17.2v.1"/></symbol>
     <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></symbol>
@@ -37,7 +38,7 @@
   <!-- Sign-in -->
   <main id="login-view" class="login" hidden>
     <form id="login-form" class="card login-card" autocomplete="off">
-      <img class="login-logo" src="assets/css-logo.png" alt="Chinese Students' Society">
+      <span class="panda-logo-frame"><img class="login-logo" src="assets/css-panda-logo.png" alt="Chinese Students' Society"></span>
       <h1 data-t="appTitle"></h1>
       <p class="muted" data-t="appSubtitle"></p>
 
@@ -58,7 +59,7 @@
     <!-- Left sidebar: brand, navigation, who is signed in -->
     <aside class="sidebar" id="sidebar">
       <div class="brand-block">
-        <img class="logo" src="assets/css-logo.png" alt="Chinese Students' Society">
+        <span class="panda-logo-frame"><img class="logo" src="assets/css-panda-logo.png" alt="Chinese Students' Society"></span>
         <div class="brand-text"><div class="brand" id="brand" data-t="appTitle"></div><span class="tagline">CONNECT ~ CULTURE ~ SOCIAL</span></div>
       </div>
       <nav class="tabs" aria-label="Main">
@@ -67,10 +68,11 @@
         <button class="tab" data-tab="events"><svg><use href="#i-cal"/></svg><span data-t="tabEvents"></span></button>
         <button class="tab" data-tab="payments"><svg><use href="#i-card"/></svg><span data-t="tabPayments"></span><span id="pay-nav-count" class="nav-pill" hidden></span></button>
         <button class="tab" data-tab="door"><svg><use href="#i-scan"/></svg><span data-t="tabDoor"></span><span id="door-nav-live" class="nav-live" hidden></span></button>
-        <div class="nav-label" id="admin-nav-label" hidden>Admin</div>
+        <div class="nav-label" id="admin-nav-label" data-t="tabSettings" hidden></div>
         <button class="tab" id="activity-tab-button" data-tab="activity" hidden><svg><use href="#i-pulse"/></svg><span data-t="tabActivity"></span></button>
         <button class="tab" id="settings-tab-button" data-tab="settings" hidden><svg><use href="#i-gear"/></svg><span data-t="tabSettings"></span></button>
       </nav>
+      <div class="sidebar-panda" aria-hidden="true"><img src="assets/panda/munch.webp" alt="" width="56" height="56" decoding="async"></div>
       <div class="who">
         <div class="avatar" id="who-avatar" aria-hidden="true"></div>
         <div class="who-text">
@@ -78,12 +80,22 @@
           <span class="who-role"><span class="muted" data-t="signedInAs"></span> <span id="admin-badge" class="pill good" data-t="roleAdmin" hidden></span></span>
           <span class="who-links"><a id="full-portal-link" class="link" href="?full=1" data-t="fullPortal" hidden></a><button id="logout-button" class="link" data-t="signOut"></button></span>
         </div>
-        <button id="admin-gear" class="icon-btn" type="button" title="Admin mode" aria-label="Admin mode"><svg><use href="#i-gear"/></svg></button>
+        <button id="admin-gear" class="icon-btn" type="button" title="Settings" aria-label="Settings"><svg><use href="#i-gear"/></svg></button>
         <button id="theme-toggle" class="icon-btn" type="button" title="Light / dark" aria-label="Switch between light and dark"><svg><use href="#i-moon"/></svg></button>
       </div>
     </aside>
 
     <div class="mainwrap">
+    <div class="forest-scene" aria-hidden="true">
+      <span class="forest-stalk distant" style="left:8%;--lean:-3deg"></span>
+      <span class="forest-stalk distant" style="left:18%;--lean:3deg"></span>
+      <span class="forest-stalk distant" style="right:17%;--lean:-2deg"></span>
+      <span class="forest-stalk distant" style="right:9%;--lean:3deg"></span>
+      <span class="forest-stalk" style="right:15px;--lean:2deg"><span class="forest-leaves" style="--branch:12%;--delay:-2s"><i></i><i></i><i></i><i></i><i></i></span><span class="forest-leaves" style="--branch:57%;--delay:-4s"><i></i><i></i><i></i><i></i><i></i></span></span>
+      <span class="forest-stalk" style="right:47px;--lean:-3deg"><span class="forest-leaves" style="--branch:32%"><i></i><i></i><i></i><i></i><i></i></span></span>
+      <span class="forest-stalk" style="left:12px;--lean:-1deg"><span class="forest-leaves" style="--branch:8%;--delay:-5s"><i></i><i></i><i></i><i></i><i></i></span><span class="forest-leaves" style="--branch:81%;--delay:-1s"><i></i><i></i><i></i><i></i><i></i></span></span>
+    </div>
+    <img class="forest-corner-panda" src="assets/panda/success.webp" alt="" aria-hidden="true" width="60" height="60" decoding="async">
     <header class="topbar">
       <button id="nav-burger" class="burger" type="button" aria-label="Menu"><svg><use href="#i-menu"/></svg></button>
       <div class="crumb"><span class="crumb-root">CSS</span> / <b id="crumb"></b></div>
@@ -94,7 +106,7 @@
     <main class="content">
      <div id="tab-overview">
       <div class="head">
-        <div class="grow"><div class="eyebrow" id="ov-date"></div><h1 id="ov-greeting"></h1><p class="sub" data-t="ovSub"></p></div>
+        <div class="grow"><div class="eyebrow" id="ov-date"></div><h1 id="ov-greeting"></h1></div>
       </div>
       <div id="ov-attention" class="attention"></div>
       <div id="ov-tiles" class="stat-strip"></div>
@@ -105,7 +117,7 @@
      </div>
 
      <div id="tab-members" hidden>
-      <div class="head"><div class="grow"><h1 data-t="tabMembers"></h1><p class="sub" data-t="membersSub"></p></div>
+      <div class="head"><div class="grow"><h1 data-t="tabMembers"></h1></div>
         <button id="add-member-button" class="primary small-button" type="button" data-t="addMember"></button></div>
       <div id="mem-list-area">
       <div class="mem-views">
@@ -119,7 +131,6 @@
         <p id="pending-status" class="muted small" aria-live="polite"></p>
         <ul id="pending-list" class="results"></ul>
         <button id="pending-more" class="secondary" type="button" hidden></button>
-        <p class="muted small" data-t="pendingNote"></p>
       </section>
       <section id="search-view">
         <label for="search-input" class="visually-hidden" data-t="searchLabel"></label>
@@ -129,10 +140,8 @@
       </section>
       <section id="partners-section" class="detail-block">
         <div class="row-between"><h3 class="section-title" data-t="partnersHeading"></h3><button id="partner-add" class="link" type="button" data-t="partnerAdd"></button></div>
-        <p class="muted small" data-t="partnersHint"></p>
         <ul id="partners-list" class="plain-list partner-list"></ul>
         <div class="row-between"><h4 class="section-title" data-t="redeemHeading"></h4><button id="redeem-csv" class="link" type="button" data-t="redeemCsv"></button></div>
-        <p class="muted small" data-t="redeemHint"></p>
         <p id="redeem-status" class="muted small" aria-live="polite"></p>
         <ul id="redeem-list" class="plain-list"></ul>
       </section>
@@ -150,19 +159,17 @@
             <button id="member-resend-pass" class="secondary small-button" type="button" data-t="resendPass" hidden></button>
           </div>
           <div id="member-pay" class="member-pay" hidden>
-            <p class="muted small" data-t="markPayNote"></p>
             <button id="member-mark-paid" class="primary" type="button" data-t="markPaid"></button>
             <p id="member-pay-error" class="error" role="alert" hidden></p>
           </div>
         </article>
-        <p class="muted small" data-t="readOnlyNote"></p>
       </section>
      </div>
 
      <div id="tab-events" hidden>
       <section id="events-list-view">
         <div class="head">
-          <div class="grow"><h1 data-t="eventsTitle"></h1><p class="sub" data-t="eventsSub"></p></div>
+          <div class="grow"><h1 data-t="eventsTitle"></h1></div>
           <button id="new-event-button" class="primary small-button" data-t="newEvent"></button>
         </div>
         <p id="events-status" class="muted small" aria-live="polite"></p>
@@ -221,10 +228,10 @@
           <button type="button" data-step="p-pub" data-t="edPublishing"></button>
         </nav>
         <form id="event-form" class="editor-form" novalidate>
-          <div class="head tight"><div class="grow"><h2 id="editor-title" class="page-title"></h2><p id="editor-hint" class="muted small" hidden></p></div></div>
+          <div class="head tight"><div class="grow"><h2 id="editor-title" class="page-title"></h2><p id="editor-hint" class="muted small portal-help" hidden></p></div></div>
 
           <section class="card panel" id="p-basics">
-            <header><h3 data-t="edBasics"></h3><p data-t="edBasicsHint"></p></header>
+            <header><h3 data-t="edBasics"></h3></header>
             <div class="inner">
               <div><label for="ev-name" data-t="evName"></label>
               <input id="ev-name" required maxlength="120"></div>
@@ -242,7 +249,7 @@
           </section>
 
           <section class="card panel" id="p-when">
-            <header><h3 data-t="edSchedule"></h3><p data-t="edScheduleHint"></p></header>
+            <header><h3 data-t="edSchedule"></h3></header>
             <div class="inner">
               <div class="grid-3">
                 <div><label for="ev-date" data-t="evDate"></label><input id="ev-date" type="date" required></div>
@@ -255,7 +262,7 @@
           </section>
 
           <section class="card panel" id="p-cap">
-            <header><h3 data-t="edCapacity"></h3><p data-t="edCapacityHint"></p></header>
+            <header><h3 data-t="edCapacity"></h3></header>
             <div class="inner">
               <div class="grid-2">
                 <div><label for="ev-capacity" data-t="evCapacity"></label><input id="ev-capacity" type="number" min="0" inputmode="numeric"></div>
@@ -270,26 +277,23 @@
           </section>
 
           <section class="card panel" id="p-waitlist">
-            <header><h3 data-t="evWaitlist"></h3><p data-t="evWaitlistHint"></p></header>
+            <header><h3 data-t="evWaitlist"></h3></header>
             <div class="inner">
-              <label class="check-row"><input id="ev-waitlist" type="checkbox"> <span data-t="evWaitlist"></span></label>
+              <label class="check-row"><input id="ev-waitlist" type="checkbox"> <span data-t="evWaitlistEnable"></span></label>
             </div>
           </section>
 
           <section class="card panel" id="p-emails">
-            <header><h3 data-t="evEmails"></h3><p data-t="evEmailsHint"></p></header>
+            <header><h3 data-t="evEmails"></h3></header>
             <div class="inner">
               <label class="check-row"><input id="ev-mail-registration" type="checkbox"> <span data-t="evMailRegistration"></span></label>
-              <p class="muted small field-hint" data-t="evMailRegistrationHint"></p>
               <label class="check-row"><input id="ev-mail-tickets" type="checkbox"> <span data-t="evMailTickets"></span></label>
-              <p class="muted small field-hint" data-t="evMailTicketsHint"></p>
               <label class="check-row"><input id="ev-mail-reminders" type="checkbox"> <span data-t="evMailReminders"></span></label>
-              <p class="muted small field-hint" data-t="evMailRemindersHint"></p>
             </div>
           </section>
 
           <section class="card panel" id="p-tix">
-            <header><h3 data-t="evTickets"></h3><p data-t="edTicketsHint"></p></header>
+            <header><h3 data-t="evTickets"></h3></header>
             <div class="inner">
               <div id="ev-ticket-types"></div>
               <div><button type="button" id="add-ticket-type" class="link" data-t="addTicketType"></button></div>
@@ -297,22 +301,22 @@
           </section>
 
           <section class="card panel" id="p-reg">
-            <header><h3 data-t="edRegistration"></h3><p data-t="evQuestionsHint"></p></header>
+            <header><h3 data-t="edRegistration"></h3></header>
             <div class="inner">
               <div id="ev-questions"></div>
               <div><button type="button" id="add-question" class="link" data-t="addQuestion"></button></div>
               <div><label for="ev-closes" data-t="evCloses"></label>
               <input id="ev-closes" type="datetime-local">
-              <p class="muted small" data-t="evClosesHint"></p></div>
+              </div>
             </div>
           </section>
 
           <section class="card panel" id="p-pub">
-            <header><h3 data-t="edPublishing"></h3><p data-t="edPublishingHint"></p></header>
+            <header><h3 data-t="edPublishing"></h3></header>
             <div class="inner">
               <div><label for="ev-code-prefix" data-t="evCodePrefix"></label>
               <input id="ev-code-prefix" maxlength="4" class="short">
-              <p class="muted small" data-t="evCodePrefixHint"></p></div>
+              </div>
             </div>
           </section>
 
@@ -327,7 +331,7 @@
       </section>
      </div>
      <div id="tab-payments" hidden>
-      <div class="head"><div class="grow"><h1 data-t="tabPayments"></h1><p class="sub" data-t="paySub"></p></div></div>
+      <div class="head"><div class="grow"><h1 data-t="tabPayments"></h1></div></div>
       <div class="payments-top">
         <label for="pay-event" class="visually-hidden" data-t="payEvent"></label>
         <select id="pay-event" class="tab-event-select"></select>
@@ -363,7 +367,7 @@
      </div>
      <div id="tab-door" hidden>
       <div class="head door-head">
-        <div class="grow"><div class="eyebrow" data-t="doorEyebrow"></div><h1 data-t="tabDoor"></h1><p class="sub" data-t="doorSub"></p></div>
+        <div class="grow"><div class="eyebrow" data-t="doorEyebrow"></div><h1 data-t="tabDoor"></h1></div>
         <label for="door-event" class="visually-hidden" data-t="payEvent"></label>
         <select id="door-event" class="tab-event-select"></select>
       </div>
@@ -446,7 +450,7 @@
       </div>
      </div>
      <div id="tab-activity" hidden>
-      <div class="head"><div class="grow"><h1 data-t="tabActivity"></h1><p class="sub" data-t="actSub"></p></div></div>
+      <div class="head"><div class="grow"><h1 data-t="tabActivity"></h1></div></div>
       <div class="payments-top">
         <div class="grid-2">
           <select id="act-event" aria-label="Event"></select>
@@ -470,7 +474,7 @@
      </div>
 
      <div id="tab-settings" hidden>
-      <div class="head"><div class="grow"><h1 data-t="tabSettings"></h1><p class="sub" data-t="setSub"></p></div></div>
+      <div class="head"><div class="grow"><h1 data-t="tabSettings"></h1></div></div>
       <p id="set-status" class="muted small"></p>
       <div class="set-layout">
       <nav class="steps set-nav" id="set-nav" aria-label="Settings sections">
@@ -486,7 +490,6 @@
         <h3 class="sub-title" data-t="setGeneralTitle"></h3>
         <label for="set-etransfer" data-t="setEtransfer"></label>
         <input id="set-etransfer" type="email" maxlength="120" autocomplete="off">
-        <p class="muted small" data-t="setEtransferHint"></p>
         <label for="set-contact" data-t="setContact"></label>
         <input id="set-contact" type="email" maxlength="120" autocomplete="off">
         <label for="set-instagram" data-t="setInstagram"></label>
@@ -498,7 +501,6 @@
 
       <form id="set-membership-form" data-pane="membership" class="card editor" novalidate>
         <h3 class="sub-title" data-t="setMembershipTitle"></h3>
-        <p class="muted small" data-t="setMembershipHint"></p>
         <label for="set-sheet" data-t="setSheet"></label>
         <input id="set-sheet" maxlength="300" autocomplete="off">
         <label for="set-tab" data-t="setTab"></label>
@@ -513,7 +515,7 @@
 
         <div class="cred" data-cred="exec">
           <div class="cred-row">
-            <div><b data-t="secExecTitle"></b><small data-t="secExecSub"></small></div>
+            <div><b data-t="secExecTitle"></b></div>
             <button type="button" class="secondary small-button" data-change="exec" data-t="secChange"></button>
           </div>
           <div class="cred-edit" hidden>
@@ -525,7 +527,7 @@
 
         <div class="cred" data-cred="admin">
           <div class="cred-row">
-            <div><b data-t="secAdminTitle"></b><small data-t="secAdminSub"></small></div>
+            <div><b data-t="secAdminTitle"></b></div>
             <button type="button" class="secondary small-button" data-change="admin" data-t="secChange"></button>
           </div>
           <div class="cred-edit" hidden>
@@ -537,7 +539,7 @@
 
         <div class="cred" data-cred="door">
           <div class="cred-row">
-            <div><b><span data-t="secDoorTitle"></span> <span class="badge b-mute" data-t="secOptional"></span></b><small data-t="secDoorSub"></small><small id="set-door-note"></small></div>
+            <div><b><span data-t="secDoorTitle"></span> <span class="badge b-mute" data-t="secOptional"></span></b><small id="set-door-note"></small></div>
             <span class="cred-buttons">
               <button type="button" id="set-door-clear" class="link danger" data-t="secClear" hidden></button>
               <button type="button" class="secondary small-button" data-change="door" data-t="secChange"></button>
@@ -551,23 +553,21 @@
 
         <div class="cred">
           <div class="cred-row">
-            <div><b data-t="secLockTitle"></b><small data-t="secLockSub"></small></div>
+            <div><b data-t="secLockTitle"></b></div>
             <input type="checkbox" class="toggle" checked disabled aria-label="Lock out after 30 failed sign-ins (always on)">
           </div>
         </div>
 
-        <p class="muted small" data-t="setPwHint"></p>
         <p id="set-password-result" class="muted small"></p>
         <button type="submit" id="set-password-save" class="visually-hidden" tabindex="-1" aria-hidden="true"></button>
       </form>
 
       <div class="card editor" id="set-emails-card" data-pane="emails">
         <h3 class="sub-title" data-t="emTitle"></h3>
-        <p class="muted small" data-t="emHint"></p>
         <label for="em-kind" data-t="emPick"></label>
         <select id="em-kind"></select>
-        <p id="em-when" class="muted small"></p>
-        <p id="em-fills" class="muted small"></p>
+        <p id="em-when" class="muted small portal-help"></p>
+        <p id="em-fills" class="muted small portal-help"></p>
         <label for="em-subject" data-t="emSubject"></label>
         <input id="em-subject" maxlength="150" autocomplete="off">
         <label for="em-title" data-t="emHeading"></label>
@@ -578,7 +578,6 @@
         <textarea id="em-intro" rows="3" maxlength="1500"></textarea>
         <label for="em-closing" data-t="emClosing"></label>
         <textarea id="em-closing" rows="3" maxlength="1500"></textarea>
-        <p class="muted small" data-t="emFormatHint"></p>
         <p id="em-result" class="muted small"></p>
         <div class="row-buttons">
           <button id="em-save" class="primary" data-t="setSave"></button>
@@ -606,20 +605,19 @@
 
       <div class="card editor" id="set-sessions-card" data-pane="sessions">
         <div class="row-between">
-          <div><h3 class="sub-title" data-t="setOnlineTitle"></h3><p class="muted small" data-t="setOnlineHint"></p></div>
+          <div><h3 class="sub-title" data-t="setOnlineTitle"></h3></div>
           <button id="set-sessions-refresh" class="secondary small-button" type="button" data-t="setRefresh"></button>
         </div>
         <ul id="set-sessions-list" class="sess-list"></ul>
         <p id="set-sessions-result" class="muted small"></p>
         <h3 class="sub-title" data-t="setSessionsTitle"></h3>
-        <p class="muted small" data-t="setSessionsHint"></p>
         <div><button id="set-signout-all" class="secondary" data-t="setSignOutAll"></button></div>
         <p id="set-signout-result" class="muted small"></p>
       </div>
 
       <div class="card editor" id="set-health-card" data-pane="health">
         <div class="row-between">
-          <div><h3 class="sub-title" data-t="setHealthTitle"></h3><p class="muted small" data-t="setHealthHint"></p></div>
+          <div><h3 class="sub-title" data-t="setHealthTitle"></h3></div>
           <button id="set-health-button" class="primary small-button" type="button" data-t="setHealthRun"></button>
         </div>
         <div id="set-health-result"></div>
@@ -670,7 +668,6 @@
       <div id="inv-refund-box" hidden>
         <label for="inv-refund" data-t="invRefundLabel"></label>
         <input id="inv-refund" inputmode="decimal" autocomplete="off">
-        <p class="muted small" data-t="invRefundHint"></p>
       </div>
       <label for="inv-reason" data-t="invReasonLabel"></label>
       <input id="inv-reason" maxlength="200" autocomplete="off">
@@ -687,7 +684,7 @@
     <form id="refund-form" class="editor" novalidate>
       <h2 id="rf-title"></h2>
       <p id="rf-owed"><strong></strong></p>
-      <p id="rf-intro" class="muted small"></p>
+      <p id="rf-intro" class="muted small portal-help"></p>
       <div class="grid-2">
         <div><label for="rf-amount" data-t="rfAmount"></label><input id="rf-amount" inputmode="decimal" autocomplete="off"></div>
         <div><label for="rf-method" data-t="rfMethod"></label>
@@ -710,17 +707,16 @@
   </dialog>
 
   <!-- Email sending: what is left and what is waiting -->
-  <dialog id="mail-dialog" class="edit-dialog">
+  <dialog id="mail-status-dialog" class="edit-dialog">
     <div class="editor">
-      <h2 data-t="mailTitle"></h2>
+      <h2 data-t="mailStatusTitle"></h2>
       <p id="mail-left"></p>
       <p id="mail-waiting"></p>
       <p id="mail-checked" class="muted small"></p>
-      <p class="muted small" data-t="mailExplain"></p>
       <p id="mail-result" class="muted small" aria-live="polite"></p>
       <div class="button-row">
         <button type="button" id="mail-refresh" class="secondary" data-t="mailRefresh"></button>
-        <button type="button" id="mail-send" class="secondary" data-t="mailSend" hidden></button>
+        <button type="button" id="mail-send-pending" class="secondary" data-t="mailSendPending" hidden></button>
         <button type="button" id="mail-close" class="primary" data-t="close"></button>
       </div>
     </div>
@@ -730,7 +726,6 @@
   <dialog id="scanlog-dialog" class="edit-dialog wide">
     <div class="editor">
       <h2 data-t="scanLogTitle"></h2>
-      <p class="muted small" data-t="scanLogHint"></p>
       <p id="scanlog-status" class="muted small" aria-live="polite"></p>
       <ul id="scanlog-list" class="results"></ul>
       <div class="button-row">
@@ -755,7 +750,6 @@
   <dialog id="member-add-dialog" class="edit-dialog">
     <form id="member-add-form" class="editor" novalidate>
       <h2 data-t="addMember"></h2>
-      <p class="muted small" data-t="addMemberHint"></p>
       <label for="ma-name" data-t="maName"></label>
       <input id="ma-name" maxlength="80" autocomplete="off">
       <div class="grid-2">
@@ -774,7 +768,6 @@
         <input id="ma-where" maxlength="120" autocomplete="off">
       </div>
       <label class="check-row"><input id="ma-paid" type="checkbox" checked> <span data-t="maPaidNow"></span></label>
-      <p class="muted small" data-t="maPaidHint"></p>
       <p id="ma-error" class="error" role="alert" hidden></p>
       <div class="button-row">
         <button type="button" id="ma-cancel" class="secondary" data-t="cancel"></button>
@@ -791,7 +784,6 @@
       <input id="pt-name" maxlength="120" autocomplete="off">
       <label for="pt-offer" data-t="partnerOffer"></label>
       <input id="pt-offer" maxlength="300" autocomplete="off">
-      <p class="muted small" data-t="partnerOfferHint"></p>
       <label for="pt-address" data-t="partnerAddress"></label>
       <input id="pt-address" maxlength="200" autocomplete="off">
       <label class="check-row"><input id="pt-active" type="checkbox" checked> <span data-t="partnerActive"></span></label>
@@ -830,7 +822,6 @@
         <div><label for="em-paid" data-t="emStatus"></label>
           <select id="em-paid"><option value="paid" data-t="emPaid"></option><option value="unpaid" data-t="emUnpaid"></option></select></div>
       </div>
-      <p class="muted small" data-t="emPaidHint"></p>
       <p id="em-error" class="error" role="alert" hidden></p>
       <div class="button-row">
         <button type="button" id="em-cancel" class="secondary" data-t="cancel"></button>
@@ -843,7 +834,6 @@
   <dialog id="admin-dialog" class="edit-dialog">
     <form id="admin-form" class="editor" novalidate>
       <h2 id="admin-title"></h2>
-      <p id="admin-hint" class="muted small"></p>
       <div id="admin-pw-wrap">
         <label for="admin-pw" data-t="adminPwLabel"></label>
         <input id="admin-pw" type="password" autocomplete="current-password">
@@ -860,7 +850,6 @@
   <dialog id="mail-dialog" class="edit-dialog">
     <form id="mail-form" class="editor" novalidate>
       <h2 id="mail-title"></h2>
-      <p class="muted small" data-t="mailHint"></p>
       <label for="mail-audience" data-t="mailWho"></label>
       <select id="mail-audience">
         <option value="all" data-t="mailWhoAll"></option>
@@ -871,7 +860,6 @@
       <input id="mail-subject" maxlength="150" autocomplete="off">
       <label for="mail-message" data-t="mailMessage"></label>
       <textarea id="mail-message" rows="6" maxlength="3000"></textarea>
-      <p class="muted small" data-t="mailFills"></p>
       <p id="mail-info" class="muted small" aria-live="polite"></p>
       <p id="mail-error" class="error" role="alert" hidden></p>
       <iframe id="mail-frame" title="Email preview" hidden style="width:100%;height:420px;border:1px solid var(--line,#ccc);border-radius:8px;background:#fff;"></iframe>
@@ -887,12 +875,10 @@
   <dialog id="add-dialog" class="edit-dialog">
     <form id="add-form" class="editor" novalidate>
       <h2 id="add-title"></h2>
-      <p class="muted small" data-t="addHint"></p>
       <label for="add-name" data-t="editName"></label>
       <input id="add-name" maxlength="80" autocomplete="off">
       <label for="add-email" data-t="editEmail"></label>
       <input id="add-email" type="email" maxlength="120" autocomplete="off">
-      <p class="muted small" data-t="addEmailHint"></p>
       <label for="add-type" data-t="editType"></label>
       <select id="add-type"></select>
       <div class="grid-2">
@@ -922,7 +908,6 @@
       <input id="ed-name" maxlength="80" autocomplete="off">
       <label for="ed-email" data-t="editEmail"></label>
       <input id="ed-email" type="email" maxlength="120" autocomplete="off">
-      <p class="muted small" data-t="editEmailHint"></p>
 
       <p id="edit-locked" class="muted small" hidden data-t="editAdminLocked"></p>
 
@@ -935,10 +920,8 @@
           </div>
           <label for="ed-type" data-t="editType"></label>
           <select id="ed-type"></select>
-          <p class="muted small" data-t="editMemberHint"></p>
           <label for="ed-flag" data-t="editFlag"></label>
           <input id="ed-flag" maxlength="200" autocomplete="off">
-          <p class="muted small" data-t="editFlagHint"></p>
           <div id="ed-answers"></div>
         </fieldset>
         <fieldset>
@@ -964,13 +947,13 @@
   </dialog>
 
   <script src="config.js?v=0.3.7"></script>
-  <script src="strings.js?v=1.11.0"></script>
+  <script src="strings.js?v=1.11.3"></script>
   <script src="mock.js?v=0.3.7"></script>
   <script src="panda.js?v=1.5.0"></script>
   <script src="peekaboo.js?v=1.0.0"></script>
   <script src="app.js?v=1.7.0"></script>
-  <script src="events.js?v=1.7.0"></script>
-  <script src="emailstatus.js?v=1.0.0"></script>
+  <script src="events.js?v=1.7.1"></script>
+  <script src="emailstatus.js?v=1.0.1"></script>
   <script src="waitlist.js?v=1.5.0"></script>
   <script src="payments.js?v=1.9.0"></script>
   <script src="edit.js?v=0.9.6"></script>
@@ -986,7 +969,7 @@
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
   <script src="door.js?v=0.12.2"></script>
   <script src="members.js?v=1.2.0"></script>
-  <script src="overview.js?v=1.2.0"></script>
-  <script src="shell.js?v=0.9.0"></script>
+  <script src="overview.js?v=1.2.1"></script>
+  <script src="shell.js?v=0.9.3"></script>
 </body>
 </html>

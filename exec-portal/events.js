@@ -219,6 +219,7 @@ function openEditor(existing, isEdit = !!existing, title) {
   $("event-editor-view").hidden = false;
   window.scrollTo(0, 0);
   $("ev-name").focus();
+  updateEditorStep();
 }
 
 function showEventsList() {

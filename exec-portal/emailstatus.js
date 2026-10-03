@@ -34,30 +34,30 @@ function renderMailStatus() {
   if (!mailState.loaded) return;
   pill.textContent = T.mailPill(mailState.left, mailState.waiting);
   pill.classList.toggle("warn", mailState.waiting > 0 || (mailState.left >= 0 && mailState.left < 10));
-  if ($("mail-dialog").open) renderMailDialog();
+  if ($("mail-status-dialog").open) renderMailDialog();
 }
 
 function renderMailDialog() {
   $("mail-left").textContent = T.mailLeft(mailState.left);
   $("mail-waiting").textContent = T.mailWaiting(mailState.waiting);
   $("mail-checked").textContent = T.mailChecked(mailState.checkedAt ? new Date(mailState.checkedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : "just now");
-  $("mail-send").hidden = !(mailState.waiting > 0 && mailState.left !== 0);
+  $("mail-send-pending").hidden = !(mailState.waiting > 0 && mailState.left !== 0);
 }
 
 $("mail-pill").addEventListener("click", () => {
   $("mail-result").textContent = "";
   renderMailDialog();
-  $("mail-dialog").showModal();
+  $("mail-status-dialog").showModal();
   refreshMailStatus(true);
 });
-$("mail-close").addEventListener("click", () => $("mail-dialog").close());
+$("mail-close").addEventListener("click", () => $("mail-status-dialog").close());
 $("mail-refresh").addEventListener("click", async () => {
   $("mail-result").textContent = "";
   await refreshMailStatus(true);
   if (!mailState.loaded) $("mail-result").textContent = T.mailNone;
 });
-$("mail-send").addEventListener("click", async () => {
-  const button = $("mail-send");
+$("mail-send-pending").addEventListener("click", async () => {
+  const button = $("mail-send-pending");
   button.disabled = true;
   $("mail-result").textContent = T.mailSending;
   const count = mailState.left >= 0 ? Math.min(mailState.waiting, mailState.left) : mailState.waiting;

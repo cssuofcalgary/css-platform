@@ -1,0 +1,61 @@
+/* Bamboo scenery and the existing panda art, layered around the portal controls. */
+:root { --forest-stalk: #416545; --forest-joint: #c5bf79; --forest-haze: #fffae6; --forest-opacity: .45; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --forest-stalk: #476f50; --forest-joint: #8b945c; --forest-haze: #244137; --forest-opacity: .27; }
+}
+:root[data-theme="dark"] { --forest-stalk: #476f50; --forest-joint: #8b945c; --forest-haze: #244137; --forest-opacity: .27; }
+
+.mainwrap { position: relative; isolation: isolate; }
+.forest-scene { position: absolute; inset: 0; z-index: -1; overflow: hidden; pointer-events: none; opacity: var(--forest-opacity); background: radial-gradient(ellipse at 55% 0%, var(--forest-haze), transparent 65%); }
+.forest-stalk { position: absolute; bottom: -50px; width: 11px; height: calc(100% + 100px); background: repeating-linear-gradient(to top, transparent 0 84px, var(--forest-joint) 84px 87px, transparent 87px 89px), var(--forest-stalk); border-radius: 8px 8px 0 0; transform: rotate(var(--lean, 0deg)); transform-origin: bottom; }
+.forest-stalk.distant { opacity: .22; width: 9px; }
+.forest-leaves { position: absolute; width: 90px; height: 75px; left: 0; top: var(--branch, 20%); transform-origin: 0 75%; animation: forest-leaf-sway 8s ease-in-out infinite alternate; animation-delay: var(--delay, 0s); }
+.forest-leaves i { position: absolute; display: block; background: var(--forest-stalk); width: 46px; height: 10px; border-radius: 100% 0 100% 0; left: 0; top: 45px; transform-origin: left; }
+.forest-leaves i:nth-child(1) { transform: rotate(-44deg); width: 64px; }
+.forest-leaves i:nth-child(2) { transform: rotate(-19deg); left: 12px; top: 33px; }
+.forest-leaves i:nth-child(3) { transform: rotate(18deg); left: 20px; top: 44px; }
+.forest-leaves i:nth-child(4) { transform: rotate(-139deg); top: 43px; width: 52px; }
+.forest-leaves i:nth-child(5) { transform: rotate(-170deg); top: 47px; width: 43px; }
+
+.sidebar {
+  --surface: #173d31; --sunken: #315943; --text: #f9f2dd; --text-2: #f0ebd6; --muted: #cfdbbd;
+  --border: #64745d; --border-2: #819070; --accent: #e4c77a; --accent-ink: #eed491; --accent-text: #173d31;
+  --gold: #e4c77a; --gold-soft: #ead7a1; --good-bg: #234930; --good-text: #afe3ac;
+  color: var(--text); border-right-color: #547151;
+}
+body:not(.scanner-mode) .sidebar .tab.active { background: #315943; color: #f9f2dd; }
+body:not(.scanner-mode) .sidebar .tab:hover { background: #315943; color: #f9f2dd; }
+.sidebar .tab.active::before { content: none; }
+.sidebar .avatar { color: #173d31; }
+.sidebar .nav-pill { background: var(--gold); color: #173d31; }
+.sidebar .icon-btn { color: var(--text-2); }
+.panda-logo-frame { position: relative; display: block; width: 84px; height: 96px; overflow: hidden; background: transparent; border-radius: 7px; flex: none; }
+:root .panda-logo-frame img { position: absolute; width: 171px; height: 128.25px; max-width: none; left: -43px; top: -27px; object-fit: contain; filter: none; mix-blend-mode: normal; margin: 0; }
+/* The navigation stays forest green in both themes, so its logo always uses light ink. */
+:root .sidebar .panda-logo-frame img { filter: brightness(0) invert(1); }
+:root[data-theme="dark"] .panda-logo-frame img { filter: brightness(0) invert(1); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .panda-logo-frame img { filter: brightness(0) invert(1); } }
+body.scanner-mode .panda-logo-frame { width: 42px; height: 48px; }
+body.scanner-mode .panda-logo-frame img { width: 85.5px; height: 64.125px; left: -21.5px; top: -13.5px; }
+body:not(.scanner-mode) .sidebar .panda-logo-frame { width: 56px; height: 64px; align-self: center; }
+:root body:not(.scanner-mode) .sidebar .panda-logo-frame img { width: 114px; height: 85.5px; left: -28.67px; top: -18px; }
+.sidebar-panda { margin-top: auto; padding-top: 8px; padding-bottom: 8px; display: flex; justify-content: flex-start; flex: none; pointer-events: none; }
+.sidebar-panda img { width: 56px; height: auto; }
+body:not(.scanner-mode) .who { margin-top: 0; }
+.forest-corner-panda { position: absolute; bottom: 8px; right: 24px; width: 54px; height: auto; pointer-events: none; }
+body:not(.scanner-mode) .content { padding-bottom: 76px; }
+body:not(.scanner-mode) .card { background-image: radial-gradient(color-mix(in srgb, var(--gold) 8%, transparent) .5px, transparent .7px); background-size: 6px 7px; }
+.topbar { background: var(--surface); }
+.steps button.on { background: var(--gold-soft); color: var(--text); border-left-color: var(--accent); }
+
+@media (max-height: 600px) { .sidebar-panda { display: none; } body:not(.scanner-mode) .who { margin-top: auto; } }
+@media (min-width: 960px) {
+  #demo-banner:not([hidden]) { position: sticky; top: 0; z-index: 50; }
+  #demo-banner:not([hidden]) ~ #app-view .sidebar { top: 33px; height: calc(100dvh - 33px); }
+  #demo-banner:not([hidden]) ~ #app-view .topbar { top: 33px; }
+}
+@media (max-width: 900px) { .steps button.on { border-bottom-color: var(--accent); } }
+@media (max-width: 560px) { .forest-corner-panda { width: 44px; right: 16px; } .forest-scene { opacity: calc(var(--forest-opacity) * .7); } }
+body.scanner-mode .forest-scene, body.scanner-mode .sidebar-panda, body.scanner-mode .forest-corner-panda { display: none; }
+@keyframes forest-leaf-sway { from { transform: rotate(-2deg); } to { transform: rotate(3deg); } }
+@media (prefers-reduced-motion: reduce) { .forest-leaves { animation: none; } }

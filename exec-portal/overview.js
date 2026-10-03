@@ -97,7 +97,7 @@ function renderOverviewTiles(upcoming, payData, doorData) {
 function attentionItem(kind, icon, title, note, go) {
   return `<button class="attn ${kind}" type="button" data-attn="${go.tab}" data-event="${go.eventId || ""}">
     <span class="ic"><svg><use href="#i-${icon}"/></svg></span>
-    <span class="txt"><b>${escapeHtml(title)}</b><small>${escapeHtml(note)}</small></span>
+    <span class="txt"><b>${escapeHtml(title)}</b>${note ? `<small>${escapeHtml(note)}</small>` : ""}</span>
     <svg class="go"><use href="#i-arrow"/></svg></button>`;
 }
 

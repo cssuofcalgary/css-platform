@@ -5,7 +5,6 @@
 function openAdminDialog() {
   const isAdmin = state.role === "admin";
   $("admin-title").textContent = isAdmin ? T.adminTitleIn : T.adminTitleEnter;
-  $("admin-hint").textContent = isAdmin ? T.adminHintIn : T.adminHintEnter;
   $("admin-pw-wrap").hidden = isAdmin;
   $("admin-submit").textContent = isAdmin ? T.adminLeave : T.adminEnter;
   $("admin-pw").value = "";
@@ -77,9 +76,24 @@ $("ed-steps").addEventListener("click", (ev) => {
   const step = ev.target.closest("[data-step]");
   if (step) document.getElementById(step.dataset.step).scrollIntoView({ behavior: "smooth", block: "start" });
 });
-window.addEventListener("scroll", () => {
+function updateEditorStep() {
   if ($("event-editor-view").hidden) return;
+  const steps = document.querySelectorAll("#ed-steps [data-step]");
+  const panels = Array.from(steps, (step) => document.getElementById(step.dataset.step));
+  if (!panels.length) return;
+  const page = document.scrollingElement;
+  const remaining = Math.max(0, page.scrollHeight - window.innerHeight - window.scrollY);
+  // Near the end, follow headings lower in the viewport because they cannot reach the top.
+  const lastTopAtBottom = panels[panels.length - 1].getBoundingClientRect().top - remaining;
+  const tailProgress = Math.max(0, 1 - remaining / window.innerHeight);
+  const readingLine = 150 + Math.max(0, lastTopAtBottom - 150) * tailProgress;
   let current = "p-basics";
-  document.querySelectorAll("#event-form .panel").forEach((p) => { if (p.getBoundingClientRect().top < 150) current = p.id; });
-  document.querySelectorAll("#ed-steps [data-step]").forEach((b) => b.classList.toggle("on", b.dataset.step === current));
-}, { passive: true });
+  panels.forEach((p) => { if (p.getBoundingClientRect().top <= readingLine) current = p.id; });
+  // The last sections may never reach the top before the page runs out of scroll room.
+  if (panels.length && window.scrollY > 0 && window.scrollY + window.innerHeight >= page.scrollHeight - 2) {
+    current = panels[panels.length - 1].id;
+  }
+  steps.forEach((b) => b.classList.toggle("on", b.dataset.step === current));
+}
+window.addEventListener("scroll", updateEditorStep, { passive: true });
+window.addEventListener("resize", updateEditorStep);
