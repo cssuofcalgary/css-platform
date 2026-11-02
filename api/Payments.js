@@ -220,7 +220,7 @@ function sendReminders_(session, eventId, dryRun) {
   if (!event) throw new ApiError_("NOT_FOUND", "Event not found.");
   const today = Utilities.formatDate(new Date(), "America/Edmonton", "yyyy-MM-dd");
   if (event.date < today) throw new ApiError_("BAD_REQUEST", "This event is over. No reminders needed.");
-  if (!eventMails_(event).reminders) throw new ApiError_("BAD_REQUEST", "Payment reminders are turned off for this event. To use them, edit the event and tick \"Send payment reminders\" under Emails.");
+  if (!eventMails_(event).reminders) throw new ApiError_("BAD_REQUEST", "Payment reminders are turned off for this event. To use them, edit the event and tick \"Enable reminders for unpaid orders.\" under Emails.");
 
   const isDue = reminderDue_;
 

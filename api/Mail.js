@@ -105,7 +105,7 @@ function emailShell_(o) {
     "<td align=\"right\" style=\"vertical-align:bottom;width:85px;padding-left:16px;\"><img src=\"" + MAIL_IMG.bottomPanda + "\" width=\"80\" alt=\"\" style=\"display:block;border:0;height:auto;\"></td></tr></table></td></tr>" +
     "<tr><td bgcolor=\"#f3ecda\" style=\"height:6px;background-color:#f3ecda;border-bottom:3px solid #a8822e;border-left:1px solid #e7ddc0;border-right:1px solid #e7ddc0;border-radius:0 0 6px 6px;font-size:0;line-height:0;\">&nbsp;</td></tr>" +
     "</table>" +
-    "<p style=\"margin:18px 0 0;font-family:" + MAIL_MONO + ";font-size:10px;color:#4a4236;text-align:center;letter-spacing:1px;text-transform:uppercase;\">Questions? Just reply to this email.</p>" +
+    "<p style=\"margin:18px 0 0;font-family:" + MAIL_MONO + ";font-size:10px;color:#4a4236;text-align:center;letter-spacing:1px;text-transform:uppercase;\">Questions? Reply to this email.</p>" +
     (o.footerNote ? "<p style=\"margin:8px 0 0;font-family:" + MAIL_SERIF + ";font-size:12px;color:#4a4236;text-align:center;\">" + o.footerNote + "</p>" : "") +
     "</td></tr></table></body></html>";
 }

@@ -97,7 +97,7 @@ function publicRegisterMember_(input) {
   memberSignupThrottle_(clean);
 
   const done = withIntakeLock_(function () { return addMemberRowLocked_(clean); });
-  if (done.existing && done.existing.paid) throw new ApiError_("ALREADY_MEMBER", "You are already an active CSS member for " + MEMBERSHIP_YEAR + "!");
+  if (done.existing && done.existing.paid) throw new ApiError_("ALREADY_MEMBER", "You are already an active CSS member for " + MEMBERSHIP_YEAR + ".");
 
   if (done.memberId) log_("public", "member.signup", done.memberId, { method: clean.method });
   const reply = { ok: true, name: done.existing ? done.existing.name : clean.name, method: done.existing ? methodKey_(done.existing.payment.method) : clean.method,

@@ -89,12 +89,12 @@ function register_(req) {
         if (t.status === "paid") paid++;
         else if (t.status === "awaiting") awaiting++;
       });
-      if (paid >= ev.capacity) throw new ApiError_("SOLD_OUT", "Sorry, this event is full.");
+      if (paid >= ev.capacity) throw new ApiError_("SOLD_OUT", "This event is full.");
       if (paid + awaiting + everyone.length > Math.floor(ev.capacity * 1.25)) {
         throw new ApiError_("SOLD_OUT", "Registration queue is full. Please check back later.");
       }
       if (plan.isFree && paid + everyone.length > ev.capacity) {
-        throw new ApiError_("SOLD_OUT", ev.capacity - paid > 0 ? "Only " + (ev.capacity - paid) + " spot(s) left." : "Sorry, this event is full.");
+        throw new ApiError_("SOLD_OUT", ev.capacity - paid > 0 ? "Only " + (ev.capacity - paid) + " spot(s) left." : "This event is full.");
       }
     }
     if (ev.capacity && ev.capacityRule === "all") {
@@ -102,7 +102,7 @@ function register_(req) {
       if (taken + everyone.length > ev.capacity) {
         throw new ApiError_("SOLD_OUT", ev.capacity - taken > 0
           ? "Only " + (ev.capacity - taken) + " spot(s) left."
-          : "Sorry, this event is full.");
+          : "This event is full.");
       }
     }
     const tickets = snapshotTickets;

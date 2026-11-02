@@ -19,7 +19,7 @@ const EMAIL_KINDS = {
     placeholders: ["name", "event", "code", "amount", "when", "where"],
     defaults: {
       subject: "Registration received: {event} ({code})",
-      title: "Thanks for registering!",
+      title: "Thanks for registering",
       subtitle: "{event}",
       intro: "To confirm your spot, send an **Interac e-transfer**:",
       closing: "If your bank doesn't allow a message, that's OK, we'll match it by name. Your spot is confirmed once payment is received, and each person then gets their own ticket by email."
@@ -31,7 +31,7 @@ const EMAIL_KINDS = {
     placeholders: ["name", "event", "when", "where"],
     defaults: {
       subject: "You're registered: {event}",
-      title: "You're registered!",
+      title: "You're registered",
       subtitle: "{event}",
       intro: "You're registered for **{event}**. It's free, so there's nothing to pay.",
       closing: ""
@@ -43,10 +43,10 @@ const EMAIL_KINDS = {
     placeholders: ["name", "event", "code", "amount", "when", "where"],
     defaults: {
       subject: "Reminder: payment needed for {event} ({code})",
-      title: "Friendly reminder",
+      title: "Payment reminder",
       subtitle: "{event}",
-      intro: "Just a reminder: your spot for **{event}** isn't confirmed yet, because we haven't received your e-transfer.",
-      closing: "Already sent it? Thank you! It can take us a day to match it, so no need to send it again. Can't make it anymore? Just reply and we'll free up your spot."
+      intro: "Your spot for **{event}** isn't confirmed yet because we haven't received your e-transfer.",
+      closing: "Already sent it? It can take us a day to match it, so there's no need to send it again. Can't make it? Reply to this email and we'll free up your spot."
     }
   },
   ticket: {
@@ -55,7 +55,7 @@ const EMAIL_KINDS = {
     placeholders: ["name", "event", "when", "where"],
     defaults: {
       subject: "Your ticket: {event}",
-      title: "You're in!",
+      title: "You're confirmed",
       subtitle: "Here's your ticket for **{event}**.",
       intro: "",
       closing: "Show the QR code at the door. A screenshot works too. This ticket is just for you; each friend gets their own."
@@ -81,20 +81,20 @@ const EMAIL_KINDS = {
       subject: "Welcome to CSS: your membership is confirmed",
       title: "You're a CSS member!",
       subtitle: "{year} membership",
-      intro: "Hi {name}, we've received your membership payment, thank you for joining the Chinese Students' Society! Your digital member pass is below. Show it for **free entry to all on-campus events** and **discounts at off-campus events** this year.",
-      closing: "Questions? Just reply to this email."
+      intro: "Hi {name}, we've received your membership payment. Thank you for joining the Chinese Students' Society. Your digital member pass is below. Show it for **free entry to all on-campus events** and **discounts at off-campus events** this year.",
+      closing: ""
     }
   },
   waitlist: {
     label: "On the waitlist",
-    when: "Sent when someone joins the waitlist of a full event. It has no payment details: we write again only if a spot opens.",
+    when: "Sent when someone joins the waitlist of a full event.",
     placeholders: ["name", "event", "when", "where"],
     defaults: {
       subject: "You're on the waitlist: {event}",
       title: "You're on the waitlist",
       subtitle: "{event}",
       intro: "Hi {name}, **{event}** is full right now, so we've put you on the waitlist.\n\nIf a spot opens up we'll email you with how to confirm it. You don't need to do anything else, and there is nothing to pay yet.",
-      closing: "Thanks for your patience."
+      closing: ""
     }
   },
   findPass: {
@@ -192,7 +192,7 @@ function mailParas_(text, style) {
 
 // ---- Signature and colour ----------------------------------------------------------
 
-const EMAIL_BRAND_DEFAULTS = { signerName: "Gordon Chen", signerRole: "President — Chinese Students' Society (CSS)", buttonColor: "#824a24" };
+const EMAIL_BRAND_DEFAULTS = { signerName: "Gordon Chen", signerRole: "President, Chinese Students' Society (CSS)", buttonColor: "#824a24" };
 
 function emailBrand_() {
   if (EMAIL_BRAND_PREVIEW_) return EMAIL_BRAND_PREVIEW_;
