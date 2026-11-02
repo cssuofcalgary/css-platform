@@ -125,11 +125,17 @@ function emailsLeftToday_() {
  * The limit is Google's and is counted over a rolling day, so this never claims a reset time.
  */
 function emailStatus_() {
+  const live = upcomingEventIds_();
+  const waiting = readRows_("Tickets").filter(function (t) { return t.status === "paid" && live[t.eventId] && ticketUnsent_(t); }).length;
+  return { ok: true, left: emailsLeftToday_(), waiting: waiting, checkedAt: new Date().toISOString() };
+}
+
+/** The events that haven't happened yet, as { event id: true }. */
+function upcomingEventIds_() {
   const today = Utilities.formatDate(new Date(), "America/Edmonton", "yyyy-MM-dd");
   const live = {};
   allEvents_().forEach(function (e) { if (!e.archivedAt && e.date >= today) live[e.id] = true; });
-  const waiting = readRows_("Tickets").filter(function (t) { return t.status === "paid" && live[t.eventId] && ticketUnsent_(t); }).length;
-  return { ok: true, left: emailsLeftToday_(), waiting: waiting, checkedAt: new Date().toISOString() };
+  return live;
 }
 
 /** Finance: the e-transfer arrived. `force` = go over capacity anyway (Finance was warned). */
@@ -331,12 +337,13 @@ function ticketUnsent_(t) {
  * Sends ticket emails for paid tickets that haven't had one yet (one order, or all). Each ticket is CLAIMED under the lock
  * before it is sent, so two people pressing Send now at the same moment can never email the same person twice.
  * `again` = send even tickets that were emailed before (resend); a ticket another run is sending right now is still skipped.
+ * `eventIds` = { event id: true }: only tickets of these events are sent and counted as waiting.
  */
-function sendPendingTicketEmails_(orderId, limit, again) {
+function sendPendingTicketEmails_(orderId, limit, again, eventIds) {
   const claimed = withLock_(function () {
     delete DB_.rows["Tickets"];   // decide on fresh data, inside the lock
     let tickets = readRows_("Tickets").filter(function (t) {
-      if (t.status !== "paid" || (orderId && t.orderId !== orderId)) return false;
+      if (t.status !== "paid" || (orderId && t.orderId !== orderId) || (eventIds && !eventIds[t.eventId])) return false;
       return again ? !freshClaim_(t) : ticketUnsent_(t);
     });
     if (limit > 0) tickets = tickets.slice(0, limit);   // oldest first: new rows go at the bottom of the sheet
@@ -369,7 +376,7 @@ function sendPendingTicketEmails_(orderId, limit, again) {
   });
   delete DB_.rows["Tickets"];
   const waiting = readRows_("Tickets").filter(function (t) {
-    return t.status === "paid" && ticketUnsent_(t) && (!orderId || t.orderId === orderId);
+    return t.status === "paid" && ticketUnsent_(t) && (!orderId || t.orderId === orderId) && (!eventIds || eventIds[t.eventId]);
   }).length;
   return { sent: sent, waiting: waiting, notEmailed: notEmailed };
 }

@@ -425,14 +425,14 @@ async function onDoorListClick(ev) {
   if (checkin) {
     // Typing a name / tapping a list = the help desk, so flagged people can be let in after checking.
     const t = doorFind(checkin.dataset.checkin);
-    if (t && t.flag && !confirm(T.confirmDeskCheckIn(t.name, t.flag))) return;
+    if (t && t.flag && !(await askConfirm(T.confirmDeskCheckIn(t.name, t.flag)))) return;
     checkin.disabled = true;
     await checkCode(checkin.dataset.checkin, true);
     $("manual-results").innerHTML = "";
   }
   if (undo) {
     const t = doorFind(undo.dataset.undo);
-    if (!confirm(T.confirmUndo(t ? t.name : ""))) return;
+    if (!(await askConfirm(T.confirmUndo(t ? t.name : "")))) return;
     undo.disabled = true;
     const reply = await api("undoCheckIn", { ticketId: undo.dataset.undo });
     if (!reply.ok) { undo.disabled = false; return showResult({ color: "red", message: errorText(reply) }); }
@@ -443,7 +443,7 @@ async function onDoorListClick(ev) {
   }
   if (pay) {
     const t = (doorState.data.tickets.concat(doorState.matches)).find((x) => x.orderId === pay.dataset.pay);
-    if (!confirm(T.confirmPaid(money(t.orderTotal), t.orderCode, t.etransferName || t.payerName))) return;
+    if (!(await askConfirm(T.confirmPaid(money(t.orderTotal), t.orderCode, t.etransferName || t.payerName)))) return;
     pay.disabled = true;
     const siteUrl = new URL(PUBLIC_SITE_URL, location.href).href;
     let reply = await api("markOrderPaid", { orderId: pay.dataset.pay, siteUrl, force: true });   // door: always let paying people in
@@ -494,7 +494,7 @@ async function onWalkInSubmit(ev) {
 async function toggleEntry() {
   if (SCANNER_MODE) return;   // opening and closing entry is for the help desk
   const open = !doorState.data.event.entryOpen;
-  if (!open && !confirm(T.confirmCloseEntry)) return;
+  if (!open && !(await askConfirm(T.confirmCloseEntry))) return;
   $("entry-toggle").disabled = true;
 
   // Only one event takes check-ins at a time: turning entry on closes any other event that still has its doors open.

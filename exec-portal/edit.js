@@ -106,7 +106,7 @@ async function onEditSubmit(event) {
 
 async function onEditDelete() {
   const { ticket, order } = editState.ctx;
-  if (!confirm(T.editDeleteConfirm(order.code || "", ticket.name || ""))) return;
+  if (!(await askConfirm(T.editDeleteConfirm(order.code || "", ticket.name || "")))) return;
   setEditBusy(true);
   const reply = await api("deleteOrder", { orderId: order.id });
   if (!reply.ok) {

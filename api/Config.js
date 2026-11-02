@@ -18,7 +18,8 @@
 
 const API_VERSION = "0.15.0";
 const MEMBER_CACHE_SECONDS = 300;   // search data is re-read from the sheet at most every 5 min
-const SESSION_SECONDS = 21600;      // stay logged in for 6 h (the Apps Script cache maximum)
+const SESSION_SECONDS = 21600;      // signed out after 6 h without use (the Apps Script cache maximum)
+const SESSION_RENEW_MS = 600000;    // while in use, those 6 h restart at most this often
 const REMINDER_AFTER_HOURS = 48;   // an unpaid order gets a "please pay" reminder after this long (and again after this long)
 const MAX_FAILED_LOGINS = 30;       // after this many wrong passwords in 10 min, new sign-ins pause for 10 min (people already signed in are unaffected)
 

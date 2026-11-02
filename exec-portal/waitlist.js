@@ -60,16 +60,16 @@ async function onWaitlistClick(event) {
   let reply;
 
   if (button.dataset.wlAct === "offer") {
-    if (!confirm(T.wlConfirmOffer(name, type))) return;
+    if (!(await askConfirm(T.wlConfirmOffer(name, type)))) return;
     button.disabled = true;
     reply = await api("offerWaitlistSpot", { entryId: id, siteUrl });
-    if (!reply.ok && reply.error === "OVER_CAPACITY" && confirm(reply.message)) {
+    if (!reply.ok && reply.error === "OVER_CAPACITY" && await askConfirm(reply.message)) {
       reply = await api("offerWaitlistSpot", { entryId: id, siteUrl, force: true });
     }
     if (reply.ok) showToast(T.wlOfferDone(reply.code, reply.emailed), reply.emailed ? "success" : undefined);
   }
   if (button.dataset.wlAct === "remove") {
-    if (!confirm(T.wlConfirmRemove(name))) return;
+    if (!(await askConfirm(T.wlConfirmRemove(name)))) return;
     button.disabled = true;
     reply = await api("removeWaitlistEntry", { entryId: id });
     if (reply.ok) showToast(T.wlRemoved);

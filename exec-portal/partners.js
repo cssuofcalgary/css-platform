@@ -158,7 +158,7 @@ $("partner-form").addEventListener("submit", async (event) => {
 
 $("pt-delete").addEventListener("click", async () => {
   const p = partnerState.editing;
-  if (!p || !confirm(T.partnerConfirmDelete(p.name))) return;
+  if (!p || !(await askConfirm(T.partnerConfirmDelete(p.name)))) return;
   const reply = await api("deletePartner", { partnerId: p.id });
   if (!reply.ok) { $("pt-error").textContent = errorText(reply); $("pt-error").hidden = false; return; }
   $("partner-dialog").close();

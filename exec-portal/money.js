@@ -322,7 +322,7 @@ async function markAlreadyReturned(order) {
 }
 
 async function refundNotOwed() {
-  const reason = prompt(T.rfNotOwedPrompt);
+  const reason = await askText(T.rfNotOwedPrompt);
   if (reason === null) return;
   const reply = await api("cancelRefund", { refundId: rfDlg.record.id, reason });
   if (!reply.ok) return setRfError(errorText(reply));

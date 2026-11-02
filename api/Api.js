@@ -190,7 +190,9 @@ function route_(req) {
     case "sendPendingEmails": {
       requireSession_(req.token);
       const count = Math.floor(Number(req.count));   // optional: send only this many, oldest first
-      const result = sendPendingTicketEmails_(null, count > 0 ? count : 0);
+      // One event's Payments page sends that event's tickets; the top-bar indicator sends upcoming events' (the ones it counts)
+      const eventIds = req.eventId ? { [req.eventId]: true } : upcomingEventIds_();
+      const result = sendPendingTicketEmails_(null, count > 0 ? count : 0, false, eventIds);
       return { ok: true, emailsSent: result.sent, emailsWaiting: result.waiting, emailsLeftToday: emailsLeftToday_() };
     }
 
@@ -388,7 +390,16 @@ function requireSession_(token) {
   if ((session.epoch || "0") !== currentEpoch_()) throw new ApiError_("NOT_LOGGED_IN", "Please log in again.");   // everyone was signed out
   touchSession_(token, session);
   if (session.role === "door") checkDoorSession_(ROUTE_ACTION_);
+  renewSession_(token, session);
   return session;
+}
+
+/** Someone still using the portal stays signed in: the session's 6 hours restart (at most every 10 minutes, to spare the cache). */
+function renewSession_(token, session) {
+  const last = Number(session.renewedAt) || Date.parse(session.since) || 0;
+  if (Date.now() - last < SESSION_RENEW_MS) return;
+  session.renewedAt = Date.now();
+  try { CacheService.getScriptCache().put("session_" + token, JSON.stringify(session), SESSION_SECONDS); } catch (e) { /* tried again on the next request */ }
 }
 
 /** For admin-only actions (settings, change log, deleting, year rollover). */

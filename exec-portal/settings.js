@@ -83,7 +83,7 @@ async function saveCredential(kind) {
   if (!$(first).value) return fail(T.secNeedPw);
   if (again && $(first).value !== $(again).value) return fail(T.setPwMismatch);
   const fields = { [kind === "exec" ? "execPassword" : kind === "admin" ? "adminPassword" : "doorPassword"]: $(first).value };
-  if (kind !== "door" && !confirm(T.setPwConfirm)) return;
+  if (kind !== "door" && !(await askConfirm(T.setPwConfirm))) return;
   const button = document.querySelector(`#set-password-form [data-save="${kind}"]`);
   const ok = await saveSettings(fields, "set-password-result", button);
   if (ok) { const msg = $("set-password-result").textContent; await openSettingsTab(); closeCredEditors(); $("set-password-result").className = "good-text small"; $("set-password-result").textContent = msg; }
@@ -105,12 +105,12 @@ $("set-password-form").addEventListener("submit", (e) => {
 });
 
 $("set-door-clear").addEventListener("click", async () => {
-  if (!confirm(T.setDoorClearConfirm)) return;
+  if (!(await askConfirm(T.setDoorClearConfirm))) return;
   if (await saveSettings({ clearDoorPassword: true }, "set-password-result", $("set-door-clear"))) openSettingsTab();
 });
 
 $("set-signout-all").addEventListener("click", async () => {
-  if (!confirm(T.setSignOutConfirm)) return;
+  if (!(await askConfirm(T.setSignOutConfirm))) return;
   const button = $("set-signout-all");
   button.disabled = true;
   const reply = await api("signOutAll");

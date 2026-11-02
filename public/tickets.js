@@ -115,6 +115,7 @@ async function showMyTickets(who) {
   }
   try { localStorage.setItem(SAVED_LINK, JSON.stringify(who)); } catch (e) { /* fine */ }
   $("my-hello").textContent = T.myTicketsHello(reply.name);
+  $("my-hello").hidden = !reply.name;
   $("my-cards").innerHTML = reply.tickets.length ? reply.tickets.map((t) => {
     const state = t.status === "paid" ? (t.checkedIn ? T.myTicketsCheckedIn : T.myTicketsPaid) : T.myTicketsWaiting(t.orderCode);
     return `<li><span class="my-ticket"><strong>${escapeText(t.event.name)}</strong>

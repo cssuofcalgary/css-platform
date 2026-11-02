@@ -15,6 +15,7 @@ These run the API code (`api/*.js`) in Node with a fake Google (in-memory tables
 | `doorundo.test.js` | a door volunteer can undo only their own check-in from the last 10 minutes, Health warns about a blank door password |
 | `emailsettings.test.js` | per-event email settings and their defaults, what counts as "waiting", the email indicator, reminders on/off, the "N confirmed, X emailed, Y waiting" numbers |
 | `money.test.js` | invalidating one person or a whole order, refunds owed and returned, putting tickets back, and every awkward e-transfer (short, too much, several orders, cancelled order, full event, finding the order) |
+| `archivehold.test.js` | the nightly archive leaves events with unpaid orders or refunds owed live; the health check names them |
 | `mytickets.test.js` | My tickets: tickets belong to the attendee, ambiguous ones are not added, cancelled ones are shown as cancelled |
 
 ```
@@ -29,6 +30,7 @@ node tests/doorundo.test.js
 node tests/hardening.test.js
 node tests/emailsettings.test.js
 node tests/money.test.js
+node tests/archivehold.test.js
 node tests/mytickets.test.js
 ```
 

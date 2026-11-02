@@ -64,7 +64,7 @@ async function sendReminders() {
   const dry = await api("sendReminders", { eventId: payState.eventId, dryRun: true });
   if (!dry.ok) { button.disabled = false; return handleEventError(dry, $("pay-status")); }
   if (!dry.due) { button.disabled = false; return showToast(T.remindersNone); }
-  if (!confirm(T.confirmReminders(dry.toEmail, dry.due - dry.toEmail, dry.emailsLeftToday))) { button.disabled = false; return; }
+  if (!(await askConfirm(T.confirmReminders(dry.toEmail, dry.due - dry.toEmail, dry.emailsLeftToday)))) { button.disabled = false; return; }
 
   const reply = await api("sendReminders", { eventId: payState.eventId });
   button.disabled = false;
@@ -92,7 +92,7 @@ async function markSelectedPaid() {
   const orders = payState.data.orders.filter((o) => payState.selected.has(o.id) && o.status === "awaiting");
   if (!orders.length) return;
   const total = orders.reduce((sum, o) => sum + o.total, 0);
-  if (!confirm(T.confirmBulk(orders.length, money(total), orders.map((o) => `${o.code} ${money(o.total)}`).join("\n")))) return;
+  if (!(await askConfirm(T.confirmBulk(orders.length, money(total), orders.map((o) => `${o.code} ${money(o.total)}`).join("\n"))))) return;
 
   $("bulk-bar").querySelectorAll("button").forEach((b) => { b.disabled = true; });
   const siteUrl = new URL(PUBLIC_SITE_URL, location.href).href;
@@ -153,7 +153,7 @@ async function onAddSubmit(e) {
   };
   setAddBusy(true);
   let reply = await api("addOrder", payload);
-  if (!reply.ok && reply.error === "OVER_CAPACITY" && confirm(T.overCapacity(reply.message))) {
+  if (!reply.ok && reply.error === "OVER_CAPACITY" && await askConfirm(T.overCapacity(reply.message))) {
     reply = await api("addOrder", { ...payload, force: true });
   }
   if (!reply.ok) {

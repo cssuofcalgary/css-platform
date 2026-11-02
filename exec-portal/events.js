@@ -149,14 +149,14 @@ async function onEventsListClick(event) {
 
 /** Delete an event and everything on it, for good. The admin types the event's name; real payments need a second yes. */
 async function deleteEventForGood(target, button) {
-  const typed = prompt(T.deletePrompt(target.name));
+  const typed = await askText(T.deletePrompt(target.name));
   if (typed === null) return;
   button.disabled = true;
   let reply = await api("deleteEvent", { eventId: target.id, confirmName: typed });
   if (!reply.ok && reply.error === "NEEDS_FORCE") {
-    if (!confirm(`${reply.message}
+    if (!(await askConfirm(`${reply.message}
 
-${T.deleteMoneyConfirm}`)) { button.disabled = false; return; }
+${T.deleteMoneyConfirm}`))) { button.disabled = false; return; }
     reply = await api("deleteEvent", { eventId: target.id, confirmName: typed, force: true });
   }
   button.disabled = false;
@@ -380,7 +380,7 @@ async function saveEvent(publish) {
     codePrefix: $("ev-code-prefix").value,
     registrationCloses: $("ev-closes").value
   };
-  if (publish && e.status !== "published" && !confirm(T.confirmPublish)) return;
+  if (publish && e.status !== "published" && !(await askConfirm(T.confirmPublish))) return;
 
   setEditorBusy(true);
   const reply = await api("saveEvent", { event: payload });
@@ -435,6 +435,31 @@ function askConfirm(message, yesLabel) {
     dialog.addEventListener("cancel", (ev) => { ev.preventDefault(); done(false); });
     document.body.appendChild(dialog);
     dialog.showModal();
+  });
+}
+
+/** Like askConfirm, with a box to type in. Answers the typed text, or null for Cancel. */
+function askText(message, yesLabel, value) {
+  return new Promise((resolve) => {
+    const dialog = document.createElement("dialog");
+    dialog.className = "edit-dialog";
+    dialog.innerHTML = `<form method="dialog" class="editor">
+      <p style="white-space:pre-line"></p>
+      <input type="text">
+      <div class="button-row">
+        <button type="button" class="secondary" data-no>${escapeHtml(T.cancel)}</button>
+        <button type="submit" class="primary">${escapeHtml(yesLabel || "OK")}</button>
+      </div></form>`;
+    dialog.querySelector("p").textContent = message;
+    const input = dialog.querySelector("input");
+    input.value = value || "";
+    const done = (answer) => { dialog.close(); dialog.remove(); resolve(answer); };
+    dialog.querySelector("form").addEventListener("submit", (ev) => { ev.preventDefault(); done(input.value); });
+    dialog.querySelector("[data-no]").addEventListener("click", () => done(null));
+    dialog.addEventListener("cancel", (ev) => { ev.preventDefault(); done(null); });
+    document.body.appendChild(dialog);
+    dialog.showModal();
+    input.select();
   });
 }
 

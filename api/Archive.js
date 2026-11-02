@@ -309,6 +309,13 @@ function deleteEvent_(session, eventId, confirmName, force) {
  * Archives events more than 30 days old, and finishes any half-done archive (an event marked archived whose
  * rows are still in the live sheet, for example after a crash or a late sign-up). A few events per run.
  */
+/** Money still to sort out: an unpaid or part-paid order, or a refund still owed. The nightly job leaves such an event live, so Finance can finish it. */
+function moneyOpen_(event) {
+  if (readRows_("Orders").some(function (o) { return o.eventId === event.id && o.status === "awaiting"; })) return true;
+  const refunds = refundsByOrder_(event.id);
+  return Object.keys(refunds).some(function (id) { return refunds[id].some(function (v) { return v.remaining > 0; }); });
+}
+
 function archiveOldEvents_() {
   const today = Utilities.formatDate(new Date(), "America/Edmonton", "yyyy-MM-dd");
   const liveEvents = {};
@@ -318,7 +325,7 @@ function archiveOldEvents_() {
     if (e.status === "draft" || !e.date) return false;
     if (e.archivedAt) return !!liveEvents[e.id];                 // finish an unfinished move
     if (e.status === "archived") return true;                     // marked archived, copy never completed
-    return daysSinceDate_(e.date) >= ARCHIVE_AFTER_DAYS;
+    return daysSinceDate_(e.date) >= ARCHIVE_AFTER_DAYS && !moneyOpen_(e);
   }).slice(0, ARCHIVE_PER_RUN);
 
   const done = [];
@@ -342,8 +349,11 @@ function archiveStatus_() {
   const archived = events.filter(function (e) { return e.archivedAt; });
   const years = {};
   archived.forEach(function (e) { years[e.archiveYear] = true; });
-  const waiting = events.filter(function (e) { return !e.archivedAt && e.status !== "draft" && e.date && daysSinceDate_(e.date) >= ARCHIVE_AFTER_DAYS + 2; });
-  const text = "live: " + live + " tickets, " + orders + " orders · archived: " + archived.length + " event" + (archived.length === 1 ? "" : "s") + " in " + Object.keys(years).length + " year" + (Object.keys(years).length === 1 ? "" : "s");
+  const old = events.filter(function (e) { return !e.archivedAt && e.status !== "draft" && e.date && daysSinceDate_(e.date) >= ARCHIVE_AFTER_DAYS + 2; });
+  const held = old.filter(moneyOpen_);
+  const waiting = old.filter(function (e) { return held.indexOf(e) === -1; });
+  const text = "live: " + live + " tickets, " + orders + " orders · archived: " + archived.length + " event" + (archived.length === 1 ? "" : "s") + " in " + Object.keys(years).length + " year" + (Object.keys(years).length === 1 ? "" : "s")
+    + (held.length ? " · not archived until unpaid orders and refunds are sorted out: " + held.map(function (e) { return e.name; }).join(", ") : "");
   if (live > LIVE_TICKETS_WARN) throw new Error(text + ". The live sheet is getting big: archive old events from the Events tab.");
   if (waiting.length) throw new Error(text + ". " + waiting.length + " old event" + (waiting.length === 1 ? " hasn't" : "s haven't") + " been archived yet (the nightly job does it; check the timers).");
   return text;

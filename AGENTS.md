@@ -41,7 +41,7 @@ The **member portal** is a separate repo: `cssuofcalgary/member-portal`, in `..\
 ```
 node tests/<name>.test.js     # one suite
 ```
-Thirteen suites: `core`, `waitlist`, `partners`, `emailclaim`, `deskalert`, `payfix`, `registration`, `doorundo`, `hardening`, `emailsettings`, `money`, `mytickets`, `feedback`. Each prints PASS/FAIL and exits non-zero on failure. `tests/harness.js` loads every `api/*.js` file into one Node `vm` with fake Google services and in-memory tables (`TBL.Events`, `TBL.Orders`, `TBL.Tickets`, `TBL.Refunds` …). Tests often need small stubs (`table_`, `withLock_`, `throttle_`, `sendTicketEmail_`). Add a suite or extend one for any change to payments, emails, tickets or permissions, and test what the attendee sees, what the exec sees, how it is fixed, and what happens on failure.
+Fourteen suites: `core`, `waitlist`, `partners`, `emailclaim`, `deskalert`, `payfix`, `registration`, `doorundo`, `hardening`, `emailsettings`, `money`, `mytickets`, `feedback`, `archivehold`. Each prints PASS/FAIL and exits non-zero on failure. `tests/harness.js` loads every `api/*.js` file into one Node `vm` with fake Google services and in-memory tables (`TBL.Events`, `TBL.Orders`, `TBL.Tickets`, `TBL.Refunds` …). Tests often need small stubs (`table_`, `withLock_`, `throttle_`, `sendTicketEmail_`). Add a suite or extend one for any change to payments, emails, tickets or permissions, and test what the attendee sees, what the exec sees, how it is fixed, and what happens on failure.
 A pass does not prove real Google behaviour (concurrency, quotas, cache expiry). After a deploy check Settings → System health.
 
 ## Deploying (only after approval)
