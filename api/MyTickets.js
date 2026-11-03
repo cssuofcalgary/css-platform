@@ -21,7 +21,7 @@ function findMyTickets_(req) {
   if (byEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new ApiError_("BAD_REQUEST", "That email doesn't look right.");
   if (!byEmail && (ucid.length < 6 || !lastName)) throw new ApiError_("BAD_REQUEST", "Enter your email, or your UCID and last name.");
 
-  const generic = { ok: true, sent: false, message: "If we found tickets, we've emailed them. Check your inbox and spam folder. If you asked in the last 10 minutes, the email is already on its way." };
+  const generic = { ok: true, sent: false, message: "If you have tickets, we'll email them. Allow up to 10 minutes and check your spam folder." };
   const key = lookupKey_("t", byEmail ? "e:" + email : "u:" + ucid);
   if (lookupBlocked_(key)) return generic;
 
@@ -89,7 +89,7 @@ function findMyPass_(req) {
   if (byEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new ApiError_("BAD_REQUEST", "That email doesn't look right.");
   if (!byEmail && (ucid.length < 6 || !lastName)) throw new ApiError_("BAD_REQUEST", "Enter your email, or your UCID and last name.");
 
-  const generic = { ok: true, sent: false, message: "If we found your membership, we've emailed your pass link. Check your inbox and spam folder. If you asked in the last 10 minutes, it's already on its way." };
+  const generic = { ok: true, sent: false, message: "If you have a membership, we'll email your pass link. Allow up to 10 minutes and check your spam folder." };
   const key = lookupKey_("m", byEmail ? "e:" + email : "u:" + ucid);
   if (lookupBlocked_(key)) return generic;
 
