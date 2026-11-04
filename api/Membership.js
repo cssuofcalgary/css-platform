@@ -8,12 +8,18 @@
  * This is the only code that WRITES to the Membership sheet (the sheet access itself lives in Store.js).
  */
 
-const MEMBERSHIP_FEE = 12;
-const MEMBERSHIP_YEAR = "2026/2027";
 const MEMBER_PAID_STATUS = "PAID";
 const MEMBER_METHODS = { etransfer: "E-transfer", cash: "Cash" };
 const MEMBER_STATUS_WAITING = { etransfer: "Awaiting E-transfer", cash: "Awaiting Cash" };
 const MEMBER_SIGNUP_BURST = 40;   // sign-ups from everyone together, per 10 minutes (keeps bots from filling the sheet)
+
+/** The membership year on a date (default today), e.g. "2026/2027". A school year runs September to August. */
+function membershipYear_(when) {
+  const ym = Utilities.formatDate(when || new Date(), "America/Edmonton", "yyyy-MM");
+  const y = parseInt(ym.slice(0, 4), 10), m = parseInt(ym.slice(5, 7), 10);
+  const start = m >= 9 ? y : y - 1;
+  return start + "/" + (start + 1);
+}
 
 // ---- Checking what was typed -------------------------------------------------------------
 
@@ -97,11 +103,11 @@ function publicRegisterMember_(input) {
   memberSignupThrottle_(clean);
 
   const done = withIntakeLock_(function () { return addMemberRowLocked_(clean); });
-  if (done.existing && done.existing.paid) throw new ApiError_("ALREADY_MEMBER", "You are already an active CSS member for " + MEMBERSHIP_YEAR + ".");
+  if (done.existing && done.existing.paid) throw new ApiError_("ALREADY_MEMBER", "You are already an active CSS member for " + membershipYear_() + ".");
 
   if (done.memberId) log_("public", "member.signup", done.memberId, { method: clean.method });
   const reply = { ok: true, name: done.existing ? done.existing.name : clean.name, method: done.existing ? methodKey_(done.existing.payment.method) : clean.method,
-    fee: MEMBERSHIP_FEE, year: MEMBERSHIP_YEAR, etransferEmail: getConfig_().etransferEmail, site: siteInfo_() };
+    fee: getConfig_().membershipFee, year: membershipYear_(), etransferEmail: getConfig_().etransferEmail, site: siteInfo_() };
   if (done.existing) reply.existing = true; else reply.memberId = done.memberId;   // someone already signed up and unpaid gets no ID back
   return reply;
 }
@@ -172,7 +178,7 @@ function sendMemberWelcomeEmail_(member) {
   const to = String(member.email).toLowerCase();
   if (!canSendMail_(to)) return false;
   try {
-    const t = mailText_("memberWelcome", { name: member.name, year: MEMBERSHIP_YEAR });
+    const t = mailText_("memberWelcome", { name: member.name, year: membershipYear_() });
     sendStyled_(to, t.subject, emailShell_({
       preheader: "Your CSS membership is confirmed", title: t.title, subtitle: t.subtitle,
       body: t.intro + t.closing,
@@ -198,7 +204,7 @@ function listPendingMembers_(offset, limit) {
     .sort(function (a, b) { return b.row - a.row; });   // new rows go at the bottom of the sheet, so a higher row is newer
   const from = Math.max(0, parseInt(offset, 10) || 0);
   const size = Math.min(100, Math.max(1, parseInt(limit, 10) || PENDING_PAGE_DEFAULT));
-  return { ok: true, members: waiting.slice(from, from + size), total: waiting.length, hasMore: from + size < waiting.length };
+  return { ok: true, members: waiting.slice(from, from + size), total: waiting.length, hasMore: from + size < waiting.length, membershipFee: getConfig_().membershipFee };
 }
 
 // ---- Exec: resend the pass, edit a member -----------------------------------------------

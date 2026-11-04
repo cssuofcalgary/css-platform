@@ -288,7 +288,7 @@ function buildEmailPreview_(key, fields, brand, editable) {
           body: t.intro + mailBox_(mailRows_(whenWhereRows_(event))) + t.closing }), plain: "You're on the waitlist." };
       }
       case "memberWelcome": {
-        const t = mailText_(key, { name: EMAIL_SAMPLE.name, year: MEMBERSHIP_YEAR });
+        const t = mailText_(key, { name: EMAIL_SAMPLE.name, year: membershipYear_() });
         return { subject: t.subject, html: emailShell_({ title: t.title, subtitle: t.subtitle, body: t.intro + t.closing,
           button: { label: "Open my member pass", url: "https://member.ucalgarycss.ca/" },
           footerNote: "Save the pass to your phone's home screen: it works offline at the door." }), plain: "Your CSS membership is confirmed." };

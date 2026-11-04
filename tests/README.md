@@ -17,6 +17,8 @@ These run the API code (`api/*.js`) in Node with a fake Google (in-memory tables
 | `money.test.js` | invalidating one person or a whole order, refunds owed and returned, putting tickets back, and every awkward e-transfer (short, too much, several orders, cancelled order, full event, finding the order) |
 | `archivehold.test.js` | the nightly archive leaves events with unpaid orders or refunds owed live; the health check names them |
 | `mytickets.test.js` | My tickets: tickets belong to the attendee, ambiguous ones are not added, cancelled ones are shown as cancelled |
+| `membership.test.js` | the membership year (September to August), the membership fee in Settings and where it shows |
+| `feedback.test.js` | a step-by-step walkthrough of star ratings: who can rate, changing a rating, bad input, member linking, what execs see in the results, report and member history |
 
 ```
 node tests/core.test.js
@@ -32,7 +34,9 @@ node tests/emailsettings.test.js
 node tests/money.test.js
 node tests/archivehold.test.js
 node tests/mytickets.test.js
+node tests/feedback.test.js
+node tests/membership.test.js
 ```
 
-Each prints PASS/FAIL lines and exits with an error if anything fails. Run all twelve before a deploy.
+Each prints PASS/FAIL lines and exits with an error if anything fails. Run all fifteen before a deploy.
 The fake Google replaces the spreadsheet, cache expiry and locks, so a pass here does not prove real Google concurrency or production settings: check Settings → System health after a deploy.

@@ -75,6 +75,25 @@ ok(r.v && r.v.ok && J(`listWaitlist_("EV1")`).v.entries.every((e) => e.email !==
 const lo = J(`listOrders_("EV1", {filter:"all"})`);
 ok(lo.v && lo.v.waitlist && lo.v.waitlist.enabled === true, "listOrders carries the waitlist summary: " + JSON.stringify(lo.v && lo.v.waitlist) + (lo.err ? " ERR " + lo.msg : ""));
 
+// someone who registered the normal way after joining the waitlist is never offered a second ticket
+J(`joinWaitlist_({ slug:"mj", person:{ name:"Late Larry", email:"larry@x.ca", ticketTypeId:"T2", answers:{Q1:"Tea"} } })`);
+let larry = J(`listWaitlist_("EV1")`).v.entries.filter((e) => e.email === "larry@x.ca")[0];
+ok(larry && larry.hasTicket === false && larry.position > 0, "a new waitlist entry has no ticket yet and gets a place");
+run(`insertRow_("Tickets", { id:"TKLARRY", secret:"larrysecret00000000000000000000", orderId:"OL", eventId:"EV1", name:"Late Larry", email:"Larry@X.ca", ucid:"", memberId:"", ticketType:"General", price:9, answers:{}, flag:"", status:"awaiting", checkedInAt:"", createdAt:"2026-10-02T00:00:00Z" });`);
+larry = J(`listWaitlist_("EV1")`).v.entries.filter((e) => e.email === "larry@x.ca")[0];
+ok(larry.hasTicket === true && larry.position === 0, "once they register (any capitals in the email) the list says so and they lose their place");
+const larryOrders = () => run(`TBL.Orders.filter(function(o){ return o.payerEmail === "larry@x.ca"; }).length`);
+const mailsBefore = sent.length;
+r = J(`offerWaitlistSpot_(${JSON.stringify(sess)}, "${larry.id}", true, "")`);
+ok(r.err === "ALREADY_REGISTERED" && /already has a ticket/.test(r.msg), "Offer a spot is refused, even when forced: " + r.msg);
+ok(larryOrders() === 0 && sent.length === mailsBefore, "no second order and no payment email");
+ok(run(`TBL.Waitlist.filter(function(w){ return w.email === "larry@x.ca"; })[0].status`) === "waiting", "the entry stays on the list for Finance to remove");
+const summary = run(`waitlistSummary_(TBL.Events[0])`);
+ok(summary.waiting === run(`TBL.Waitlist.filter(function(w){ return w.status === "waiting" && w.email !== "larry@x.ca"; }).length`), "the Payments waitlist count leaves them out");
+run(`updateRow_("Tickets", "TKLARRY", { status: "cancelled" });`);
+larry = J(`listWaitlist_("EV1")`).v.entries.filter((e) => e.email === "larry@x.ca")[0];
+ok(larry.hasTicket === false, "if that ticket is cancelled they can be offered a spot again");
+
 // waitlist off -> join refused
 run(`TBL.Events[0].waitlist = "FALSE"`);
 r = J(`joinWaitlist_({ slug:"mj", person:{ name:"No Wl", email:"nw@x.ca", ticketTypeId:"T2", answers:{Q1:"Tea"} } })`);

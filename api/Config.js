@@ -9,6 +9,7 @@
  *   ADMIN_PASSWORD       Admin password: everything execs can do, plus admin-only tools. Optional.
  *   MEMBERSHIP_TAB       Tab with the member rows. Default: "Form Responses 1".
  *   ETRANSFER_EMAIL      Where people send e-transfers. Default: css.uofcalgary@gmail.com.
+ *   MEMBERSHIP_FEE       The yearly membership fee in dollars. Default: 12.
  *   CONTACT_EMAIL, INSTAGRAM_URL   Shown at the bottom of the public pages.
  *
  * All of these (and both passwords) can also be changed from the Exec Portal's Settings tab (admin only).
@@ -23,8 +24,11 @@ const SESSION_RENEW_MS = 600000;    // while in use, those 6 h restart at most t
 const REMINDER_AFTER_HOURS = 48;   // an unpaid order gets a "please pay" reminder after this long (and again after this long)
 const MAX_FAILED_LOGINS = 30;       // after this many wrong passwords in 10 min, new sign-ins pause for 10 min (people already signed in are unaffected)
 
+const DEFAULT_MEMBERSHIP_FEE = 12;   // until a fee is saved in Settings → Membership
+
 function getConfig_() {
   const props = PropertiesService.getScriptProperties();
+  const fee = String(props.getProperty("MEMBERSHIP_FEE") || "").trim();
   return {
     membershipSheetId: extractSheetId_(props.getProperty("MEMBERSHIP_SHEET_ID")),
     membershipTab: String(props.getProperty("MEMBERSHIP_TAB") || "Form Responses 1").trim(),
@@ -32,7 +36,8 @@ function getConfig_() {
     adminPassword: String(props.getProperty("ADMIN_PASSWORD") || ""),
     etransferEmail: String(props.getProperty("ETRANSFER_EMAIL") || "css.uofcalgary@gmail.com").trim(),
     contactEmail: String(props.getProperty("CONTACT_EMAIL") || "css.uofcalgary@gmail.com").trim(),
-    instagramUrl: String(props.getProperty("INSTAGRAM_URL") || "https://www.instagram.com/ucalgary.css/").trim()
+    instagramUrl: String(props.getProperty("INSTAGRAM_URL") || "https://www.instagram.com/ucalgary.css/").trim(),
+    membershipFee: fee !== "" && isFinite(Number(fee)) && Number(fee) >= 0 ? Number(fee) : DEFAULT_MEMBERSHIP_FEE
   };
 }
 

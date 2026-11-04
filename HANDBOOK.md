@@ -11,16 +11,16 @@ Wrong password 30 times → sign-in pauses for 10 minutes.
 The **sun/moon button** (bottom of the menu) switches light and dark. Tap the **CSS logo** to refresh the page.
 
 ## Members tab: sign-ups, payments and search
-Membership is **$12 for the school year**. People join on their own at **member.ucalgarycss.ca/create** (this replaces the Google Form), or an exec adds them here. Both end up as one row on the Membership sheet.
+Membership costs the fee set in **Settings → Membership** for the school year (September to August). People join on their own at **member.ucalgarycss.ca/create** (this replaces the Google Form), or an exec adds them here. Both end up as one row on the Membership sheet.
 
 **Pending** (opens first when someone is waiting): everyone who signed up and hasn't been confirmed yet. A red number on **Members** in the left menu, and a line on the Overview, show how many.
 - Each card shows how they said they'd pay. **Cash:** when, where, and who took it. **E-transfer:** when they signed up, their email and UCID.
-- Check the payment (the CSS Gmail for an e-transfer, or the exec who took the cash), then tap **Mark paid ($12)**. They get their member pass by email and the card slides away. **Details** opens their full page.
+- Check the payment (the CSS Gmail for an e-transfer, or the exec who took the cash), then tap **Mark paid**. They get their member pass by email and the card slides away. **Details** opens their full page.
 - Only sign-ups from the website and **Add member** show here. Older members who are not marked paid are under **Search**.
 
-**Add member** (top right): for someone joining at the table. Enter name, UCID (8 digits), email, and cash or e-transfer. Leave **Payment received ($12)** ticked if you have the money: they're marked paid and emailed their pass in one step. Untick it to add them as unpaid and confirm later from Pending. Someone already on the sheet is refused, and it tells you who they are.
+**Add member** (top right): for someone joining at the table. Enter name, UCID (8 digits), email, and cash or e-transfer. Leave **Payment received** ticked if you have the money: they're marked paid and emailed their pass in one step. Untick it to add them as unpaid and confirm later from Pending. Someone already on the sheet is refused, and it tells you who they are.
 
-**Search:** type part of a **name**, a **UCID**, a **member ID** (CSS…) or an **email**, then tap a person to see their details. Anyone not marked paid also has a **Mark paid ($12)** button on their page.
+**Search:** type part of a **name**, a **UCID**, a **member ID** (CSS…) or an **email**, then tap a person to see their details. Anyone not marked paid also has a **Mark paid** button on their page.
 
 If the pass email can't be sent (the daily email limit), the person is still marked paid and the message tells you the email did not go. They can get their pass later from **member.ucalgarycss.ca → Find my pass**. See **RUNBOOK.md**.
 
@@ -96,7 +96,7 @@ If you see "ticket emails waiting", the daily email limit was reached. The bar s
 - Turn it on per event: **Events → Edit → Waitlist**. It is off by default.
 - When the event is full, the public page shows **Join the waitlist** instead of "sold out". People give the same details as when registering. They get one short email. They have **no ticket and take no spot**.
 - **Payments → Waitlist** lists them, oldest first. When a spot opens (a cancel or refund), press **Offer a spot** next to the next name. That makes a normal registration and emails them the payment details (or the ticket, if it is free). If no spot looks free the portal asks before offering anyway.
-- Nothing moves by itself. An offer is held for 48 hours as a guide: if they have not paid by then, cancel their order (Refund / cancel) and offer the next person. **Remove** takes someone off the list.
+- Nothing moves by itself. An offer is held for 48 hours as a guide: if they have not paid by then, cancel their order (Refund / cancel) and offer the next person. Someone who has since registered the normal way shows **Already registered** and can't be offered a spot: press **Remove**. **Remove** takes someone off the list.
 
 ## Cancel requests
 On the ticket page of an **unpaid** ticket there is a **Cancel my registration** button. It does **not** cancel anything: it records that the person asked. Payments shows **Asked to cancel (n)** (and an alert on Overview). Press **Refund / cancel** to cancel the order, or **Dismiss request** to keep it. Nobody is emailed.
@@ -174,7 +174,7 @@ A plain list of what happened, newest first: "Kevin marked TNM-4408 paid · 6:02
 
 Settings has six sections down the left. Pick one to open it:
 - **General:** the e-transfer email, the contact email and the Instagram link shown on the public pages.
-- **Membership:** each year, paste the new sheet's link and press **Test and save**. It reads the sheet first and tells you how many members it found, so a wrong link can't break anything.
+- **Membership:** the membership fee, and the Membership sheet. Each year, paste the new sheet's link and press **Test and save**. It reads the sheet first and tells you how many members it found, so a wrong link can't break anything.
 - **Security:** the exec password, the admin password and the optional door password, each on its own row. Press **Change**, type the new one twice, save. Everyone else is signed out and needs the new password. Never write a password in a document or chat.
 - **Emails:** change the wording of each email (see "Changing the words in emails" below).
 - **Sessions:** **Online now** lists everyone signed in (name, role, scanner or not, last seen; yours says "This device"). **Sign out** next to a name signs just that person out, handy for a lost phone. **Sign everyone else out** does it for all.

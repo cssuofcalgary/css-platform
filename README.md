@@ -197,6 +197,7 @@ Also added in Oct 2026: Orders `cancelRequestedAt`, `cancelRequestedBy` (a ticke
 | `EXEC_PASSWORD` | Exec sign-in. Required. Change any time; takes effect immediately |
 | `ADMIN_PASSWORD` | Admin sign-in (admin-only tools, coming later). Optional |
 | `MEMBERSHIP_TAB` | Default `Form Responses 1` |
+| `MEMBERSHIP_FEE` | The yearly membership fee in dollars, changed in Settings → Membership. Default `12`. The membership year ("2026/2027") is worked out from the date: it changes on September 1 |
 | `ETRANSFER_EMAIL` | Default `css.uofcalgary@gmail.com` |
 | `CONTACT_EMAIL`, `INSTAGRAM_URL` | Shown at the bottom of the public pages (the API sends them; `public/config.js` is only the fallback) |
 | `LINK_KEY` | Set **by the system** the first time a private link is made. Signs the links in "Find my pass / tickets" emails. **Delete it to cancel every link ever sent** (a new one is made automatically; members just ask for a new link) |

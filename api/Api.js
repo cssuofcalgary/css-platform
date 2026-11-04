@@ -108,7 +108,7 @@ function route_(req) {
     case "searchMembers": {
       const session = requireSession_(req.token);
       const matches = searchMembers_(loadMembers_(), req.query, 100000);
-      return { ok: true, name: session.name, results: matches.slice(0, 25), total: matches.length };
+      return { ok: true, name: session.name, results: matches.slice(0, 25), total: matches.length, membershipFee: getConfig_().membershipFee };
     }
 
     case "listPendingMembers":
@@ -131,7 +131,7 @@ function route_(req) {
       requireSession_(req.token);
       const member = findMemberById_(loadMembers_(), req.memberId);
       if (!member) throw new ApiError_("NOT_FOUND", "No member with that ID.");
-      return { ok: true, member: member };
+      return { ok: true, member: member, membershipFee: getConfig_().membershipFee };
     }
 
     case "listEvents": {
@@ -364,7 +364,7 @@ function login_(password, name) {
   cache.remove(userKey);
 
   warmCaches_(false);   // sign-in may take a moment longer; every screen after it is quick
-  return { ok: true, token: startSession_(who, role), name: who, role: role };
+  return { ok: true, token: startSession_(who, role), name: who, role: role, membershipFee: config.membershipFee };
 }
 
 /** Reads the tables into the shared cache now, so the first click after signing in is not the slow one. */

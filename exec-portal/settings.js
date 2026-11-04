@@ -13,6 +13,7 @@ async function openSettingsTab() {
   $("set-instagram").value = s.instagramUrl;
   $("set-sheet").value = s.membershipSheetId;
   $("set-tab").value = s.membershipTab;
+  $("set-fee").value = s.membershipFee;
   $("set-pw-note").textContent = T.setPwNote(s.execPasswordSet, s.adminPasswordSet);
   ["set-exec-pw", "set-exec-pw2", "set-admin-pw", "set-admin-pw2"].forEach((id) => { $(id).value = ""; });
   $("set-door-note").textContent = s.doorPasswordSet ? T.setDoorNoteSet : T.setDoorNoteNone;
@@ -55,7 +56,7 @@ $("set-general-form").addEventListener("submit", (e) => {
 
 $("set-membership-form").addEventListener("submit", (e) => {
   e.preventDefault();
-  saveSettings({ membershipSheet: $("set-sheet").value, membershipTab: $("set-tab").value }, "set-membership-result", $("set-membership-save"));
+  saveSettings({ membershipSheet: $("set-sheet").value, membershipTab: $("set-tab").value, membershipFee: $("set-fee").value }, "set-membership-result", $("set-membership-save"));
 });
 
 // ---- Security: each password is a row; Change opens its boxes right there ----

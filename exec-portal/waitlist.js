@@ -22,7 +22,7 @@ async function loadWaitlist() {
 }
 
 function drawWaitlist(wl) {
-  const waiting = wl.entries.filter((e) => e.status === "waiting").length;
+  const waiting = wl.entries.filter((e) => e.status === "waiting" && !e.hasTicket).length;
   $("pay-status").textContent = wl.entries.length ? T.wlSummary(waiting, wl.free) : "";
   $("orders").innerHTML = wl.entries.length ? wl.entries.map((w) => waitlistCard(w, wl.holdHours)).join("") : `<li class="muted">${T.wlEmpty}</li>`;
 }
@@ -42,9 +42,10 @@ function waitlistCard(w, holdHours) {
         ${w.status === "offered" ? `<span>${escapeHtml(T.wlOfferedInfo(w.offeredBy, shortTime(w.offeredAt), w.orderCode))}</span>` : ""}
         ${stale ? `<span class="flag">${escapeHtml(T.wlStale(holdHours))}</span>` : ""}
       </div>
-      <div class="o-total"><span class="pill ${w.status === "waiting" ? "warn" : "good"}">${w.status === "waiting" ? T.wlWaitingPill : T.wlOfferedPill}</span></div>
+      <div class="o-total">${w.hasTicket ? `<span class="pill neutral">${T.wlHasTicketPill}</span>`
+        : `<span class="pill ${w.status === "waiting" ? "warn" : "good"}">${w.status === "waiting" ? T.wlWaitingPill : T.wlOfferedPill}</span>`}</div>
       <div class="order-actions o-actions">
-        ${w.status === "waiting" ? `<button class="primary" data-wl-act="offer">${T.wlOffer}</button>` : ""}
+        ${w.status === "waiting" && !w.hasTicket ? `<button class="primary" data-wl-act="offer">${T.wlOffer}</button>` : ""}
         ${w.status === "waiting" ? `<button class="link danger" data-wl-act="remove">${T.wlRemove}</button>` : ""}
         <span class="order-result"></span>
       </div>

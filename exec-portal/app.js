@@ -6,6 +6,7 @@ const SCANNER_MODE = PARAMS.get("mode") === "scanner";
 const FORCE_FULL = PARAMS.get("full") === "1";
 
 const state = {
+  membershipFee: null,   // the fee saved in Settings, as the server last said
   token: sessionStorage.getItem("css_token") || "",
   name: sessionStorage.getItem("css_name") || "",
   role: sessionStorage.getItem("css_role") || "exec",
@@ -45,6 +46,7 @@ async function api(action, details = {}) {
   if (!quiet) pandaBusy(true, BATCH_ACTIONS.includes(action));
   try {
     const reply = await apiRequest(action, details);
+    if (reply && reply.membershipFee !== undefined) state.membershipFee = reply.membershipFee;
     if (reply && reply.ok && EMAIL_ACTIONS.includes(action) && typeof refreshMailStatus === "function") refreshMailStatus(true);
     return reply;
   } finally { if (!quiet) pandaBusy(false); }
@@ -291,7 +293,7 @@ function showMember(m) {
   $("member-resend-pass").textContent = T.resendPass;
   $("member-pay-error").hidden = true;
   $("member-mark-paid").disabled = false;
-  $("member-mark-paid").textContent = T.memberMarkPaid;
+  $("member-mark-paid").textContent = T.memberMarkPaid(state.membershipFee);
   window.scrollTo(0, 0);
 }
 
@@ -304,6 +306,7 @@ function openAddMember() {
   $("ma-when").max = todayMountain();
   $("ma-who").value = state.name || "";
   $("ma-paid").checked = true;
+  $("ma-paid-label").textContent = T.maPaidNow(state.membershipFee);
   $("ma-error").hidden = true;
   $("ma-submit").disabled = false;
   $("ma-submit").textContent = T.maSubmit;
@@ -353,7 +356,7 @@ async function markMemberPaid() {
   if (!reply.ok) {
     if (reply.error === "NOT_LOGGED_IN") { signOutLocally(); return showLogin(errorText(reply)); }
     button.disabled = false;
-    button.textContent = T.memberMarkPaid;
+    button.textContent = T.memberMarkPaid(state.membershipFee);
     $("member-pay-error").textContent = errorText(reply);
     $("member-pay-error").hidden = false;
     return;

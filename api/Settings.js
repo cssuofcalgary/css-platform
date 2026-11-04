@@ -27,6 +27,7 @@ function getSettings_(token) {
       instagramUrl: config.instagramUrl,
       membershipSheetId: config.membershipSheetId,
       membershipTab: config.membershipTab,
+      membershipFee: config.membershipFee,
       execPasswordSet: !!config.password,
       adminPasswordSet: !!config.adminPassword,
       doorPasswordSet: !!props.getProperty("SCANNER_PASSWORD"),
@@ -80,6 +81,12 @@ function saveSettings_(session, token, input) {
     }
   }
 
+  if (input.membershipFee !== undefined) {
+    const raw = text(input.membershipFee, 20).replace(/^\$\s*/, "");
+    if (!/^\d{1,4}(\.\d{1,2})?$/.test(raw) || Number(raw) > 1000) throw new ApiError_("BAD_REQUEST", "The membership fee should be an amount like 12 or 12.50.");
+    if (Number(raw) !== config.membershipFee) { updates.MEMBERSHIP_FEE = String(Number(raw)); changed.push("membership fee"); }
+  }
+
   let newPasswords = 0;
   const exec = input.execPassword !== undefined && input.execPassword !== "" ? String(input.execPassword) : "";
   const admin = input.adminPassword !== undefined && input.adminPassword !== "" ? String(input.adminPassword) : "";
@@ -116,7 +123,7 @@ function saveSettings_(session, token, input) {
     log_(session.name, "settings.save", "", { changed: changed });   // names only, never values
   });
 
-  const reply = { ok: true, changed: changed, message: notes };
+  const reply = { ok: true, changed: changed, message: notes, membershipFee: updates.MEMBERSHIP_FEE !== undefined ? Number(updates.MEMBERSHIP_FEE) : config.membershipFee };
   if (newPasswords) {
     signOutEveryone_();
     reply.token = startSession_(session.name, session.role);   // the admin stays signed in

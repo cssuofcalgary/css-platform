@@ -48,11 +48,21 @@ function waitlistRoom_(event) {
   return { free: free, outstanding: outstanding };
 }
 
+/** Emails that already hold a live ticket (paid or waiting for payment) for this event, as { email: true }. */
+function ticketEmails_(event) {
+  const have = {};
+  readRows_("Tickets").forEach(function (t) {
+    if (t.eventId === event.id && (t.status === "paid" || t.status === "awaiting")) have[String(t.email || "").trim().toLowerCase()] = true;
+  });
+  return have;
+}
+
 /** The little summary the Payments tab needs (waiting count, free spots). */
 function waitlistSummary_(event) {
   if (event.archivedAt) return { enabled: false, waiting: 0, offered: 0, free: null };
   const entries = readRows_("Waitlist").filter(function (w) { return w.eventId === event.id; });
-  const waiting = entries.filter(function (w) { return w.status === "waiting"; }).length;
+  const have = ticketEmails_(event);
+  const waiting = entries.filter(function (w) { return w.status === "waiting" && !have[String(w.email || "").toLowerCase()]; }).length;
   const offered = entries.filter(function (w) { return w.status === "offered"; }).length;
   if (!event.waitlist && !entries.length) return { enabled: false, waiting: 0, offered: 0, free: null };
   return { enabled: !!event.waitlist, waiting: waiting, offered: offered, free: waitlistRoom_(event).free };
@@ -114,12 +124,15 @@ function listWaitlist_(eventId) {
   if (!event) throw new ApiError_("NOT_FOUND", "Event not found.");
   const entries = readRows_("Waitlist").filter(function (w) { return w.eventId === event.id && w.status !== "removed"; })
     .sort(function (a, b) { return String(a.createdAt).localeCompare(String(b.createdAt)); });   // sign-up order
+  const have = ticketEmails_(event);
   let place = 0;
   const list = entries.map(function (w) {
+    const hasTicket = w.status === "waiting" && !!have[String(w.email || "").toLowerCase()];   // signed up the normal way since joining
     return {
       id: w.id, name: w.name, email: w.email, ucid: w.ucid, memberId: w.memberId, ticketType: w.ticketType, answers: w.answers || {},
       status: w.status, createdAt: w.createdAt, offeredAt: w.offeredAt, offeredBy: w.offeredBy, orderCode: w.orderCode,
-      position: w.status === "waiting" ? ++place : 0
+      hasTicket: hasTicket,
+      position: w.status === "waiting" && !hasTicket ? ++place : 0
     };
   });
   const room = event.archivedAt ? { free: null, outstanding: 0 } : waitlistRoom_(event);
@@ -140,6 +153,9 @@ function offerWaitlistSpot_(session, entryId, force, siteUrl) {
     const event = findEvent_(function (e) { return e.id === entry.eventId; });
     if (!event) throw new ApiError_("NOT_FOUND", "Event not found.");
     assertNotArchived_(event);
+    if (ticketEmails_(event)[String(entry.email || "").toLowerCase()]) {
+      throw new ApiError_("ALREADY_REGISTERED", entry.name + " already has a ticket for this event, so no spot was offered. Remove them from the waitlist.");
+    }
     const type = event.ticketTypes.filter(function (t) { return t.id === entry.ticketTypeId; })[0];
     if (!type) throw new ApiError_("BAD_REQUEST", "The ticket type this person picked no longer exists on the event. Remove them or add it back.");
 
