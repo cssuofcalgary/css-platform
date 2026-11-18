@@ -63,6 +63,8 @@ const STRINGS = {
     setMembershipTitle: "Membership",
     setSheet: "Sheet link or ID",
     setTab: "Tab name",
+    setYear: "Membership year",
+    setYearPlaceholder: "2026/2027",
     setFee: "Membership fee ($)",
     setTestSave: "Test and save",
     setPwNote: (exec, admin) => `Exec password: ${exec ? "set" : "NOT set"} · Settings pass: ${admin ? "set" : "NOT set"}.`,
@@ -77,6 +79,7 @@ const STRINGS = {
     setChecking: "Checking…",
     setOk: "OK",
     setProblem: "Problem",
+    setWarning: "Warning",
     setNoError: "No errors in the last 24 hours.",
     emTitle: "Email wording",
     emPick: "Which email",
@@ -165,6 +168,15 @@ const STRINGS = {
     ovDoorNote: (inside, paid) => `${inside} inside of ${paid} paid.`,
     ovUnsent: (n) => n === 1 ? "1 ticket email is waiting to send" : `${n} ticket emails are waiting to send`,
     ovUnsentNote: "",
+    // Needs attention: one line per thing to do, with its button
+    attnReview: (codes, what) => `A ${what} for ${codes} was cut off and needs checking`,
+    attnReviewNote: (codes) => `Check ${codes} (amount received and notes), record anything missing, then press Done.`,
+    attnOffer: (name, code) => `${name}'s waitlist offer (${code}) wasn't delivered`,
+    attnCard: (name) => `${name}'s membership card wasn't emailed`,
+    attnMembersUnreadable: "The membership sheet couldn't be read, so membership cards weren't checked.",
+    attnOpen: "Open payments", attnDone: "Done", attnSendNow: "Send now", attnResendOffer: "Resend offer", attnResendCard: "Resend card",
+    attnSent: (sent, waiting) => waiting ? `${sent} sent, ${waiting} still waiting.` : `${sent} sent.`,
+    attnOfferSent: "Offer sent again.", attnCardSent: "Card sent.", attnStillFailed: "Still couldn't send. Try again later.",
     ovTileEvents: "Upcoming events", ovTileRegistered: "Registered", ovTileAwaiting: "Awaiting payment", ovTileInside: "Inside now",
     ovTileEventsNote: (next) => next ? `Next: ${next}` : "None scheduled", ovTileRegisteredNote: "across upcoming events", ovTileInsideNote: (p) => `of ${p} paid`,
     ovNoEvents: "No upcoming events yet. Create one in Events.",
@@ -321,6 +333,7 @@ const STRINGS = {
       const parts = [];
       if (r.mode === "refund") return `Payment recorded, but it can't be used. ${dollars(r.refund.owed)} is owed back: return it, then record the refund.`;
       const paidN = (r.results || []).filter((x) => x.paid).length;
+      parts.push("Payment saved.");
       if (paidN) parts.push(T.emailOutcome(r));
       (r.results || []).filter((x) => !x.paid).forEach((x) => parts.push(`${x.code}: ${dollars(x.stillDue)} still to come.`));
       if (r.refund) parts.push(`${dollars(r.refund.owed)} extra is owed back: return it, then record the refund.`);
@@ -441,7 +454,7 @@ const STRINGS = {
       const head = `${n} ticket${n === 1 ? "" : "s"} confirmed.`;
       if (r.notEmailed) return head + " This event doesn't email tickets: people open them from their ticket link, or you can press Resend tickets.";
       if (!n) return head;
-      if (r.emailsWaiting) return head + ` ${r.emailsSent} emailed; ${r.emailsWaiting} waiting to send because Google's email limit is used up. The payments are recorded. Press Send now at the top of this tab when more emails are allowed.`;
+      if (r.emailsWaiting) return head + ` ${r.emailsSent} emailed; ${r.emailsWaiting} couldn't send yet and ${r.emailsWaiting === 1 ? "is" : "are"} waiting. The payment is saved: don't record it again. Press Send now at the top of this tab or in Needs attention.`;
       return head + ` ${r.emailsSent} emailed.`;
     },
     remindersOffNote: "Reminders are off for this event. To use them, edit the event and tick \"Enable reminders for unpaid orders.\" under Emails.",

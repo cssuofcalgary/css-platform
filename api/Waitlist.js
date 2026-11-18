@@ -218,7 +218,10 @@ function offerWaitlistSpot_(session, entryId, force, siteUrl, requestId) {
 
   let emailed = false;
   if (made.isFree) emailed = emailsAfterSave_(made.order.id).sent > 0;
-  else if (!made.needsReview) emailed = sendRegistrationEmail_(made.event, made.order, [made.ticket]);
+  else if (!made.needsReview) {
+    emailed = sendRegistrationEmail_(made.event, made.order, [made.ticket]);
+    recordOfferEmail_(made.entry || { id: entryId }, emailed);   // a failed one shows in Needs attention with "Resend offer"
+  }
   const reply = { ok: true, code: made.order.code, status: made.order.status, emailed: emailed, needsReview: made.needsReview };
   finishRequest_("offerWaitlistSpot", rid, session.name, reply);
   return reply;

@@ -310,6 +310,19 @@ function route_(req) {
     case "removeWaitlistEntry":
       return removeWaitlistEntry_(requireSession_(req.token), req.entryId);
 
+    case "resendWaitlistOffer":
+      return resendWaitlistOffer_(requireSession_(req.token), req.entryId);
+
+    case "attentionList":
+      requireSession_(req.token);
+      return attentionList_();
+
+    case "dismissReview":
+      return dismissReview_(requireSession_(req.token), req.requestId);
+
+    case "resendMemberCard":
+      return resendMemberCard_(requireSession_(req.token), req.memberId);
+
     case "eventReport":
       return eventReport_(requireSession_(req.token), req.eventId);
 

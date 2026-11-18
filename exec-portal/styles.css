@@ -491,3 +491,10 @@ body.scanner-mode .content { max-width: 520px; }
 }
 .ticket-actions { display: flex; flex-wrap: wrap; gap: 0.5rem 1rem; }
 .ticket-actions button:disabled { opacity: 0.4; cursor: default; }
+/* Needs attention lines with their own buttons */
+.attn.has-actions { cursor: default; flex-wrap: wrap; }
+.attn.has-actions:hover { transform: none; }
+.attn-actions { margin-left: auto; display: flex; flex-wrap: wrap; gap: 8px; }
+.attn.done { opacity: 0.55; }
+.attn.done .attn-actions { display: none; }
+@media (max-width: 600px) { .attn-actions { margin-left: 48px; } }

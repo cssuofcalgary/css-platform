@@ -13,8 +13,13 @@ const MEMBER_METHODS = { etransfer: "E-transfer", cash: "Cash" };
 const MEMBER_STATUS_WAITING = { etransfer: "Awaiting E-transfer", cash: "Awaiting Cash" };
 const MEMBER_SIGNUP_BURST = 40;   // sign-ups from everyone together, per 10 minutes (keeps bots from filling the sheet)
 
-/** The membership year on a date (default today), e.g. "2026/2027". A school year runs September to August. */
+/** The year shown to members: the admin's choice, or today's school year until one is saved. */
 function membershipYear_(when) {
+  return getConfig_().membershipYear || membershipYearFromDate_(when);
+}
+
+/** The school year on a date (default today), used as the default and for the handover warning. */
+function membershipYearFromDate_(when) {
   const ym = Utilities.formatDate(when || new Date(), "America/Edmonton", "yyyy-MM");
   const y = parseInt(ym.slice(0, 4), 10), m = parseInt(ym.slice(5, 7), 10);
   const start = m >= 9 ? y : y - 1;

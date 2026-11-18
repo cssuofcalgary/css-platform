@@ -22,7 +22,7 @@ const TABLES = {
   Partners: ["id", "name", "offer", "address", "active", "sort", "createdAt", "createdBy", "updatedAt", "updatedBy"],
   Redemptions: ["id", "time", "receivedAt", "memberId", "memberName", "partnerId", "partnerName", "offer"],
   Waitlist: ["id", "eventId", "name", "email", "ucid", "memberId", "ticketTypeId", "ticketType", "answers", "status",
-             "createdAt", "offeredAt", "offeredBy", "orderId", "orderCode", "notes"],
+             "createdAt", "offeredAt", "offeredBy", "orderId", "orderCode", "notes", "offerEmail"],
   // Money owed back to people (see Refunds.js). One row per decision; "returns" lists each time money was handed back.
   Refunds: ["id", "orderId", "orderCode", "eventId", "payerName", "payerEmail", "kind", "ticketIds", "owed", "returns", "status", "reason", "createdAt", "createdBy", "closedAt"],
   // One row per press of a button that records money or registrations, so pressing it again (or a retry) can't record it twice.

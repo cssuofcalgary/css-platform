@@ -1,11 +1,11 @@
-// The membership year follows the date (September to August); the fee comes from Settings and shows wherever money is asked for.
+// Membership wording uses the year in Settings, or September to August when blank; the fee comes from the same Settings.
 const fs = require("fs"), path = require("path");
 const { run } = require("./harness.js");
 let fails = 0;
 const ok = (cond, msg) => { console.log((cond ? "PASS " : "FAIL ") + msg); if (!cond) fails++; };
 const J = (code) => { try { return { v: run(code) }; } catch (e) { return { err: e.code || e.message, msg: e.message }; } };
 
-// The harness swaps in a fixed getConfig_; put the real one back so the fee is read from the (fake) Script Properties.
+// The harness swaps in a fixed getConfig_; put the real one back so the year and fee are read from the (fake) Script Properties.
 const config = fs.readFileSync(path.join(__dirname, "..", "api", "Config.js"), "utf8").replace(/\r\n/g, "\n");
 run(config.slice(config.indexOf("function getConfig_()"), config.indexOf("\n}\n", config.indexOf("function getConfig_()")) + 2));
 run(`
@@ -22,6 +22,29 @@ ok(year("2027-01-15T12:00:00Z") === "2026/2027", "January is still the year that
 ok(year("2027-08-31T12:00:00Z") === "2026/2027", "August 31 is the last day of the year");
 ok(year("2027-09-01T12:00:00Z") === "2027/2028", "the next September moves on by itself: " + year("2027-09-01T12:00:00Z"));
 ok(/^\d{4}\/\d{4}$/.test(run("membershipYear_()")), "today's year has the usual look: " + run("membershipYear_()"));
+
+// ---- The saved membership year is optional and only changes when an admin saves it
+const automaticYear = run("membershipYear_()");
+const selectedStart = Number(automaticYear.slice(0, 4)) - 1;
+const selectedYear = selectedStart + "/" + (selectedStart + 1);
+ok(run("getConfig_().membershipYear") === "" && run("getSettings_('').settings.membershipYear") === "", "before a year is saved, Settings keeps the year blank");
+let yearReply = J(`saveSettings_(__admin, "", { membershipYear: "  ${selectedYear}  " })`);
+ok(yearReply.v && yearReply.v.changed.includes("membership year"), "Settings saves a membership year");
+ok(run("getConfig_().membershipYear") === selectedYear && run("getSettings_('').settings.membershipYear") === selectedYear, "Settings shows the saved year without surrounding spaces");
+ok(run("membershipYear_()") === selectedYear && year("2027-09-01T12:00:00Z") === selectedYear, "the saved year stays selected when the calendar moves on");
+ok(run('membershipYearFromDate_(new Date("2027-09-01T12:00:00Z"))') === "2027/2028", "the health check can still work out the year from the date");
+yearReply = J(`saveSettings_(__admin, "", { membershipYear: ${JSON.stringify(selectedYear)} })`);
+ok(yearReply.v && yearReply.v.changed.length === 0, "saving the same year again changes nothing");
+["2026", "2026-2027", "26/27", "2026/2028", "2026/2025", "2026/2026", "2026/2027 extra", "2026/2027\n2027/2028"].forEach((bad) => {
+  const b = J(`saveSettings_(__admin, "", { membershipYear: ${JSON.stringify(bad)} })`);
+  ok(b.err === "BAD_REQUEST", "refuses the membership year " + JSON.stringify(bad) + " with a plain message: " + b.msg);
+});
+ok(run("membershipYear_()") === selectedYear, "a refused year leaves the saved year alone");
+yearReply = J(`saveSettings_(__admin, "", { membershipYear: "2026/2028", membershipFee: "99", contactEmail: "other@example.com" })`);
+ok(yearReply.err === "BAD_REQUEST" && run("getConfig_().membershipFee") === 12 && run("getConfig_().contactEmail") !== "other@example.com", "a bad year stops the whole settings save, including otherwise valid changes");
+yearReply = J(`saveSettings_(__admin, "", { membershipYear: "   " })`);
+ok(yearReply.v && yearReply.v.changed.includes("membership year") && run("getSettings_('').settings.membershipYear") === "", "clearing the year saves a blank setting");
+ok(run("membershipYear_()") === automaticYear && year("2027-09-01T12:00:00Z") === "2027/2028", "clearing the year restores the September-to-August default");
 
 // ---- The fee: $12 until someone saves another
 ok(run("getConfig_().membershipFee") === 12, "no fee saved yet: $12");
@@ -87,6 +110,43 @@ ok(r.err === "NOT_FOUND" && r.msg.indexOf(run("membershipYear_()")) !== -1, "a r
 run(`TBL.Partners.forEach(function (p) { p.active = "FALSE"; });`);
 r = J(`memberCard_({ memberId: "CSS0041234", k: ${JSON.stringify(pk)} })`);
 ok(r.v && r.v.dealsActive === false && r.v.partners.length === 0, "switching every partner off turns deals off for members");
+
+// ---- Every public membership reply uses the year the admin selected
+J(`saveSettings_(__admin, "", { membershipYear: ${JSON.stringify(selectedYear)} })`);
+r = J(`route_({ action: "membershipInfo" })`);
+ok(r.v && r.v.year === selectedYear && r.v.fee === 15, "Join CSS advertises the selected membership year and saved fee");
+r = J(`route_({ action: "memberCard", memberId: "CSS0041234", k: ${JSON.stringify(pk)} })`);
+ok(r.v && r.v.year === selectedYear && r.v.member.paid === true, "the member card uses the selected year without changing paid membership");
+run(`function addMemberRowLocked_() { return { memberId: "CSS0061234" }; }`);
+r = J(`publicRegisterMember_({ name: "Kim Wong", ucid: "30444444", email: "kim@example.com", method: "etransfer" })`);
+ok(r.v && r.v.year === selectedYear && r.v.fee === 15, "new sign-up replies use the selected year even when it differs from the date");
+run(`function addMemberRowLocked_() { return { existing: { name: "Kim Wong", paid: true, memberId: "CSS0061234", payment: {} } }; }`);
+r = J(`publicRegisterMember_({ name: "Kim Wong", ucid: "30444444", email: "kim@example.com", method: "cash" })`);
+ok(r.err === "ALREADY_MEMBER" && r.msg.includes(selectedYear), "the already-member message uses the selected year");
+r = J(`memberCard_({ memberId: "CSS0099999", k: ${JSON.stringify(gone)} })`);
+ok(r.err === "NOT_FOUND" && r.msg.includes(selectedYear), "a missing membership message uses the selected year");
+
+// ---- A year mismatch is a warning in the manual health check, never a system problem
+run(`
+var __savedBackupStatus = backupStatus_, __savedArchiveStatus = archiveStatus_, __savedLog = log_;
+backupStatus_ = function () { return "Backup checked"; };
+archiveStatus_ = function () { return "Archive checked"; };
+var __healthRuns = [];
+log_ = function (who, action, id, detail) { if (action === "health.check") __healthRuns.push(detail); };
+`);
+r = J(`healthCheck_(__admin)`);
+let yearCheck = r.v && r.v.checks.find((c) => c.name === "Membership year");
+ok(yearCheck && yearCheck.ok === false && yearCheck.warning === true && yearCheck.detail.includes(selectedYear) && yearCheck.detail.includes(automaticYear), "the health warning shows both the selected year and the year suggested by the date");
+ok(run("__healthRuns[__healthRuns.length - 1].problems") === 0, "membership-year and door-password warnings are not counted as system problems");
+J(`saveSettings_(__admin, "", { membershipYear: ${JSON.stringify(automaticYear)} })`);
+r = J(`healthCheck_(__admin)`);
+yearCheck = r.v && r.v.checks.find((c) => c.name === "Membership year");
+ok(yearCheck && yearCheck.ok === true, "the membership year check is OK when the selected year matches the date");
+J(`saveSettings_(__admin, "", { membershipYear: "" })`);
+r = J(`healthCheck_(__admin)`);
+yearCheck = r.v && r.v.checks.find((c) => c.name === "Membership year");
+ok(yearCheck && yearCheck.ok === true && run("membershipInfo_().year") === automaticYear, "a blank year keeps the automatic default and does not raise a warning");
+run(`backupStatus_ = __savedBackupStatus; archiveStatus_ = __savedArchiveStatus; log_ = __savedLog;`);
 
 // ---- The words on the buttons (exec portal strings.js)
 const strings = {};

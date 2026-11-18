@@ -27,6 +27,7 @@ function getSettings_(token) {
       instagramUrl: config.instagramUrl,
       membershipSheetId: config.membershipSheetId,
       membershipTab: config.membershipTab,
+      membershipYear: config.membershipYear,
       membershipFee: config.membershipFee,
       execPasswordSet: !!config.password,
       adminPasswordSet: !!config.adminPassword,
@@ -79,6 +80,15 @@ function saveSettings_(session, token, input) {
       changed.push("Membership sheet");
       notes = "Found " + found.members + " members (" + found.paid + " paid).";
     }
+  }
+
+  if (input.membershipYear !== undefined) {
+    const year = String(input.membershipYear === null ? "" : input.membershipYear).trim();
+    const parts = year.match(/^([1-9]\d{3})\/([1-9]\d{3})$/);
+    if (year && (!parts || Number(parts[2]) !== Number(parts[1]) + 1)) {
+      throw new ApiError_("BAD_REQUEST", "The membership year should look like 2026/2027, with two years in a row.");
+    }
+    if (year !== config.membershipYear) { updates.MEMBERSHIP_YEAR = year; changed.push("membership year"); }
   }
 
   if (input.membershipFee !== undefined) {
@@ -190,6 +200,12 @@ function healthCheck_(session) {
     const members = loadMembers_();
     return members.length + " members (" + members.filter(function (m) { return m.paid; }).length + " paid)";
   });
+  const expectedYear = membershipYearFromDate_();
+  const selectedYear = membershipYear_();
+  checks.push({
+    name: "Membership year", ok: selectedYear === expectedYear, warning: true,
+    detail: selectedYear === expectedYear ? selectedYear : "Settings uses " + selectedYear + "; today's date suggests " + expectedYear + ". Check the membership year and selected sheet in Settings → Membership."
+  });
   run("Weekly backup (data + membership)", backupStatus_);
   run("Archive", archiveStatus_);
   // A warning, not a failure of the system: the door sign-in works without a password, so anyone with the scanner link can sign in
@@ -208,7 +224,7 @@ function healthCheck_(session) {
   const lastError = recentError_(24);   // only an error from the last 24 hours; older ones are old news and drop off by themselves
   const config = getConfig_();
   // A manual run (from the portal) is written to the Log, so Activity shows who checked and what they found. The nightly job passes no session and logs nothing.
-  if (session) log_(session.name, "health.check", "", { problems: checks.filter(function (c) { return !c.ok; }).length + (lastError ? 1 : 0) });
+  if (session) log_(session.name, "health.check", "", { problems: checks.filter(function (c) { return !c.ok && !c.warning; }).length + (lastError ? 1 : 0) });
   return {
     ok: true,
     version: API_VERSION,
