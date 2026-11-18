@@ -19,14 +19,14 @@ const $ = (id) => document.getElementById(id);
 
 // Looking things up is safe to repeat, so a hiccup (Google being slow, a dropped connection) is retried
 // quietly. Anything that changes data (mark paid, scan, edit…) is never repeated automatically.
-const READ_ACTIONS = ["listEvents", "listOrders", "doorList", "eventSummary", "searchMembers", "getMember"];
+const READ_ACTIONS = ["listEvents", "listOrders", "doorList", "eventSummary", "searchMembers", "getMember", "listRecentEmails"];
 const REQUEST_TIMEOUT_MS = 35000;
 const RETRY_PAUSE_MS = 1200;
 
 // The panda shows in the middle when a request takes longer than a moment (and moves on to "taking a little longer" and
 // "still working" the longer it waits). Door scans, searches-as-you-type and the keep-alive stay quiet, and so does the
 // scanner phone page. Jobs that work through a list show "almost there" instead.
-const QUIET_ACTIONS = ["ping", "scan", "doorList", "deskAlerts", "searchMembers", "getMember", "emailStatus"];
+const QUIET_ACTIONS = ["ping", "scan", "doorList", "deskAlerts", "searchMembers", "getMember", "emailStatus", "listRecentEmails"];
 const EMAIL_ACTIONS = ["markOrderPaid", "markOrdersPaid", "sendPendingEmails", "resendTickets", "addOrder", "sendReminders", "editTicket", "offerWaitlist", "mailAll"];   // after these the email indicator is refreshed
 const BATCH_ACTIONS = ["sendPendingEmails", "markOrdersPaid", "sendReminders"];
 const PANDA_DELAY_MS = 700;

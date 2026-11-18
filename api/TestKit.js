@@ -182,7 +182,7 @@ function emailStressTestSheet() {
   const html = stressSheetHtml_(cards);
   const blob = Utilities.newBlob(html, "text/html", "stress-test-qr-sheet.html");
   const file = DriveApp.createFile(blob);
-  MailApp.sendEmail({
+  sendMail_({
     to: stressTestEmail_(),
     subject: "CSS stress test: 50 QR codes",
     body: "Open the attached stress-test-qr-sheet.html in a browser (download it first). It has 50 QR codes with what each scan should do. A copy is also in Google Drive: " + file.getUrl(),

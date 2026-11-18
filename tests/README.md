@@ -8,6 +8,7 @@ These run the API code (`api/*.js`) in Node with a fake Google (in-memory tables
 | `waitlist.test.js` | joining, offering a spot, removing |
 | `partners.test.js` | partner deals and the redemption log |
 | `emailclaim.test.js` | two execs pressing Send at once can't double-email |
+| `emailhistory.test.js` | subject/recipient/time and sent/failed history, rolling 24-hour boundaries, no bodies or private links, unchanged send results when logging fails, attachments, and exec/admin/door permissions |
 | `deskalert.test.js` | scanner results, the "send to desk" alerts, the scan log, member pass links |
 | `payfix.test.js` | repairing a half-finished Mark paid, restoring a cancelled or refunded order |
 | `registration.test.js` | registering (event site and member portal): ticket pages in the reply, member verification, name and ID checks, retries, a failed ticket write, resuming, the event read again inside the lock, locks, capacity |

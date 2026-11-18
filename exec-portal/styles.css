@@ -456,6 +456,12 @@ body.scanner-mode .content { max-width: 520px; }
 #member-note-text { width: 100%; min-width: 0; resize: vertical; }
 #member-note-save { justify-self: start; }
 
+.email-history-list { max-height: 300px; overflow-y: auto; }
+.email-history-list li { padding: 10px 0; border-bottom: 1px solid var(--border); overflow-wrap: anywhere; }
+.email-history-top { display: flex; align-items: baseline; gap: 10px; justify-content: space-between; }
+.email-history-top strong { min-width: 0; }
+.email-history-top .pill { flex: none; }
+
 /* Panda loader (loading, slow, success, error) */
 .pl { text-align: center; padding: 12px 0 8px; color: inherit; }
 .pl-stage { position: relative; width: 64px; height: 62px; margin: 0 auto; animation: plBob 2s ease-in-out infinite; }

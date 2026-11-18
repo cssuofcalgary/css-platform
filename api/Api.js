@@ -239,6 +239,10 @@ function route_(req) {
       requireSession_(req.token);
       return emailStatus_();
 
+    case "listRecentEmails":
+      requireSession_(req.token);
+      return listRecentEmails_();
+
     case "restoreOrder":
       return restoreOrder_(requireSession_(req.token), req.orderId, !!req.force);
 

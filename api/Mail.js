@@ -141,7 +141,43 @@ function whenWhereRows_(event) {
 }
 
 function sendStyled_(to, subject, html, plain) {
-  MailApp.sendEmail({ to: to, subject: subject, body: plain, htmlBody: html, name: MAIL_FROM_NAME, replyTo: getConfig_().etransferEmail });
+  sendMail_({ to: to, subject: subject, body: plain, htmlBody: html, name: MAIL_FROM_NAME, replyTo: getConfig_().etransferEmail });
+}
+
+/** Every platform email uses this wrapper. A log problem must never turn a sent email into a failed send. */
+function sendMail_(mail) {
+  try {
+    MailApp.sendEmail(mail);
+  } catch (err) {
+    recordEmailSend_(mail, "failed");
+    throw err;
+  }
+  recordEmailSend_(mail, "sent");
+}
+
+function recordEmailSend_(mail, status) {
+  try {
+    log_("email", "email." + status, String(mail.to || ""), { subject: String(mail.subject || "") });
+  } catch (err) {
+    console.error("Couldn't record email history: " + err.message);
+  }
+}
+
+/** Only reads the existing Log table. Bodies, attachments and private pass/ticket links are never included. */
+function listRecentEmails_() {
+  const now = Date.now(), since = now - 24 * 60 * 60 * 1000;
+  const rows = readLastRows_("Log", 5000);
+  const entries = [];
+  rows.forEach(function (row) {
+    const time = Date.parse(row.time);
+    if (!isFinite(time) || time < since || time > now || (row.action !== "email.sent" && row.action !== "email.failed")) return;
+    let details;
+    try { details = JSON.parse(row.details || "{}"); } catch (err) { return; }
+    if (!details || typeof details.subject !== "string") return;
+    entries.push({ time: row.time, to: row.target, subject: details.subject, status: row.action === "email.sent" ? "sent" : "failed" });
+  });
+  entries.sort(function (a, b) { return Date.parse(b.time) - Date.parse(a.time); });
+  return { ok: true, entries: entries, partial: rows.length === 5000 && !rows.some(function (r) { return Date.parse(r.time) < since; }) };
 }
 
 // ---- The emails --------------------------------------------------------------------

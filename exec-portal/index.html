@@ -9,7 +9,7 @@
   <link rel="icon" href="assets/css-logo.png" type="image/png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Fraunces:opsz,wght@9..144,500;9..144,600&family=JetBrains+Mono:wght@400;500&display=swap">
-  <link rel="stylesheet" href="styles.css?v=1.7.5">
+  <link rel="stylesheet" href="styles.css?v=1.7.6">
   <link rel="stylesheet" href="theme.css?v=0.13.5">
   <link rel="stylesheet" href="peekaboo.css?v=1.0.1">
   <link rel="stylesheet" href="forest.css?v=1.0.7">
@@ -768,6 +768,11 @@
       <p id="mail-waiting"></p>
       <p id="mail-checked" class="muted small"></p>
       <p id="mail-result" class="muted small" aria-live="polite"></p>
+      <section class="detail-block">
+        <h3 class="section-title" data-t="mailHistoryHeading"></h3>
+        <p id="mail-history-status" class="muted small" aria-live="polite"></p>
+        <ul id="mail-history-list" class="plain-list email-history-list"></ul>
+      </section>
       <div class="button-row">
         <button type="button" id="mail-refresh" class="secondary" data-t="mailRefresh"></button>
         <button type="button" id="mail-send-pending" class="secondary" data-t="mailSendPending" hidden></button>
@@ -1012,13 +1017,13 @@
     </form>
   </dialog>
   <script src="config.js?v=0.3.7"></script>
-  <script src="strings.js?v=1.11.13"></script>
+  <script src="strings.js?v=1.11.14"></script>
   <script src="mock.js?v=0.3.7"></script>
   <script src="panda.js?v=1.5.1"></script>
   <script src="peekaboo.js?v=1.0.0"></script>
-  <script src="app.js?v=1.7.6"></script>
+  <script src="app.js?v=1.7.7"></script>
   <script src="events.js?v=1.7.5"></script>
-  <script src="emailstatus.js?v=1.0.1"></script>
+  <script src="emailstatus.js?v=1.0.2"></script>
   <script src="waitlist.js?v=1.5.3"></script>
   <script src="payments.js?v=1.9.2"></script>
   <script src="edit.js?v=0.9.8"></script>
