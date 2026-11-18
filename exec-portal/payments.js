@@ -166,7 +166,7 @@ async function onOrdersClick(event) {
 
   if (button.dataset.act === "repair") {
     button.disabled = true;
-    reply = await api("markOrderPaid", { orderId: order.id, siteUrl });   // an already-paid order: finishes tickets and emails that were left undone
+    reply = await apiOnce("markOrderPaid", { orderId: order.id, siteUrl });   // an already-paid order: finishes tickets and emails that were left undone
     if (reply.ok) result.textContent = T.repaired(reply.repaired || 0, reply.emailsSent);
   }
 

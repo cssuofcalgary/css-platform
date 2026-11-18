@@ -143,16 +143,39 @@ function listWaitlist_(eventId) {
  * Finance: a spot opened, so make a real registration for this person (the usual payment email goes out). `force` = offer
  * even though no spot looks free (Finance was warned).
  */
-function offerWaitlistSpot_(session, entryId, force, siteUrl) {
+function offerWaitlistSpot_(session, entryId, force, siteUrl, requestId) {
   rememberSiteUrl_(siteUrl);
   const members = membersQuietly_();
+  const rid = cleanRequestId_(requestId);
   const made = withIntakeAndScriptLock_(function () {
+    const saved = savedRequest_("offerWaitlistSpot", rid);
+    if (saved && saved.status === "done") return { repeat: saved.reply };   // the same press again: same answer, nothing new
+    delete DB_.rows["Waitlist"]; delete DB_.rows["Orders"]; delete DB_.rows["Tickets"];
     const entry = readRows_("Waitlist").filter(function (w) { return w.id === entryId; })[0];
     if (!entry) throw new ApiError_("NOT_FOUND", "That waitlist entry no longer exists.");
     if (entry.status !== "waiting") throw new ApiError_("BAD_REQUEST", "This person is already " + entry.status + ".");
     const event = findEvent_(function (e) { return e.id === entry.eventId; });
     if (!event) throw new ApiError_("NOT_FOUND", "Event not found.");
     assertNotArchived_(event);
+
+    // One offer per entry: its order carries "wl-<entry id>". An earlier offer that stopped halfway (order saved, ticket or
+    // waitlist mark not) is finished here with the same order and payment code, instead of making a second one.
+    const opKey = "wl-" + entry.id;
+    const prior = readRows_("Orders").filter(function (o) { return o.requestId === opKey && o.status !== "cancelled" && o.status !== "refunded"; })[0];
+    if (prior) {
+      let ticket = readRows_("Tickets").filter(function (t) { return t.orderId === prior.id; })[0];
+      const type = event.ticketTypes.filter(function (t) { return t.id === entry.ticketTypeId; })[0] || { name: entry.ticketType, price: prior.total };
+      const flag = membershipFlag_({ name: entry.name, email: entry.email, ucid: entry.ucid, memberId: entry.memberId, needsMembership: !!type.needsMembership }, members);
+      if (!ticket) {
+        ticket = waitlistTicket_(entry, prior, type, flag, new Date().toISOString());
+        insertRow_("Tickets", ticket);
+      }
+      updateRow_("Waitlist", entry.id, { status: "offered", offeredAt: prior.createdAt, offeredBy: session.name, orderId: prior.id, orderCode: prior.code }, entry._row);
+      log_(session.name, "waitlist.offer.resumed", prior.code, { name: entry.name });
+      const needsReview = /Requires exec verification/.test(String(prior.notes || ""));
+      return { event: event, order: prior, ticket: ticket, isFree: prior.status === "paid", needsReview: needsReview };
+    }
+
     if (ticketEmails_(event)[String(entry.email || "").toLowerCase()]) {
       throw new ApiError_("ALREADY_REGISTERED", entry.name + " already has a ticket for this event, so no spot was offered. Remove them from the waitlist.");
     }
@@ -176,24 +199,38 @@ function offerWaitlistSpot_(session, entryId, force, siteUrl) {
       payerName: entry.name, payerEmail: entry.email, etransferName: "", total: price,
       status: isFree ? "paid" : "awaiting", createdAt: now, paidAt: isFree ? now : "", paidBy: isFree ? "Waitlist offer" : "",
       notes: "From the waitlist (offered by " + session.name + ")" + (needsReview ? ". Requires exec verification of member status" : ""),
-      cancelRequestedAt: "", cancelRequestedBy: ""
+      cancelRequestedAt: "", cancelRequestedBy: "", requestId: opKey
     };
-    const ticket = {
-      id: newTicketId_(), secret: Utilities.getUuid().replace(/-/g, ""), orderId: order.id, eventId: event.id,
-      name: entry.name, email: entry.email, ucid: entry.ucid, memberId: entry.memberId, ticketType: type.name, price: price,
-      answers: entry.answers || {}, flag: flag, status: order.status, checkedInAt: "", checkedInBy: "", createdAt: now
-    };
+    const ticket = waitlistTicket_(entry, order, type, flag, now);
     insertRow_("Orders", order);
-    insertRow_("Tickets", ticket);
-    updateRow_("Waitlist", entry.id, { status: "offered", offeredAt: now, offeredBy: session.name, orderId: order.id, orderCode: order.code }, entry._row);
+    try {
+      insertRow_("Tickets", ticket);
+      updateRow_("Waitlist", entry.id, { status: "offered", offeredAt: now, offeredBy: session.name, orderId: order.id, orderCode: order.code }, entry._row);
+    } catch (err) {
+      // The order is saved but not the rest. It stays linked to this entry, so pressing Offer again finishes it.
+      console.error("Waitlist offer stopped halfway: " + (err && err.message || err));
+      throw (err instanceof ApiError_ ? err : new ApiError_("TEMPORARY", "The offer was only partly saved. Press Offer again to finish it (no second order will be made)."));
+    }
+    log_(session.name, "waitlist.offer", order.code, { name: ticket.name, total: order.total });
     return { event: event, order: order, ticket: ticket, isFree: isFree, needsReview: needsReview };
   });
-  log_(session.name, "waitlist.offer", made.order.code, { name: made.ticket.name, total: made.order.total });
+  if (made.repeat) return made.repeat;
 
   let emailed = false;
-  if (made.isFree) emailed = sendPendingTicketEmails_(made.order.id).sent > 0;
+  if (made.isFree) emailed = emailsAfterSave_(made.order.id).sent > 0;
   else if (!made.needsReview) emailed = sendRegistrationEmail_(made.event, made.order, [made.ticket]);
-  return { ok: true, code: made.order.code, status: made.order.status, emailed: emailed, needsReview: made.needsReview };
+  const reply = { ok: true, code: made.order.code, status: made.order.status, emailed: emailed, needsReview: made.needsReview };
+  finishRequest_("offerWaitlistSpot", rid, session.name, reply);
+  return reply;
+}
+
+/** The ticket a waitlist offer makes: in the order's status, with the answers the person gave when they joined. */
+function waitlistTicket_(entry, order, type, flag, now) {
+  return {
+    id: newTicketId_(), secret: Utilities.getUuid().replace(/-/g, ""), orderId: order.id, eventId: order.eventId,
+    name: entry.name, email: entry.email, ucid: entry.ucid, memberId: entry.memberId, ticketType: type.name, price: Number(type.price) || 0,
+    answers: entry.answers || {}, flag: flag, status: order.status, checkedInAt: "", checkedInBy: "", createdAt: now
+  };
 }
 
 /** Finance: take someone off the waitlist (they asked, or never replied). The entry is kept, marked removed. */

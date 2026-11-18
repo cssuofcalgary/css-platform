@@ -30,7 +30,7 @@ function eventFromRow_(row) {
     imageFileId: row.imageFileId,
     imageUrl: row.imageUrl,
     ticketTypes: row.ticketTypes || [],
-    questions: row.questions || [],
+    questions: eventQuestions_(row.questions, row.ticketTypes),
     codePrefix: row.codePrefix,
     registrationCloses: row.registrationCloses || "",
     archivedAt: row.archivedAt || "",       // set once the event's tickets and orders have moved to the yearly archive (Archive.js)
@@ -41,6 +41,25 @@ function eventFromRow_(row) {
     updatedBy: row.updatedBy,
     updatedAt: row.updatedAt
   };
+}
+
+/**
+ * Every question with its `forTickets` list (the ticket type ids it is for; empty = every ticket type). Older events have no
+ * list, so their questions are for everyone, exactly as before. Ids of ticket types that were deleted are left out.
+ */
+function eventQuestions_(questions, ticketTypes) {
+  const typeIds = {};
+  (ticketTypes || []).forEach(function (t) { typeIds[t.id] = true; });
+  return (questions || []).map(function (q) {
+    const list = Array.isArray(q.forTickets) ? q.forTickets.filter(function (id) { return typeIds[id]; }) : [];
+    return Object.assign({}, q, { forTickets: list });
+  });
+}
+
+/** Does this question apply to someone holding this ticket type? */
+function questionApplies_(question, ticketTypeId) {
+  const list = question.forTickets || [];
+  return !list.length || list.indexOf(ticketTypeId) !== -1;
 }
 
 function allEvents_() {
@@ -233,6 +252,19 @@ function registrationOpen_(event) {
   return now < registrationClosesAt_(event);
 }
 
+/**
+ * Events whose existing tickets people can still list and recover: upcoming and published or closed. Closing only stops
+ * new sign-ups; it never hides tickets people already have. Drafts and archived events are left out.
+ */
+function ticketEventsById_() {
+  const today = Utilities.formatDate(new Date(), "America/Edmonton", "yyyy-MM-dd");
+  const events = {};
+  allEvents_().forEach(function (e) {
+    if ((e.status === "published" || e.status === "closed") && !e.archivedAt && e.date >= today) events[e.id] = e;
+  });
+  return events;
+}
+
 // ---- Helpers ----------------------------------------------------------------
 
 const MAX_TICKET_PRICE = 1000;
@@ -269,6 +301,8 @@ function cleanEventInput_(input) {
     };
   });
   if (!ticketTypes.length) throw new ApiError_("BAD_REQUEST", "Add at least one ticket type.");
+  const typeIds = {};
+  ticketTypes.forEach(function (t) { typeIds[t.id] = true; });
 
   const questions = (input.questions || []).filter(function (q) { return text(q.label); }).map(function (q) {
     const type = q.type === "choice" ? "choice" : "text";
@@ -277,7 +311,10 @@ function cleanEventInput_(input) {
           .map(function (o) { return text(o, 60); }).filter(Boolean)
       : [];
     if (type === "choice" && options.length < 2) throw new ApiError_("BAD_REQUEST", "Choice questions need at least 2 options.");
-    return { id: text(q.id, 20) || newId_("Q"), label: text(q.label, 150), type: type, options: options, required: !!q.required };
+    // forTickets: the ticket types this question is for. Empty = every ticket type. Ids of ticket types that no longer exist are dropped.
+    const forTickets = (Array.isArray(q.forTickets) ? q.forTickets : []).map(function (id) { return text(id, 20); })
+      .filter(function (id, i, all) { return typeIds[id] && all.indexOf(id) === i; });
+    return { id: text(q.id, 20) || newId_("Q"), label: text(q.label, 150), type: type, options: options, required: !!q.required, forTickets: forTickets };
   });
   // Answers are saved under the question's wording, so two questions worded the same would overwrite each other.
   const seenLabels = {};

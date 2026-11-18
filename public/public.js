@@ -117,12 +117,38 @@ function showMessage(text, withBack) {
 
 let currentEvent = null;
 let guestCount = 0;
+// What someone typed on the sign-up form, kept while they look back at the event page (this visit only; nothing is sent).
+let registerDraft = null;   // { slug, shape, guestCount, nodes }
 
-function showRegisterForm(e) {
+/** Ticket types and questions as one string: a draft is only put back if the event's form still looks the same. */
+function formShape(e) {
+  return JSON.stringify([e.ticketTypes, e.questions]);
+}
+
+function backToEvent(e) {
+  registerDraft = { slug: e.slug, shape: formShape(e), guestCount, nodes: [...$("page").childNodes] };
+  showEvent(e.slug);
+}
+
+function showRegisterForm(e, fresh) {
+  if (!fresh && registerDraft && registerDraft.slug === e.slug && registerDraft.shape === formShape(e)) {
+    $("page").replaceChildren(...registerDraft.nodes);   // the same boxes, with everything still typed in them
+    guestCount = registerDraft.guestCount;
+    registerDraft = null;
+    updateMemberFields();
+    updateQuestions();
+    updateTotal();
+    window.scrollTo(0, 0);
+    return;
+  }
+  registerDraft = null;
   guestCount = 0;
   const hasPrice = e.ticketTypes.some((t) => Number(t.price) > 0);
   $("page").innerHTML = `
-    <button class="back link-button" id="back-to-event">${T.cancel}</button>
+    <div class="row-between form-top">
+      <button type="button" class="back link-button" id="back-to-event">${T.cancel}</button>
+      <button type="button" class="link-button" id="clear-form">${T.clearForm}</button>
+    </div>
     <h1 class="page-title">${escapeHtml(e.name)}</h1>
     <form id="register-form" class="register-form" novalidate>
       <section class="person card-block" data-person="0">
@@ -150,14 +176,32 @@ function showRegisterForm(e) {
       <button type="submit" class="register" id="submit">${T.submit}</button>
     </form>`;
 
-  $("back-to-event").addEventListener("click", () => showEvent(e.slug));
+  $("back-to-event").addEventListener("click", () => backToEvent(e));
+  $("clear-form").addEventListener("click", async () => { if (await askConfirm(T.clearConfirm)) showRegisterForm(e, true); });
   $("add-guest").addEventListener("click", addGuest);
   $("register-form").addEventListener("change", onFormChange);
   $("register-form").addEventListener("click", onFormClick);
   $("register-form").addEventListener("submit", onSubmit);
   updateMemberFields();
+  updateQuestions();
   updateTotal();
   window.scrollTo(0, 0);
+}
+
+/** A small yes/no box drawn in the page (the browser's own confirm() can stop appearing). */
+function askConfirm(message) {
+  return new Promise((resolve) => {
+    const dialog = document.createElement("dialog");
+    dialog.className = "ask";
+    dialog.innerHTML = `<p></p><div class="ask-buttons"><button type="button" class="register" data-yes>${T.clearYes}</button><button type="button" class="link-button" data-no>${T.clearKeep}</button></div>`;
+    dialog.querySelector("p").textContent = message;
+    const done = (answer) => { dialog.close(); dialog.remove(); resolve(answer); };
+    dialog.querySelector("[data-yes]").addEventListener("click", () => done(true));
+    dialog.querySelector("[data-no]").addEventListener("click", () => done(false));
+    dialog.addEventListener("cancel", (ev) => { ev.preventDefault(); done(false); });
+    document.body.appendChild(dialog);
+    dialog.showModal();
+  });
 }
 
 // ---- Waitlist (event is full) --------------------------------------------------
@@ -182,6 +226,7 @@ function showWaitlistForm(e) {
   $("register-form").addEventListener("change", onFormChange);
   $("register-form").addEventListener("submit", onWaitlistSubmit);
   updateMemberFields();
+  updateQuestions();
   window.scrollTo(0, 0);
 }
 
@@ -243,10 +288,31 @@ function personFields(e, i) {
     </div>
 
     ${e.questions.map((q) => `
+      <div class="question" data-question="${escapeAttr(q.id)}">
       <label for="${id(q.id)}">${escapeHtml(q.label)} ${q.required ? `<span class="req">*</span>` : ""}</label>
       ${q.type === "choice"
         ? `<select id="${id(q.id)}" data-q="${escapeAttr(q.id)}"><option value="">${T.choose}</option>${q.options.map((o) => `<option>${escapeHtml(o)}</option>`).join("")}</select>`
-        : `<input id="${id(q.id)}" data-q="${escapeAttr(q.id)}" maxlength="300">`}`).join("")}`;
+        : `<input id="${id(q.id)}" data-q="${escapeAttr(q.id)}" maxlength="300">`}
+      </div>`).join("")}`;
+}
+
+/** A question can be limited to some ticket types (forTickets). None listed = it is for every ticket. */
+function questionApplies(q, ticketTypeId) {
+  const only = Array.isArray(q.forTickets) ? q.forTickets.filter(Boolean) : [];
+  return !only.length || (!!ticketTypeId && only.includes(ticketTypeId));
+}
+
+/** Each person sees only the questions for the ticket they picked. A question that disappears loses its answer. */
+function updateQuestions() {
+  document.querySelectorAll("#register-form .person").forEach((s) => {
+    const type = chosenType(s);
+    s.querySelectorAll("[data-question]").forEach((box) => {
+      const q = currentEvent.questions.find((x) => x.id === box.dataset.question);
+      const show = !q || questionApplies(q, type ? type.id : "");
+      box.hidden = !show;
+      if (!show) box.querySelectorAll("[data-q]").forEach((el) => { el.value = ""; });
+    });
+  });
 }
 
 function addGuest() {
@@ -261,6 +327,7 @@ function addGuest() {
   $("guests").appendChild(section);
   renumberGuests();
   updateMemberFields();
+  updateQuestions();
   updateTotal();
   section.querySelector("input").focus();
 }
@@ -279,6 +346,7 @@ function onFormClick(ev) {
 
 function onFormChange() {
   updateMemberFields();
+  updateQuestions();
   updateTotal();
 }
 
@@ -296,15 +364,19 @@ function updateMemberFields() {
 
 function updateTotal() {
   let total = 0;
+  let allChosen = true;
   document.querySelectorAll("#register-form .person").forEach((s) => {
     const type = chosenType(s);
     if (type) total += Number(type.price) || 0;
+    else allChosen = false;
   });
-  $("total").textContent = money(total);
+  // Until everyone has a ticket the total isn't known yet: say so instead of "Free"
+  $("total").textContent = allChosen ? money(total) : T.chooseTickets;
+  $("total").classList.toggle("total-pending", !allChosen);
   // Nothing owed: no e-transfer details to ask for, and the button says it is just a registration
   if ($("etransfer-block")) $("etransfer-block").hidden = total === 0;
   const button = $("submit");
-  if ($("etransfer-block") && button && !button.disabled) button.textContent = total > 0 ? T.submitPaid : T.submitFree;   // only on the registration form of an event that charges
+  if ($("etransfer-block") && button && !button.disabled) button.textContent = total > 0 ? T.submitPaid : allChosen ? T.submitFree : T.submit;   // only on the registration form of an event that charges
 }
 
 function readPeople() {
@@ -314,7 +386,10 @@ function readPeople() {
       if (el.type === "radio") { if (el.checked) person.ticketTypeId = el.value; }
       else person[el.dataset.f] = el.value.trim();
     });
-    s.querySelectorAll("[data-q]").forEach((el) => { person.answers[el.dataset.q] = el.value.trim(); });
+    s.querySelectorAll("[data-q]").forEach((el) => {   // answers only to the questions for this person's ticket
+      const q = currentEvent.questions.find((x) => x.id === el.dataset.q);
+      if (!q || questionApplies(q, person.ticketTypeId)) person.answers[el.dataset.q] = el.value.trim();
+    });
     return person;
   });
 }
@@ -327,11 +402,13 @@ function firstProblem(people) {
     if (!p.name) return T.fullName + who;
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(p.email || "")) return T.email + who;
     if (!p.ticketTypeId) return T.ticket + who;
-    const missing = currentEvent.questions.find((q) => q.required && !p.answers[q.id]);
+    const missing = currentEvent.questions.find((q) => q.required && questionApplies(q, p.ticketTypeId) && !(p.answers || {})[q.id]);
     if (missing) return missing.label + who;
   }
   return "";
 }
+
+let pendingRegistration = null;   // { key: the details sent, id: their requestId } until the server confirms the sign-up
 
 async function onSubmit(ev) {
   ev.preventDefault();
@@ -345,20 +422,26 @@ async function onSubmit(ev) {
   button.disabled = true;
   button.textContent = T.submitting;
   // Busy or slow? Try again by itself. The same requestId on every try means the server can never create two registrations.
-  const requestId = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : String(Date.now()) + "-" + Math.random().toString(16).slice(2);
+  // Pressing Register again with the same details (after a dropped connection) keeps that id too; a finished sign-up gets a new one.
+  const details = {
+    slug: currentEvent.slug,
+    people,
+    etransferName: $("etransfer-name") ? $("etransfer-name").value.trim() : "",
+    website: $("website").value
+  };
+  const key = JSON.stringify(details);
+  if (!pendingRegistration || pendingRegistration.key !== key) {
+    pendingRegistration = { key, id: (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : String(Date.now()) + "-" + Math.random().toString(16).slice(2) };
+  }
+  const requestId = pendingRegistration.id;
   let reply;
   for (let attempt = 1; attempt <= 4; attempt++) {
-    reply = await api("register", {
-      slug: currentEvent.slug,
-      people,
-      etransferName: $("etransfer-name") ? $("etransfer-name").value.trim() : "",
-      website: $("website").value,
-      requestId
-    });
+    reply = await api("register", { ...details, requestId });
     if (reply.ok || !["BUSY", "TEMPORARY", "NETWORK"].includes(reply.error) || attempt === 4) break;
     button.textContent = T.submittingAgain;
     await new Promise((resolve) => setTimeout(resolve, 1500 * attempt));
   }
+  if (reply.ok) pendingRegistration = null;
   button.disabled = false;
   button.textContent = T.submit;
   updateTotal();

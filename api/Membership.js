@@ -112,6 +112,35 @@ function publicRegisterMember_(input) {
   return reply;
 }
 
+/** Public (no login): the fee, year and e-transfer address the Join CSS page shows before anyone signs up. Same Settings as the sign-up reply. */
+function membershipInfo_() {
+  const config = getConfig_();
+  return { ok: true, fee: config.membershipFee, year: membershipYear_(), etransferEmail: config.etransferEmail, site: siteInfo_() };
+}
+
+/**
+ * Public, for the member portal's pass screen: the member card from the Membership sheet chosen in Settings, whether
+ * deals are on (activePartners_), and the deals themselves for a paid member. Needs the member's own pass link key.
+ * A wrong key is NOT_ALLOWED; a right key for someone not on the current sheet is NOT_FOUND.
+ */
+function memberCard_(req) {
+  const memberId = String(req.memberId || "").trim().toUpperCase();
+  if (!memberId || !linkKeyOk_("pass", memberId, req.k)) throw new ApiError_("NOT_ALLOWED", "This link isn't valid. Ask for a new one.");
+  const member = findMemberById_(loadMembers_(), memberId);
+  if (!member) throw new ApiError_("NOT_FOUND", "We couldn't find this membership for " + membershipYear_() + ". Enter your email to get your pass link again.");
+  const partners = activePartners_();
+  const reply = {
+    ok: true,
+    member: { memberId: member.memberId, name: member.name, ucid: member.ucid, paid: !!member.paid },
+    year: membershipYear_(), fee: getConfig_().membershipFee,
+    dealsActive: partners.length > 0,
+    partners: member.paid ? partners : [],   // deals are for paid members only
+    site: siteInfo_()
+  };
+  if (member.paid && partners.length) log_("Member: " + member.name, "partners.open", member.memberId, {});
+  return reply;
+}
+
 /**
  * Exec adds a member by hand (a sign-up at the table, or someone who paid before the form existed). Any exec (checked by
  * the caller). With paidNow the payment is confirmed in the same step: marked PAID and the pass is emailed.

@@ -52,6 +52,20 @@ async function api(action, details = {}) {
   } finally { if (!quiet) pandaBusy(false); }
 }
 
+// Buttons that record money or registrations send an id for each press. The same press (same details) keeps its id until the
+// server says it worked, so a retry or a second click after a dropped connection gets the saved answer instead of a duplicate.
+const pendingPressIds = {};
+function newRequestId() {
+  return (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 12);
+}
+async function apiOnce(action, details = {}) {
+  const key = action + JSON.stringify(details);
+  const requestId = pendingPressIds[key] || (pendingPressIds[key] = newRequestId());
+  const reply = await api(action, { ...details, requestId });
+  if (reply && reply.ok) delete pendingPressIds[key];   // done: the next press is a new one
+  return reply;
+}
+
 async function apiRequest(action, details = {}) {
   const body = { action, token: state.token, ...(SCANNER_MODE ? { scanner: true } : {}), ...details };   // "scanner" lets the server count this page as a scanner phone
   if (!API_URL) return MockApi.handle(body);   // demo mode

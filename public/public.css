@@ -190,6 +190,13 @@ label.radio:has(input:checked) { border-style: solid; border-color: var(--primar
 }
 .total-row { display: flex; justify-content: space-between; align-items: baseline; padding: 4px 2px 0; font-family: var(--pixel); font-size: 16px; }
 .total-row strong { font-size: 24px; }
+.total-row strong.total-pending { font-size: 15px; color: var(--ink-soft); }
+.form-top { margin-bottom: 18px; flex-wrap: wrap; }
+.form-top .back { margin-bottom: 0; }
+dialog.ask { max-width: min(90vw, 420px); border: 2px dashed var(--gold); border-radius: 8px; background: var(--paper); color: var(--ink); padding: 20px; font-family: var(--serif); }
+dialog.ask::backdrop { background: rgba(30, 25, 15, 0.45); }
+dialog.ask p { margin: 0 0 16px; font-weight: 600; }
+.ask-buttons { display: grid; gap: 10px; justify-items: center; }
 .form-error { color: var(--error); font-weight: 700; margin: 0; text-align: center; }
 .hp { position: absolute; left: -9999px; width: 1px; height: 1px; opacity: 0; }
 
@@ -226,6 +233,7 @@ label.radio:has(input:checked) { border-style: solid; border-color: var(--primar
 .stamp.void { color: #8a7f6a; border-color: #8a7f6a; }
 .ticket-state { font-style: italic; color: var(--ink-soft); margin: 0 0 6px; }
 .mono { font-family: var(--pixel); letter-spacing: 0.5px; }
+.find-tickets { margin-top: 18px; }
 
 /* Feedback stars on the ticket page */
 .feedback { margin-top: 18px; text-align: center; }
@@ -284,6 +292,7 @@ label.radio:has(input:checked) { border-style: solid; border-color: var(--primar
 .my-ticket .when { color: var(--ink-soft, #6b6153); font-size: 14px; }
 .my-ticket .state { font-weight: 600; white-space: nowrap; }
 .my-ticket .state.wait { color: #a1502f; }
+.my-ticket .state.void { color: #8a7f6a; text-decoration: line-through; }
 
 /* "Keep this page" reminder when an event doesn't email confirmations or tickets */
 .keep-note { padding: 10px 14px; border-radius: 10px; background: color-mix(in srgb, var(--accent, #c8202f) 8%, transparent); border: 1px dashed color-mix(in srgb, var(--accent, #c8202f) 40%, transparent); }

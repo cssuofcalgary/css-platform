@@ -101,7 +101,7 @@ async function markSelectedPaid() {
   const tally = { confirmed: 0, emailsSent: 0, emailsWaiting: 0, notEmailed: 0 };
   for (let i = 0; i < orders.length; i += BULK_CHUNK) {
     const ids = orders.slice(i, i + BULK_CHUNK).map((o) => o.id);
-    const reply = await api("markOrdersPaid", { orderIds: ids, siteUrl });
+    const reply = await apiOnce("markOrdersPaid", { orderIds: ids, siteUrl });
     if (!reply.ok) { error = reply; break; }
     emails += reply.emailsSent;
     tally.confirmed += reply.confirmed || 0; tally.emailsSent += reply.emailsSent || 0; tally.emailsWaiting += reply.emailsWaiting || 0; tally.notEmailed += reply.notEmailed || 0;
@@ -152,9 +152,9 @@ async function onAddSubmit(e) {
     siteUrl: new URL(PUBLIC_SITE_URL, location.href).href
   };
   setAddBusy(true);
-  let reply = await api("addOrder", payload);
+  let reply = await apiOnce("addOrder", payload);
   if (!reply.ok && reply.error === "OVER_CAPACITY" && await askConfirm(T.overCapacity(reply.message))) {
-    reply = await api("addOrder", { ...payload, force: true });
+    reply = await apiOnce("addOrder", { ...payload, force: true });
   }
   if (!reply.ok) {
     setAddBusy(false);

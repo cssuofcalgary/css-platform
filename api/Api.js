@@ -87,6 +87,12 @@ function route_(req) {
     case "memberProfile":
       return memberProfile_(req);
 
+    case "memberCard":
+      return memberCard_(req);
+
+    case "membershipInfo":
+      return membershipInfo_();
+
     case "openMyAccess":
       return openMyAccess_(req);
 
@@ -161,10 +167,10 @@ function route_(req) {
       return listOrders_(req.eventId, req);
 
     case "markOrderPaid":
-      return markOrderPaid_(requireSession_(req.token), req.orderId, !!req.force, req.siteUrl);
+      return markOrderPaid_(requireSession_(req.token), req.orderId, !!req.force, req.siteUrl, req.requestId);
 
     case "markOrdersPaid":
-      return markOrdersPaid_(requireSession_(req.token), req.orderIds, req.siteUrl);
+      return markOrdersPaid_(requireSession_(req.token), req.orderIds, req.siteUrl, req.requestId);
 
     case "sendReminders":
       return sendReminders_(requireSession_(req.token), req.eventId, !!req.dryRun);
@@ -173,7 +179,7 @@ function route_(req) {
       return emailAttendees_(requireSession_(req.token), req.eventId, req.audience, req.subject, req.message, !!req.dryRun);
 
     case "addOrder":
-      return addOrder_(requireSession_(req.token), req.eventId, req.order, !!req.force, req.siteUrl);
+      return addOrder_(requireSession_(req.token), req.eventId, req.order, !!req.force, req.siteUrl, req.requestId);
 
     case "refundOrder":
       return refundOrder_(requireSession_(req.token), req.orderId, req.reason);
@@ -299,7 +305,7 @@ function route_(req) {
       return listWaitlist_(req.eventId);
 
     case "offerWaitlistSpot":
-      return offerWaitlistSpot_(requireSession_(req.token), req.entryId, !!req.force, req.siteUrl);
+      return offerWaitlistSpot_(requireSession_(req.token), req.entryId, !!req.force, req.siteUrl, req.requestId);
 
     case "removeWaitlistEntry":
       return removeWaitlistEntry_(requireSession_(req.token), req.entryId);

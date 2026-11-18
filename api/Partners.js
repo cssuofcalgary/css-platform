@@ -105,18 +105,24 @@ function passMember_(req) {
 }
 
 /**
+ * The switched-on partners, as members see them. This is the one deals on/off rule: deals are on while at least one
+ * partner is switched on in Members → Partner deals, and off when none is.
+ */
+function activePartners_() {
+  ensurePartnersSeeded_();
+  return sortedPartners_().filter(function (p) { return p.active; })
+    .map(function (p) { return { name: p.name, offer: p.offer, address: p.address }; });
+}
+
+/**
  * Public, for a member's pass page: the ACTIVE partners, but only with a valid pass link (memberId + key) of a paid member.
  * Opening the list is written to the Log (who looked), like the old "visits".
  */
 function memberPartners_(req) {
   const member = passMember_(req);
-  ensurePartnersSeeded_();
+  const partners = activePartners_();
   log_("Member: " + member.name, "partners.open", member.memberId, {});
-  return {
-    ok: true,
-    partners: sortedPartners_().filter(function (p) { return p.active; })
-      .map(function (p) { return { name: p.name, offer: p.offer, address: p.address }; })
-  };
+  return { ok: true, dealsActive: partners.length > 0, partners: partners };
 }
 
 // ---- Redemptions (the log of who used which deal) --------------------------------------------

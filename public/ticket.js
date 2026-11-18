@@ -85,7 +85,7 @@ function showReply(reply, secret, cached) {
   if (reply.error === "NOT_FOUND") {
     retryRunning = false;
     clearCache(secret);
-    $("page").innerHTML = pandaMarkup("error", { sub: T.ticketNotFound });
+    $("page").innerHTML = pandaMarkup("error", { sub: T.ticketNotFound }) + `<a class="btn find-tickets" href="tickets.html">${T.findTitle}</a>`;
     return;
   }
   if (cached) render(cached.data, { state: "offline", savedAt: cached.savedAt, qr: cached.qr });

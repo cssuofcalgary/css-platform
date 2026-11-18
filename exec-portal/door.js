@@ -455,30 +455,71 @@ async function onDoorListClick(ev) {
 
 // ---- Walk-ins -----------------------------------------------------------------------
 
+/** The "Paid by" box, and a place for the event's questions under the ticket choice (made here, so the page markup stays as it is). */
+function walkInMethodBox() { return $("walkin-form").querySelector('input[name="wi-method"]').closest("fieldset"); }
+function walkInAnswersBox() {
+  let box = $("wi-answers");
+  if (!box) {
+    box = document.createElement("div");
+    box.id = "wi-answers";
+    walkInMethodBox().before(box);
+  }
+  return box;
+}
+
+function walkInQuestions(ticketTypeId) {
+  const questions = (doorState.data && doorState.data.event.questions) || [];
+  return questions.filter((q) => !(q.forTickets || []).length || q.forTickets.includes(ticketTypeId));
+}
+
 function openWalkIn() {
   const types = doorState.data ? doorState.data.event.ticketTypes : [];
-  $("wi-types").innerHTML = types.map((t, i) => `
-    <label class="check"><input type="radio" name="wi-type" value="${escapeHtml(t.id)}" data-member="${t.needsMembership ? 1 : 0}" ${i === types.length - 1 ? "checked" : ""}>
+  // With more than one ticket type nothing is ticked: the volunteer has to choose. With one, it is the only choice.
+  $("wi-types").innerHTML = types.map((t) => `
+    <label class="check"><input type="radio" name="wi-type" value="${escapeHtml(t.id)}" data-member="${t.needsMembership ? 1 : 0}" data-price="${Number(t.price) || 0}" ${types.length === 1 ? "checked" : ""}>
       ${escapeHtml(t.name)} · ${money(t.price)}</label>`).join("");
   ["wi-name", "wi-ucid", "wi-member-id"].forEach((id) => { $(id).value = ""; });
+  const cash = $("walkin-form").querySelector('input[name="wi-method"][value="cash"]');
+  if (cash) cash.checked = true;
+  walkInAnswersBox().innerHTML = "";
   $("wi-error").hidden = true;
   updateWalkInMember();
   $("walkin-form").hidden = false;
   $("wi-name").focus();
 }
 
+/** After a ticket is picked: member ID box for member tickets, the questions for that ticket, and Paid by only when money is due. */
 function updateWalkInMember() {
   const picked = document.querySelector('input[name="wi-type"]:checked');
   $("wi-member").hidden = !(picked && picked.dataset.member === "1");
+  if (picked) $("wi-error").hidden = true;   // "Pick a ticket first." no longer applies
+  walkInMethodBox().hidden = !(picked && Number(picked.dataset.price) > 0);
+  const box = walkInAnswersBox();
+  const before = {};
+  box.querySelectorAll("[data-wq]").forEach((input) => { before[input.dataset.wq] = input.value; });   // keep what was already chosen
+  box.innerHTML = (picked ? walkInQuestions(picked.value) : []).map((q) => {
+    const id = `wi-q-${escapeHtml(q.id)}`;
+    const value = before[q.id] || "";
+    const req = q.required ? "required" : "";
+    const input = q.type === "choice"
+      ? `<select id="${id}" data-wq="${escapeHtml(q.id)}" ${req}><option value="">${T.walkInChoose}</option>${(q.options || []).map((o) =>
+          `<option ${o === value ? "selected" : ""}>${escapeHtml(o)}</option>`).join("")}</select>`
+      : `<input id="${id}" data-wq="${escapeHtml(q.id)}" maxlength="300" value="${escapeHtml(value)}" ${req}>`;
+    return `<label for="${id}">${escapeHtml(q.label)}${q.required ? " *" : ""}</label>${input}`;
+  }).join("");
 }
 
 async function onWalkInSubmit(ev) {
   ev.preventDefault();
   const picked = document.querySelector('input[name="wi-type"]:checked');
+  if (!picked) { $("wi-error").textContent = T.walkInPickTicket; $("wi-error").hidden = false; return; }
+  const answers = {};
+  walkInAnswersBox().querySelectorAll("[data-wq]").forEach((input) => { if (input.value.trim()) answers[input.dataset.wq] = input.value; });
+  const method = document.querySelector('input[name="wi-method"]:checked');
   const walkIn = {
     name: $("wi-name").value, ucid: $("wi-ucid").value, memberId: $("wi-member-id").value,
-    ticketTypeId: picked ? picked.value : "",
-    method: document.querySelector('input[name="wi-method"]:checked').value
+    ticketTypeId: picked.value, answers,
+    method: Number(picked.dataset.price) > 0 && method ? method.value : ""
   };
   $("wi-submit").disabled = true;
   const reply = await api("walkIn", { eventId: doorState.eventId, walkIn });

@@ -46,6 +46,11 @@ const STRINGS = {
     submitting: "Registering…",
     pleaseFill: (what) => `Please fill in: ${what}`,
     cancel: "← Back to event",
+    chooseTickets: "Choose tickets",
+    clearForm: "Clear form",
+    clearConfirm: "Clear everything you've typed on this form, including any friends you added?",
+    clearYes: "Yes, clear it",
+    clearKeep: "Keep it",
 
     // After registering
     almostDone: "Almost done!",
@@ -75,6 +80,8 @@ const STRINGS = {
     myTicketsPaid: "Paid",
     myTicketsCheckedIn: "Checked in",
     myTicketsWaiting: (code) => "Waiting for payment" + (code ? " · code " + code : ""),
+    myTicketsCancelled: "Cancelled",
+    myTicketsBusy: "We couldn't load your tickets just now. Please try again in a minute.",
     myTicketsForget: "Not you? Use a different email",
     reviewTitle: "Registration received!",
     reviewNote: "Because your ticket requires membership verification, your QR code will be issued once an executive reviews your member status.",

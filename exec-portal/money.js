@@ -155,7 +155,7 @@ async function submitPayment(e) {
   };
   $("pay-save").disabled = true;
   $("pay-save").textContent = T.paySaving;
-  const reply = await api("applyTransfer", payload);
+  const reply = await apiOnce("applyTransfer", payload);
   $("pay-save").textContent = T.paySubmit;
   if (!reply.ok && reply.error === "OVER_CAPACITY") {
     payDlg.needFull = "yes";
@@ -249,7 +249,7 @@ async function submitInvalidate(e) {
   $("inv-save").disabled = true;
   const payload = { orderId: invDlg.order.id, ticketIds: picked.map((t) => t.id), reason: $("inv-reason").value };
   if (!$("inv-refund-box").hidden) payload.refundAmount = $("inv-refund").value;
-  const reply = await api("invalidateTickets", payload);
+  const reply = await apiOnce("invalidateTickets", payload);
   if (!reply.ok) {
     $("inv-save").disabled = false;
     if (reply.error === "NOT_LOGGED_IN") { $("invalidate-dialog").close(); return handleEventError(reply, $("inv-error")); }
@@ -300,7 +300,7 @@ function openRefundDialog(order) {
 async function submitRefund(e) {
   e.preventDefault();
   $("rf-save").disabled = true;
-  const reply = await api("recordRefund", {
+  const reply = await apiOnce("recordRefund", {
     refundId: rfDlg.record ? rfDlg.record.id : undefined, orderId: rfDlg.order.id,
     amount: $("rf-amount").value, method: $("rf-method").value, date: $("rf-date").value, by: $("rf-by").value, note: $("rf-note").value
   });
@@ -315,7 +315,7 @@ async function submitRefund(e) {
 }
 
 async function markAlreadyReturned(order) {
-  const reply = await api("recordRefund", { orderId: order.id, unknown: true });
+  const reply = await apiOnce("recordRefund", { orderId: order.id, unknown: true });
   if (!reply.ok) return showToast(errorText(reply));
   showToast(T.rfRecorded(0));
   loadOrders();

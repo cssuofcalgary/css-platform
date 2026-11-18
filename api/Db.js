@@ -25,11 +25,13 @@ const TABLES = {
              "createdAt", "offeredAt", "offeredBy", "orderId", "orderCode", "notes"],
   // Money owed back to people (see Refunds.js). One row per decision; "returns" lists each time money was handed back.
   Refunds: ["id", "orderId", "orderCode", "eventId", "payerName", "payerEmail", "kind", "ticketIds", "owed", "returns", "status", "reason", "createdAt", "createdBy", "closedAt"],
+  // One row per press of a button that records money or registrations, so pressing it again (or a retry) can't record it twice.
+  Requests: ["id", "action", "who", "status", "plan", "reply", "createdAt", "doneAt"],
   Log: ["time", "who", "action", "target", "details"]
 };
 
 /** Columns holding lists/objects; stored as JSON text. */
-const JSON_COLUMNS = { ticketTypes: true, questions: true, answers: true, summary: true, returns: true, ticketIds: true };
+const JSON_COLUMNS = { ticketTypes: true, questions: true, answers: true, summary: true, returns: true, ticketIds: true, plan: true, reply: true };
 
 /**
  * Remembered for the rest of this one request only (each request starts fresh),
@@ -428,4 +430,64 @@ function withLock_(fn) {
 
 function newId_(prefix) {
   return prefix + Utilities.getUuid().replace(/-/g, "").slice(0, 10).toUpperCase();
+}
+
+// ---- Pressing a button twice ---------------------------------------------------------------------
+// The dashboard sends a requestId with each press of a button that records money or registrations, and the SAME id when it
+// tries again (busy server, dropped connection). The Requests tab remembers each press: "started" with the list of writes it
+// is about to make, then "done" with the answer it gave. A repeat of a finished press gets that same answer back and records
+// nothing; a repeat of a press that stopped halfway finishes the same list of writes instead of working it all out again.
+
+/** The page's id for one press (letters, digits and dashes), or "" when it sent none (an older page). */
+function cleanRequestId_(value) {
+  const id = String(value || "");
+  return /^[A-Za-z0-9-]{8,64}$/.test(id) ? id : "";
+}
+
+/** What an earlier try of this press saved, or null. Call it inside the lock (it reads fresh). */
+function savedRequest_(action, rid) {
+  if (!rid) return null;
+  delete DB_.rows["Requests"];
+  return readRows_("Requests").filter(function (r) { return r.id === action + ":" + rid; })[0] || null;
+}
+
+/** Writes down what this press is about to do, before doing any of it. */
+function startRequest_(action, rid, who, plan) {
+  if (!rid) return;
+  insertRow_("Requests", { id: action + ":" + rid, action: action, who: who, status: "started", plan: plan || {}, reply: {}, createdAt: new Date().toISOString(), doneAt: "" });
+}
+
+/** Keeps the answer, so a repeat gets the same one. Never fails the press: what it saved already stops anything being recorded twice. */
+function finishRequest_(action, rid, who, reply) {
+  if (!rid) return;
+  try {
+    const row = savedRequest_(action, rid);
+    const done = { status: "done", reply: reply, doneAt: new Date().toISOString() };
+    if (row) updateRow_("Requests", row.id, done, row._row);
+    else insertRow_("Requests", Object.assign({ id: action + ":" + rid, action: action, who: who, plan: {}, createdAt: done.doneAt }, done));
+  } catch (e) { console.error("Could not keep the answer for " + action + ": " + e.message); }
+}
+
+/**
+ * Carries out a list of planned writes: { table, id, set, was } changes a row, { table, add } adds one. Doing the list a second
+ * time changes nothing: a change sets fixed values, and a row is only added when its id isn't there yet. `was` = what the
+ * row held when the plan was made; if it now holds something else (someone changed it since), that write is skipped and
+ * its id returned, so the screen can say to check it.
+ */
+function applyWrites_(writes) {
+  const rows = {}, skipped = [];
+  const table = function (name) { return rows[name] || (rows[name] = readRows_(name).slice()); };
+  (writes || []).forEach(function (w) {
+    if (w.add) {
+      if (!table(w.table).some(function (r) { return String(r.id) === String(w.add.id); })) insertRow_(w.table, w.add);
+      return;
+    }
+    const row = table(w.table).filter(function (r) { return String(r.id) === String(w.id); })[0];
+    if (!row) { skipped.push(w.id); return; }
+    const holds = function (column, value) { return toCell_(column, row[column]) === toCell_(column, value); };
+    if (Object.keys(w.set).every(function (c) { return holds(c, w.set[c]); })) return;   // done already
+    if (w.was && !Object.keys(w.was).every(function (c) { return holds(c, w.was[c]) || holds(c, w.set[c]); })) { skipped.push(w.id); return; }
+    updateRow_(w.table, w.id, w.set, row._row);
+  });
+  return skipped;
 }

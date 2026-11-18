@@ -138,12 +138,35 @@ function upcomingEventIds_() {
   return live;
 }
 
+/**
+ * Ticket emails right after something was saved. The save has already happened, so a problem here (the email step is busy,
+ * Google hiccups) never turns it into an error that makes someone press the button again: the tickets just stay waiting.
+ */
+function emailsAfterSave_(orderId) {
+  try {
+    return sendPendingTicketEmails_(orderId);
+  } catch (err) {
+    console.error("Ticket emails after a save failed: " + (err && err.message || err)); rememberError_("email", err);
+    let waiting = 0;
+    try { delete DB_.rows["Tickets"]; waiting = readRows_("Tickets").filter(function (t) { return t.orderId === orderId && t.status === "paid" && ticketUnsent_(t); }).length; } catch (e) { /* unknown */ }
+    return { sent: 0, waiting: waiting, notEmailed: 0 };
+  }
+}
+
 /** Finance: the e-transfer arrived. `force` = go over capacity anyway (Finance was warned). */
-function markOrderPaid_(session, orderId, force, siteUrl) {
+function markOrderPaid_(session, orderId, force, siteUrl, requestId) {
   rememberSiteUrl_(siteUrl);
-  const result = withLock_(function () { return markPaidLocked_(session, orderId, force); });
-  const sent = sendPendingTicketEmails_(result.order.id);
-  return { ok: true, alreadyPaid: result.already, repaired: result.repaired || 0, confirmed: result.confirmed || 0, emailsSent: sent.sent, emailsWaiting: sent.waiting, notEmailed: sent.notEmailed || 0, emailsLeftToday: emailsLeftToday_() };
+  const rid = cleanRequestId_(requestId);
+  const result = withLock_(function () {
+    const saved = savedRequest_("markOrderPaid", rid);
+    if (saved && saved.status === "done") return { repeat: saved.reply };   // the same press again: same answer, nothing new
+    return markPaidLocked_(session, orderId, force);
+  });
+  if (result.repeat) return result.repeat;
+  const sent = emailsAfterSave_(result.order.id);
+  const reply = { ok: true, alreadyPaid: result.already, repaired: result.repaired || 0, confirmed: result.confirmed || 0, emailsSent: sent.sent, emailsWaiting: sent.waiting, notEmailed: sent.notEmailed || 0, emailsLeftToday: emailsLeftToday_() };
+  finishRequest_("markOrderPaid", rid, session.name, reply);
+  return reply;
 }
 
 /** The part of "mark paid" that changes data. Call it while holding the lock. */
@@ -181,14 +204,17 @@ function markPaidLocked_(session, orderId, force) {
  */
 const MAX_BULK_ORDERS = 10;
 
-function markOrdersPaid_(session, orderIds, siteUrl) {
+function markOrdersPaid_(session, orderIds, siteUrl, requestId) {
   rememberSiteUrl_(siteUrl);
   const ids = [];
   (Array.isArray(orderIds) ? orderIds : []).forEach(function (id) { if (id && ids.indexOf(id) === -1) ids.push(String(id)); });
   if (!ids.length) throw new ApiError_("BAD_REQUEST", "Pick at least one order.");
   if (ids.length > MAX_BULK_ORDERS) throw new ApiError_("BAD_REQUEST", "Up to " + MAX_BULK_ORDERS + " orders at a time.");
+  const rid = cleanRequestId_(requestId);
 
   const outcomes = withLock_(function () {
+    const saved = savedRequest_("markOrdersPaid", rid);
+    if (saved && saved.status === "done") return { repeat: saved.reply };
     return ids.map(function (id) {
       try {
         const r = markPaidLocked_(session, id, false);
@@ -201,14 +227,18 @@ function markOrdersPaid_(session, orderIds, siteUrl) {
     });
   });
 
+  if (outcomes.repeat) return outcomes.repeat;
+
   let sent = 0, waiting = 0, notEmailed = 0, confirmed = 0;
   outcomes.forEach(function (o) {
     if (!o.ok || (o.already && !o.repaired)) return;
     confirmed += o.confirmed || 0;
-    const r = sendPendingTicketEmails_(o.orderId);
+    const r = emailsAfterSave_(o.orderId);
     sent += r.sent; waiting += r.waiting; notEmailed += r.notEmailed || 0;
   });
-  return { ok: true, results: outcomes, confirmed: confirmed, emailsSent: sent, emailsWaiting: waiting, notEmailed: notEmailed, emailsLeftToday: emailsLeftToday_() };
+  const reply = { ok: true, results: outcomes, confirmed: confirmed, emailsSent: sent, emailsWaiting: waiting, notEmailed: notEmailed, emailsLeftToday: emailsLeftToday_() };
+  finishRequest_("markOrdersPaid", rid, session.name, reply);
+  return reply;
 }
 
 /**

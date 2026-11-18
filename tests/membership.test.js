@@ -58,6 +58,36 @@ ok(run(`route_({ action: "searchMembers", token: __tok, query: "bo" }).membershi
 ok(run(`route_({ action: "getMember", token: __tok, memberId: "CSS0031234" }).membershipFee`) === 15, "a member's page carries the fee");
 ok(run(`listPendingMembers_(0, 20).membershipFee`) === 15, "the Pending list carries the fee");
 
+// ---- Join CSS page: fee, year and e-transfer address come from Settings before anyone submits
+run(`__props.setProperty("ETRANSFER_EMAIL", "pay-test@example.com")`);
+r = J(`route_({ action: "membershipInfo" })`);
+ok(r.v && r.v.ok && r.v.fee === 15 && r.v.year === run("membershipYear_()") && r.v.etransferEmail === "pay-test@example.com", "the Join page reads the saved fee, this year and the e-transfer address: " + JSON.stringify(r.v));
+run(`__props.setProperty("MEMBERSHIP_FEE", "20")`);
+ok(J(`route_({ action: "membershipInfo" })`).v.fee === 20, "a new fee in Settings shows on the Join page straight away");
+run(`__props.setProperty("MEMBERSHIP_FEE", "15")`);
+
+// ---- Member portal pass: the card, deals switch and deals all come from the platform
+run(`TBL.Partners = []; function table_(n) { return { name: n }; }
+TBL.__members = [{ memberId: "CSS0041234", name: "Pat Paid", email: "pat@example.com", ucid: "30222222", paid: true, row: 2, payment: {} },
+  { memberId: "CSS0051234", name: "Una Unpaid", email: "una@example.com", ucid: "30333333", paid: false, status: "Awaiting E-transfer", row: 3, payment: {} }];`);
+const pk = run(`linkKey_("pass", "CSS0041234")`);
+r = J(`route_({ action: "memberCard", memberId: "css0041234", k: ${JSON.stringify(pk)} })`);
+ok(r.v && r.v.ok && r.v.member.name === "Pat Paid" && r.v.member.paid === true && r.v.member.ucid === "30222222" && r.v.member.memberId === "CSS0041234", "a valid pass link gets the member card without the old system");
+ok(r.v && r.v.dealsActive === true && r.v.partners.length === 7, "deals are on while partners are switched on, and a paid member gets the list");
+ok(r.v && r.v.fee === 15 && r.v.year === run("membershipYear_()"), "the card carries the Settings fee and year");
+ok(r.v && !("email" in r.v.member), "the card does not send the email address");
+const uk = run(`linkKey_("pass", "CSS0051234")`);
+r = J(`memberCard_({ memberId: "CSS0051234", k: ${JSON.stringify(uk)} })`);
+ok(r.v && r.v.member.paid === false && r.v.partners.length === 0, "an unpaid member sees their card as unpaid and no deals");
+ok(J(`memberCard_({ memberId: "CSS0041234", k: "wrong" })`).err === "NOT_ALLOWED", "a wrong key is refused as a bad link");
+ok(J(`memberCard_({ memberId: "CSS0041234" })`).err === "NOT_ALLOWED", "no key is refused as a bad link");
+const gone = run(`linkKey_("pass", "CSS0099999")`);
+r = J(`memberCard_({ memberId: "CSS0099999", k: ${JSON.stringify(gone)} })`);
+ok(r.err === "NOT_FOUND" && r.msg.indexOf(run("membershipYear_()")) !== -1, "a real link for someone not on this year's sheet says so: " + r.msg);
+run(`TBL.Partners.forEach(function (p) { p.active = "FALSE"; });`);
+r = J(`memberCard_({ memberId: "CSS0041234", k: ${JSON.stringify(pk)} })`);
+ok(r.v && r.v.dealsActive === false && r.v.partners.length === 0, "switching every partner off turns deals off for members");
+
 // ---- The words on the buttons (exec portal strings.js)
 const strings = {};
 new Function("exports", fs.readFileSync(path.join(__dirname, "..", "exec-portal", "strings.js"), "utf8") + "; exports.T = T;")(strings);

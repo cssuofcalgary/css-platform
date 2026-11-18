@@ -245,6 +245,7 @@ a.link { color: var(--accent); font-weight: 600; text-decoration: none; }
 .editor { display: grid; gap: 8px; margin-top: 8px; }
 .editor h2 { margin: 0 0 4px; }
 .editor label { margin-top: 6px; display: block; }
+#wi-answers { display: contents; }   /* the walk-in questions space out like the form's other fields */
 textarea {
   width: 100%;
   padding: 12px 14px;

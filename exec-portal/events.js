@@ -175,9 +175,24 @@ function copyOfEvent(source) {
   copy.name = `${source.name} (copy)`;
   copy.date = "";
   copy.registrationCloses = "";
-  copy.ticketTypes.forEach((t) => delete t.id);
-  copy.questions.forEach((q) => delete q.id);
+  // new ticket ids for the copy, and each question's "only for these tickets" moved over to them
+  const newIds = {};
+  copy.ticketTypes.forEach((t) => { const id = newTicketTypeId(); if (t.id) newIds[t.id] = id; t.id = id; });
+  copy.questions.forEach((q) => {
+    delete q.id;
+    q.forTickets = (q.forTickets || []).map((id) => newIds[id]).filter(Boolean);
+  });
   return copy;
+}
+
+/** Ticket types get their id here (same shape as the server's), so a question can be tied to a ticket type that isn't saved yet. */
+function newTicketTypeId() {
+  const hex = Array.from(crypto.getRandomValues(new Uint8Array(5)), (b) => b.toString(16).padStart(2, "0")).join("");
+  return "TT" + hex.toUpperCase();
+}
+
+function ensureTicketTypeIds() {
+  eventsState.editing.ticketTypes.forEach((t) => { if (!t.id) t.id = newTicketTypeId(); });
 }
 
 function openEditor(existing, isEdit = !!existing, title) {
@@ -188,6 +203,7 @@ function openEditor(existing, isEdit = !!existing, title) {
     questions: []
   };
   eventsState.editing = JSON.parse(JSON.stringify(e));
+  ensureTicketTypeIds();
 
   $("editor-title").textContent = title || (isEdit ? T.editEventTitle : T.newEventTitle);
   $("editor-hint").textContent = title ? T.duplicateHint : "";
@@ -257,8 +273,19 @@ function renderQuestions() {
         <label>${T.questionOptions}</label>
         <input data-field="options" value="${escapeHtml((q.options || []).join(", "))}">
       </div>
+      ${questionTicketChoice(q)}
       <button type="button" class="link danger" data-remove="question">${T.remove}</button>
     </div>`).join("");
+}
+
+/** "Only for these tickets": one box per ticket type. None ticked = the question is for every ticket. */
+function questionTicketChoice(q) {
+  const types = eventsState.editing.ticketTypes;
+  if (types.length < 2) return "";
+  const picked = q.forTickets || [];
+  return `<fieldset class="for-tickets"><legend>${T.questionForTickets}</legend><div class="chips">${types.map((t) => `
+    <label class="check"><input type="checkbox" data-for-ticket="${escapeHtml(t.id)}" ${picked.includes(t.id) ? "checked" : ""}> ${escapeHtml(t.name || T.ticketUnnamed)}</label>`).join("")}
+  </div></fieldset>`;
 }
 
 /** Copies what's typed in the repeat rows back into eventsState.editing. */
@@ -273,6 +300,9 @@ function readRepeatRows(containerId, key) {
         : field === "options" ? input.value.split(",").map((s) => s.trim()).filter(Boolean)
         : input.value;
     });
+    if (key === "questions" && row.querySelector("[data-for-ticket]")) {
+      item.forTickets = [...row.querySelectorAll("[data-for-ticket]:checked")].map((box) => box.dataset.forTicket);
+    }
   });
 }
 
@@ -281,8 +311,20 @@ function onRepeatClick(event) {
   if (!remove) return;
   const key = remove.dataset.remove === "ticket" ? "ticketTypes" : "questions";
   readAllRows();
-  eventsState.editing[key].splice(Number(remove.closest(".repeat-row").dataset.index), 1);
-  key === "ticketTypes" ? renderTicketTypes() : renderQuestions();
+  const [gone] = eventsState.editing[key].splice(Number(remove.closest(".repeat-row").dataset.index), 1);
+  if (key === "ticketTypes") {
+    // a question that was only for the removed ticket forgets it
+    eventsState.editing.questions.forEach((q) => { q.forTickets = (q.forTickets || []).filter((id) => id !== gone.id); });
+    renderTicketTypes();
+  }
+  renderQuestions();
+}
+
+/** Renaming a ticket type updates the names in each question's "only for these tickets" boxes. */
+function onTicketTypeTyped(event) {
+  if (event.target.dataset.field !== "name") return;
+  readAllRows();
+  renderQuestions();
 }
 
 function onQuestionTypeChange(event) {
@@ -534,8 +576,9 @@ document.addEventListener("touchend", (e) => {
 $("events-list").addEventListener("click", onEventsListClick);
 $("add-ticket-type").addEventListener("click", () => {
   readAllRows();
-  eventsState.editing.ticketTypes.push({ name: "", price: 0, needsMembership: false });
+  eventsState.editing.ticketTypes.push({ id: newTicketTypeId(), name: "", price: 0, needsMembership: false });
   renderTicketTypes();
+  renderQuestions();
 });
 $("add-question").addEventListener("click", () => {
   readAllRows();
@@ -543,6 +586,7 @@ $("add-question").addEventListener("click", () => {
   renderQuestions();
 });
 $("ev-ticket-types").addEventListener("click", onRepeatClick);
+$("ev-ticket-types").addEventListener("change", onTicketTypeTyped);
 $("ev-questions").addEventListener("click", onRepeatClick);
 $("ev-questions").addEventListener("change", onQuestionTypeChange);
 $("ev-image-file").addEventListener("change", onImagePicked);
