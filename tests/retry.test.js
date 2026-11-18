@@ -180,5 +180,57 @@ run(`healthy();`);
 resumed = fn(`invalidateTickets_(S, ${JSON.stringify(inv2)})`);
 ok(resumed.v && resumed.v.ok && run(`TBL.Refunds.length`) === 1 && Number(run(`TBL.Refunds[0].owed`)) === 20 && Number(run(`order("I2").total`)) === 20, "Refund owed: the retry finishes it (one $20 refund owed, order total $20)");
 
+// ---- Independent review R1/R2: a retry must never mistake someone else's payment for its own, or write a refund it can't justify
+// R1: two real $5 payments. A is cut off before its order write, B goes through, then A is retried.
+run(`reset(); ord("R1", "awaiting", 20, { received: "0" }); tk("TKTR1", "R1", "awaiting", 20); failNext("update", "Orders");`);
+const payA = { orderIds: ["R1"], amount: 5, short: "wait", requestId: "transfer-A-001" };
+half = fn(`applyTransfer_(S, ${JSON.stringify(payA)})`);
+ok(half.err && Number(run(`order("R1").received`)) === 0, "R1: payment A is cut off before the order is changed");
+run(`healthy();`);
+const payB = fn(`applyTransfer_(S, ${JSON.stringify({ orderIds: ["R1"], amount: 5, short: "wait", requestId: "transfer-B-001" })})`);
+ok(payB.v && payB.v.ok && Number(run(`order("R1").received`)) === 5, "R1: a separate $5 payment B goes through");
+let retryA = fn(`applyTransfer_(S, ${JSON.stringify(payA)})`);
+ok(retryA.v && retryA.v.ok === false && retryA.v.error === "NEEDS_REVIEW", "R1: retrying A asks Finance to check instead of claiming it was saved: " + JSON.stringify(retryA.v && retryA.v.message));
+ok(Number(run(`order("R1").received`)) === 5 && /RT-R1/.test(retryA.v.message), "R1: nothing more is recorded, and the message names the order to check");
+ok(same(fn(`applyTransfer_(S, ${JSON.stringify(payA)})`).v, retryA.v) && Number(run(`order("R1").received`)) === 5, "R1: pressing A again gives the same 'check it' answer and still records nothing");
+const payA2 = fn(`applyTransfer_(S, ${JSON.stringify(Object.assign({}, payA, { requestId: "transfer-A-002" }))})`);
+ok(payA2.v && payA2.v.ok && Number(run(`order("R1").received`)) === 10, "R1: after checking, Finance records A as a new press and both $5 payments count ($10)");
+
+// R2: A is $25 on a $20 order (refund $5 extra), cut off before the order write; B records $10; A is retried.
+run(`reset(); ord("R2", "awaiting", 20, { received: "0" }); tk("TKTR2", "R2", "awaiting", 20); failNext("update", "Orders");`);
+const overA = { orderIds: ["R2"], amount: 25, over: "refund", requestId: "transfer-A-003" };
+half = fn(`applyTransfer_(S, ${JSON.stringify(overA)})`);
+run(`healthy();`);
+fn(`applyTransfer_(S, ${JSON.stringify({ orderIds: ["R2"], amount: 10, short: "wait", requestId: "transfer-B-003" })})`);
+retryA = fn(`applyTransfer_(S, ${JSON.stringify(overA)})`);
+ok(retryA.v && retryA.v.error === "NEEDS_REVIEW", "R2: retrying the overpayment after another payment asks Finance to check");
+ok(run(`TBL.Refunds.length`) === 0 && Number(run(`order("R2").received`)) === 10 && run(`order("R2").status`) === "awaiting",
+  "R2: no $5 refund owed is created and the order isn't marked paid (received stays $10)");
+
+// The ordinary case still works: the order step saved, then the reply got lost. The repeat knows it was this press.
+run(`reset(); ord("R3", "awaiting", 20, { received: "0" }); tk("TKTR3", "R3", "awaiting", 20); failNext("insert", "Refunds");`);
+const overC = { orderIds: ["R3"], amount: 25, over: "refund", requestId: "transfer-C-001" };
+half = fn(`applyTransfer_(S, ${JSON.stringify(overC)})`);
+ok(half.err && Number(run(`order("R3").received`)) === 25 && run(`order("R3").lastWrite`) === "applyTransfer:transfer-C-001", "The order remembers which press changed it");
+run(`healthy();`);
+const resumedC = fn(`applyTransfer_(S, ${JSON.stringify(overC)})`);
+ok(resumedC.v && resumedC.v.ok && Number(run(`order("R3").received`)) === 25 && run(`TBL.Refunds.length`) === 1 && run(`order("R3").status`) === "paid",
+  "Cut off after the order step: the retry finishes (received $25 once, one $5 refund owed, paid)");
+
+// Even when another payment left the exact numbers this press planned, a repeat that already changed the order isn't confused.
+run(`reset(); ord("R4", "awaiting", 20, { received: "0" }); tk("TKTR4", "R4", "awaiting", 20);`);
+const payD = { orderIds: ["R4"], amount: 5, short: "wait", requestId: "transfer-D-001" };
+const firstD = fn(`applyTransfer_(S, ${JSON.stringify(payD)})`);
+ok(firstD.v && same(fn(`applyTransfer_(S, ${JSON.stringify(payD)})`).v, firstD.v) && Number(run(`order("R4").received`)) === 5, "A finished $5 press repeated: same answer, $5 once");
+
+// Refund owed: the order changed between a cut-off try and its retry -> no refund owed is written, Finance checks.
+run(`reset(); ord("R5", "paid", 40); tk("TKTR5A", "R5", "paid", 20); tk("TKTR5B", "R5", "paid", 20); failNext("update", "Orders");`);
+const invR = { orderId: "R5", ticketIds: ["TKTR5B"], reason: "TEST", requestId: "inv-press-0005" };
+half = fn(`invalidateTickets_(S, ${JSON.stringify(invR)})`);
+run(`healthy(); realUpdate("Orders", "R5", { total: 30, notes: "TEST changed by someone else" });`);
+const invRetry = fn(`invalidateTickets_(S, ${JSON.stringify(invR)})`);
+ok(invRetry.v && invRetry.v.error === "NEEDS_REVIEW" && run(`TBL.Refunds.length`) === 0 && run(`TBL.Tickets[1].status`) === "paid",
+  "Refund owed: the order changed since the cut-off try, so nothing more is written (no refund owed, ticket still valid)");
+
 console.log(fails ? "\n" + fails + " FAILED" : "\nALL RETRY TESTS PASS");
 process.exit(fails ? 1 : 0);

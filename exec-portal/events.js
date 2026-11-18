@@ -6,7 +6,8 @@ const eventsState = { events: [], editing: null, loaded: false, showArchived: fa
 
 // ---- Tabs -------------------------------------------------------------------
 
-function switchTab(name) {
+async function switchTab(name) {
+  if (!(await leaveEventEditor())) return;
   document.querySelectorAll(".tab").forEach((b) => b.classList.toggle("active", b.dataset.tab === name));
   $("tab-overview").hidden = name !== "overview";
   $("tab-members").hidden = name !== "members";
@@ -171,7 +172,7 @@ ${T.deleteMoneyConfirm}`))) { button.disabled = false; return; }
 /** A new event that starts as a copy of another: same prices, questions, capacity. The date is left for you to pick. */
 function copyOfEvent(source) {
   const copy = JSON.parse(JSON.stringify(source));
-  ["id", "slug", "status", "entryOpen", "createdBy", "createdAt", "updatedBy", "updatedAt"].forEach((k) => delete copy[k]);
+  ["id", "slug", "status", "entryOpen", "summary", "editDraft", "createdBy", "createdAt", "updatedBy", "updatedAt"].forEach((k) => delete copy[k]);
   copy.name = `${source.name} (copy)`;
   copy.date = "";
   copy.registrationCloses = "";
@@ -196,13 +197,15 @@ function ensureTicketTypeIds() {
 }
 
 function openEditor(existing, isEdit = !!existing, title) {
-  const e = existing || {
+  const e = existing ? { ...existing, ...existing.editDraft } : {
     name: "", date: "", startTime: "", endTime: "", location: "", description: "",
     capacity: null, capacityRule: "paid", imageFileId: "", imageUrl: "", codePrefix: "",
     ticketTypes: [{ name: "Member", price: 0, needsMembership: true }, { name: "Non-member", price: 0 }],
     questions: []
   };
   eventsState.editing = JSON.parse(JSON.stringify(e));
+  delete eventsState.editing.summary;
+  delete eventsState.editing.editDraft;
   ensureTicketTypeIds();
 
   $("editor-title").textContent = title || (isEdit ? T.editEventTitle : T.newEventTitle);
@@ -236,13 +239,35 @@ function openEditor(existing, isEdit = !!existing, title) {
   window.scrollTo(0, 0);
   $("ev-name").focus();
   updateEditorStep();
+  eventsState.savedEditor = JSON.stringify(readEventEditor());
+  setEditorBusy(false);
 }
 
-function showEventsList() {
+async function showEventsList() {
+  if (!(await leaveEventEditor())) return;
   $("event-detail-view").hidden = true;
   $("event-editor-view").hidden = true;
   $("events-list-view").hidden = false;
 }
+
+function eventEditorDirty() {
+  return !!eventsState.editing && !$("event-editor-view").hidden &&
+    (eventsState.saving || eventsState.uploading || JSON.stringify(readEventEditor()) !== eventsState.savedEditor);
+}
+
+async function leaveEventEditor() {
+  if (eventsState.saving || eventsState.uploading) { setEditorError(T.eventWait); return false; }
+  if (eventEditorDirty() && !(await askConfirm(T.eventLeaveConfirm, T.eventLeave))) return false;
+  eventsState.editing = null;
+  return true;
+}
+
+// Browsers require their own warning for refresh/close; a custom dialog cannot delay closing a tab.
+window.addEventListener("beforeunload", (event) => {
+  if (!eventEditorDirty()) return;
+  event.preventDefault();
+  event.returnValue = "";
+});
 
 function renderTicketTypes() {
   $("ev-ticket-types").innerHTML = eventsState.editing.ticketTypes.map((t, i) => `
@@ -252,7 +277,11 @@ function renderTicketTypes() {
         <div><label>${T.ticketPrice}</label><input data-field="price" type="number" min="0" step="0.5" inputmode="decimal" value="${t.price ?? 0}"></div>
       </div>
       <label class="check"><input type="checkbox" data-field="needsMembership" ${t.needsMembership ? "checked" : ""}> ${T.needsMembership}</label>
-      <button type="button" class="link danger" data-remove="ticket">${T.remove}</button>
+      <div class="ticket-actions">
+        <button type="button" class="link" data-move="-1" ${i === 0 ? "disabled" : ""}>${T.ticketMoveUp}</button>
+        <button type="button" class="link" data-move="1" ${i === eventsState.editing.ticketTypes.length - 1 ? "disabled" : ""}>${T.ticketMoveDown}</button>
+        <button type="button" class="link danger" data-remove="ticket">${T.remove}</button>
+      </div>
     </div>`).join("");
 }
 
@@ -307,6 +336,14 @@ function readRepeatRows(containerId, key) {
 }
 
 function onRepeatClick(event) {
+  const move = event.target.closest("[data-move]");
+  if (move) {
+    readAllRows();
+    moveTicketType(Number(move.closest(".repeat-row").dataset.index), Number(move.dataset.move));
+    renderTicketTypes();
+    renderQuestions();
+    return;
+  }
   const remove = event.target.closest("[data-remove]");
   if (!remove) return;
   const key = remove.dataset.remove === "ticket" ? "ticketTypes" : "questions";
@@ -318,6 +355,13 @@ function onRepeatClick(event) {
     renderTicketTypes();
   }
   renderQuestions();
+}
+
+function moveTicketType(index, direction) {
+  const types = eventsState.editing.ticketTypes;
+  const next = index + direction;
+  if (next < 0 || next >= types.length) return;
+  [types[index], types[next]] = [types[next], types[index]];
 }
 
 /** Renaming a ticket type updates the names in each question's "only for these tickets" boxes. */
@@ -343,14 +387,19 @@ async function onImagePicked() {
   const file = $("ev-image-file").files[0];
   if (!file) return;
   if (file.size > 15 * 1024 * 1024) { $("ev-image-status").textContent = T.imageTooBig; return; }
+  eventsState.uploading = true;
+  setEditorBusy(true);
   $("ev-image-status").textContent = T.uploading;
-  const dataUrl = await shrinkImage(file, 1600, 0.85);
-  const reply = await api("uploadImage", { dataUrl, filename: file.name });
-  if (!reply.ok) return handleEventError(reply, $("ev-image-status"));
-  eventsState.editing.imageFileId = reply.fileId;
-  eventsState.editing.imageUrl = reply.url;
-  showImagePreview(dataUrl);
-  $("ev-image-status").textContent = T.uploaded;
+  try {
+    const dataUrl = await shrinkImage(file, 1600, 0.85);
+    const reply = await api("uploadImage", { dataUrl, filename: file.name });
+    if (!reply.ok) return handleEventError(reply, $("ev-image-status"));
+    eventsState.editing.imageFileId = reply.fileId;
+    eventsState.editing.imageUrl = reply.url;
+    showImagePreview(dataUrl);
+    $("ev-image-status").textContent = T.uploaded;
+  } catch (error) { $("ev-image-status").textContent = errorText({ error: "NETWORK" }); }
+  finally { eventsState.uploading = false; setEditorBusy(false); }
 }
 
 /** "Pick a previous image": a grid of the pictures already in Drive; clicking one reuses it (no re-upload). */
@@ -402,10 +451,10 @@ function showImagePreview(url) {
 
 // ---- Save -------------------------------------------------------------------
 
-async function saveEvent(publish) {
+function readEventEditor() {
   readAllRows();
   const e = eventsState.editing;
-  const payload = {
+  return {
     ...e,
     name: $("ev-name").value,
     date: $("ev-date").value,
@@ -422,26 +471,66 @@ async function saveEvent(publish) {
     codePrefix: $("ev-code-prefix").value,
     registrationCloses: $("ev-closes").value
   };
-  if (publish && e.status !== "published" && !(await askConfirm(T.confirmPublish))) return;
+}
 
+async function saveEvent(publish) {
+  if (eventsState.saving || eventsState.uploading) return;
+  const payload = readEventEditor();
+  if (publish && !(await askConfirm(payload.status === "published" || payload.status === "closed" ? T.eventPublishConfirm : T.confirmPublish))) return;
+
+  eventsState.saving = true;
   setEditorBusy(true);
-  const reply = await api("saveEvent", { event: payload });
-  if (!reply.ok) { setEditorBusy(false); return setEditorError(errorText(reply)); }
-
-  if (publish && reply.event.status !== "published") {
-    const status = await api("setEventStatus", { eventId: reply.event.id, status: "published" });
-    if (!status.ok) { setEditorBusy(false); return setEditorError(errorText(status)); }
+  try {
+    const reply = await api("saveEvent", { event: { ...payload, saveDraft: !publish, publish } });
+    if (!reply.ok) return setEditorError(errorText(reply));
+    eventsState.editing = null;
+    eventsState.loaded = false;
+  } catch (error) {
+    setEditorError(errorText({ error: "NETWORK" }));
+    return;
+  } finally {
+    eventsState.saving = false;
+    setEditorBusy(false);
   }
-  setEditorBusy(false);
-  eventsState.loaded = false;
-  showEventsList();
+  await showEventsList();
   loadEvents();
 }
 
 function setEditorBusy(busy) {
-  $("save-draft-button").disabled = busy;
-  $("save-publish-button").disabled = busy;
-  $("save-publish-button").textContent = busy ? T.saving : T.savePublish;
+  $("event-form").querySelectorAll("input, select, textarea, button").forEach((el) => { el.disabled = busy; });
+  if (!busy && eventsState.editing) {
+    $("ev-ticket-types").querySelectorAll("[data-move]").forEach((button) => {
+      const next = Number(button.closest(".repeat-row").dataset.index) + Number(button.dataset.move);
+      button.disabled = next < 0 || next >= eventsState.editing.ticketTypes.length;
+    });
+  }
+  const live = eventsState.editing && ["published", "closed"].includes(eventsState.editing.status);
+  $("save-publish-button").textContent = busy ? T.saving : live ? T.eventPublishChanges : T.savePublish;
+}
+
+function previewEvent() {
+  if (eventsState.saving || eventsState.uploading) return;
+  const draft = readEventEditor();
+  const key = newTicketTypeId();
+  const url = new URL(PUBLIC_SITE_URL, location.href);
+  url.hash = "preview=" + key;
+  const preview = window.open(url.href, "_blank");
+  if (!preview) return setEditorError(T.eventPreviewBlocked);
+  const receive = (message) => {
+    if (message.source !== preview || message.origin !== url.origin || message.data?.previewReady !== key) return;
+    preview.postMessage({ previewKey: key, event: {
+      name: draft.name, slug: draft.slug || "", description: draft.description, date: draft.date,
+      startTime: draft.startTime, endTime: draft.endTime, location: draft.location, imageUrl: draft.imageUrl,
+      ticketTypes: draft.ticketTypes, questions: draft.questions,
+      registrationCloses: draft.registrationCloses || (draft.date ? draft.date + "T" + (draft.startTime || "23:59") : ""),
+      registrationOpen: true, spotsLeft: null, soldOut: false,
+      previewLabel: T.eventPreviewLabel
+    } }, url.origin);
+    window.removeEventListener("message", receive);
+    clearTimeout(timeout);
+  };
+  window.addEventListener("message", receive);
+  const timeout = setTimeout(() => window.removeEventListener("message", receive), 60000);
 }
 
 function setEditorError(text) {
@@ -594,3 +683,10 @@ $("ev-image-pick").addEventListener("click", togglePreviousImages);
 $("ev-image-grid").addEventListener("click", onPreviousImageClick);
 $("event-form").addEventListener("submit", (ev) => { ev.preventDefault(); saveEvent(false); });
 $("save-publish-button").addEventListener("click", () => saveEvent(true));
+const previewButton = document.createElement("button");
+previewButton.type = "button";
+previewButton.id = "event-preview-button";
+previewButton.className = "secondary";
+previewButton.textContent = T.eventPreview;
+previewButton.addEventListener("click", previewEvent);
+$("save-draft-button").before(previewButton);

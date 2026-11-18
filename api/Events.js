@@ -36,6 +36,7 @@ function eventFromRow_(row) {
     archivedAt: row.archivedAt || "",       // set once the event's tickets and orders have moved to the yearly archive (Archive.js)
     archiveYear: row.archiveYear || "",
     summary: row.summary || {},            // frozen numbers of an archived event
+    editDraft: (row.summary || {}).editDraft || null,
     createdBy: row.createdBy,
     createdAt: row.createdAt,
     updatedBy: row.updatedBy,
@@ -87,7 +88,9 @@ function spotsTaken_(event) {
 // ---- Exec actions -----------------------------------------------------------
 
 function saveEvent_(session, input) {
-  const clean = cleanEventInput_(input || {});
+  input = input || {};
+  if (input.saveDraft === true && input.publish === true) throw new ApiError_("BAD_REQUEST", "Choose Save draft or Publish changes.");
+  const clean = cleanEventInput_(input, input.saveDraft === true);
   return withLock_(function () {
     const now = new Date().toISOString();
     const events = allEvents_();
@@ -95,7 +98,21 @@ function saveEvent_(session, input) {
     if (clean.id) {
       const current = events.filter(function (e) { return e.id === clean.id; })[0];
       if (!current) throw new ApiError_("NOT_FOUND", "That event no longer exists.");
+      if (current.status === "archived") throw new ApiError_("BAD_REQUEST", "Restore this event before editing it.");
+      // Use the existing JSON cell: live fields remain the source for registration, the door and public reads.
+      const summary = Object.assign({}, current.summary);
+      if (input.saveDraft === true && current.status !== "draft") {
+        summary.editDraft = clean;
+        if (JSON.stringify(summary).length > 45000) throw new ApiError_("BAD_REQUEST", "This draft is too long. Shorten the description or questions and try again.");
+        const changes = { summary: summary, updatedBy: session.name, updatedAt: now };
+        updateRow_("Events", current.id, changes);
+        log_(session.name, "event.draft", current.id, { name: clean.name });
+        return { ok: true, event: eventFromRow_(Object.assign({}, rowOf_(current), changes)) };
+      }
+      delete summary.editDraft;
       const changes = Object.assign({}, clean, { updatedBy: session.name, updatedAt: now });
+      changes.summary = summary;
+      if (input.publish === true) changes.status = "published";
       delete changes.id;
       delete changes.slug;   // the public link never changes once created
       updateRow_("Events", current.id, changes);
@@ -106,7 +123,7 @@ function saveEvent_(session, input) {
     const event = Object.assign({}, clean, {
       id: newId_("EV"),
       slug: uniqueSlug_(clean.name, events),
-      status: "draft",
+      status: input.publish === true ? "published" : "draft",
       entryOpen: false,
       createdBy: session.name,
       createdAt: now,
@@ -133,6 +150,10 @@ function setEventStatus_(session, eventId, status) {
     if (status === "closed") return restored;
   }
   return withLock_(function () {
+    if (status === "published") {
+      const latest = findEvent_(function (e) { return e.id === eventId; });
+      cleanEventInput_(latest);   // incomplete drafts must be finished before they can go public
+    }
     updateRow_("Events", eventId, { status: status, updatedBy: session.name, updatedAt: new Date().toISOString() });
     log_(session.name, "event.status", eventId, { status: status });
     return { ok: true };
@@ -277,13 +298,15 @@ function isRealDate_(iso) {
   return d.getUTCFullYear() === p[0] && d.getUTCMonth() === p[1] - 1 && d.getUTCDate() === p[2];
 }
 
-function cleanEventInput_(input) {
+function cleanEventInput_(input, draft) {
   const text = function (v, max) { return String(v === undefined || v === null ? "" : v).trim().slice(0, max || 200); };
   const name = text(input.name, 120);
-  if (!name) throw new ApiError_("BAD_REQUEST", "The event needs a name.");
+  if (!name && !draft) throw new ApiError_("BAD_REQUEST", "The event needs a name.");
   const date = text(input.date, 10);
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new ApiError_("BAD_REQUEST", "The event needs a date.");
-  if (!isRealDate_(date)) throw new ApiError_("BAD_REQUEST", "That date doesn't exist (" + date + "). Check the day and month.");
+  if (!(draft && !date)) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new ApiError_("BAD_REQUEST", "The event needs a date.");
+    if (!isRealDate_(date)) throw new ApiError_("BAD_REQUEST", "That date doesn't exist (" + date + "). Check the day and month.");
+  }
   ["startTime", "endTime"].forEach(function (k) {
     const v = text(input[k], 5);
     if (v && !/^([01]\d|2[0-3]):[0-5]\d$/.test(v)) throw new ApiError_("BAD_REQUEST", "The " + (k === "startTime" ? "start" : "end") + " time doesn't look right (use hours and minutes, like 18:30).");
@@ -291,7 +314,7 @@ function cleanEventInput_(input) {
 
   const ticketTypes = (input.ticketTypes || []).map(function (t) {
     const price = Number(t.price);
-    if (!text(t.name, 60)) throw new ApiError_("BAD_REQUEST", "Every ticket type needs a name.");
+    if (!text(t.name, 60) && !draft) throw new ApiError_("BAD_REQUEST", "Every ticket type needs a name.");
     if (!isFinite(price) || price < 0 || price > MAX_TICKET_PRICE) throw new ApiError_("BAD_REQUEST", "Ticket prices must be between $0 and $" + MAX_TICKET_PRICE + ".");
     return {
       id: text(t.id, 20) || newId_("TT"),
@@ -300,9 +323,12 @@ function cleanEventInput_(input) {
       needsMembership: !!t.needsMembership
     };
   });
-  if (!ticketTypes.length) throw new ApiError_("BAD_REQUEST", "Add at least one ticket type.");
+  if (!ticketTypes.length && !draft) throw new ApiError_("BAD_REQUEST", "Add at least one ticket type.");
   const typeIds = {};
-  ticketTypes.forEach(function (t) { typeIds[t.id] = true; });
+  ticketTypes.forEach(function (t) {
+    if (typeIds[t.id]) throw new ApiError_("BAD_REQUEST", "Two ticket types have the same ID. Remove the extra ticket type and try again.");
+    typeIds[t.id] = true;
+  });
 
   const questions = (input.questions || []).filter(function (q) { return text(q.label); }).map(function (q) {
     const type = q.type === "choice" ? "choice" : "text";
@@ -310,7 +336,7 @@ function cleanEventInput_(input) {
       ? (Array.isArray(q.options) ? q.options : String(q.options || "").split(","))
           .map(function (o) { return text(o, 60); }).filter(Boolean)
       : [];
-    if (type === "choice" && options.length < 2) throw new ApiError_("BAD_REQUEST", "Choice questions need at least 2 options.");
+    if (type === "choice" && options.length < 2 && !draft) throw new ApiError_("BAD_REQUEST", "Choice questions need at least 2 options.");
     // forTickets: the ticket types this question is for. Empty = every ticket type. Ids of ticket types that no longer exist are dropped.
     const forTickets = (Array.isArray(q.forTickets) ? q.forTickets : []).map(function (id) { return text(id, 20); })
       .filter(function (id, i, all) { return typeIds[id] && all.indexOf(id) === i; });

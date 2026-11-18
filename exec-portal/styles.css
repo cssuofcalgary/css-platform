@@ -489,3 +489,5 @@ body.scanner-mode .content { max-width: 520px; }
   .pl-frames-2 .pl-f1 { opacity: 0; }
   .pl-dots i { animation: none; transform: scale(1); opacity: 1; }
 }
+.ticket-actions { display: flex; flex-wrap: wrap; gap: 0.5rem 1rem; }
+.ticket-actions button:disabled { opacity: 0.4; cursor: default; }

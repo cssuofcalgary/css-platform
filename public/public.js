@@ -4,6 +4,7 @@
 const $ = (id) => document.getElementById(id);
 
 async function api(action, details = {}) {
+  if (new URLSearchParams(location.hash.slice(1)).has("preview")) return { ok: false, error: "PREVIEW" };
   try {
     const res = await fetch(API_URL, {
       signal: AbortSignal.timeout(30000),   // never stay on "Loading…" forever
@@ -63,6 +64,10 @@ async function showEvent(slug) {
   const reply = await api("publicEvent", { slug });
   if (!reply.ok) return showPandaError(reply.error === "NOT_FOUND" ? T.notFound : T.error, reply.error === "NOT_FOUND" ? null : () => showEvent(slug), true);
   const e = reply.event;
+  renderEvent(e);
+}
+
+function renderEvent(e) {
   document.title = `${e.name} · CSS`;
 
   $("page").innerHTML = `
@@ -70,11 +75,13 @@ async function showEvent(slug) {
     <article class="event">
       ${e.imageUrl ? `<img class="hero" src="${escapeAttr(e.imageUrl)}" alt="" onerror="this.remove()">` : ""}
       <h1 class="event-name">${escapeHtml(e.name)}</h1>
+      ${e.previewLabel ? `<p class="notice">${escapeHtml(e.previewLabel)}</p>` : ""}
 
       <dl class="facts">
-        <div><dt>${T.when}</dt><dd>${escapeHtml(formatDate(e.date))}${timeRange(e) ? `<br>${escapeHtml(timeRange(e))}` : ""}</dd></div>
+        <div><dt>${T.when}</dt><dd>${escapeHtml(formatDate(e.date))}${timeRange(e) ? `<br>${escapeHtml(timeRange(e))}` : ""}${e.registrationCloses ? `<br>${escapeHtml(T.closesAt(formatDateTime(e.registrationCloses)))}` : ""}</dd></div>
         ${e.location ? `<div><dt>${T.where}</dt><dd>${escapeHtml(e.location)}</dd></div>` : ""}
       </dl>
+      ${e.description ? `<section class="description">${paragraphs(e.description)}</section>` : ""}
       <hr class="perforation">
 
       <section class="tickets">
@@ -86,7 +93,6 @@ async function showEvent(slug) {
         ${registerBlock(e)}
       </section>
 
-      ${e.description ? `<hr class="perforation"><section class="description">${paragraphs(e.description)}</section>` : ""}
     </article>`;
   currentEvent = e;
   const open = $("open-register");
@@ -96,12 +102,13 @@ async function showEvent(slug) {
 }
 
 function registerBlock(e) {
+  if (e.previewLabel) return `<button class="register" disabled>${T.register}</button>`;
   if (e.soldOut) return `<p class="notice">${T.soldOut}</p>${e.waitlistOpen ? `<button class="register" id="open-waitlist">${T.waitlistJoin}</button>` : ""}`;
   if (!e.registrationOpen) return `<p class="notice">${T.closed}</p>`;
   return `
     ${e.spotsLeft !== null && e.spotsLeft <= 20 ? `<p class="spots">${T.spotsLeft(e.spotsLeft)}</p>` : ""}
-    <button class="register" id="open-register">${T.register}</button>
-    <p class="muted small">${e.ticketTypes.some((t) => Number(t.price) > 0) ? T.payNote + " " : ""}${e.registrationCloses ? T.closesAt(formatDateTime(e.registrationCloses)) : ""}</p>`;
+    ${e.ticketTypes.some((t) => Number(t.price) > 0) ? `<p class="muted small">${T.payNote}</p>` : ""}
+    <button class="register" id="open-register">${T.register}</button>`;
 }
 
 function formatDateTime(local) {
@@ -533,6 +540,26 @@ function start() {
   $("contact-link").href = "mailto:" + CONTACT_EMAIL;
   $("instagram-link").href = INSTAGRAM_URL;
 
+  const previewKey = new URLSearchParams(location.hash.slice(1)).get("preview");
+  if (previewKey) {
+    const editor = window.opener;
+    if (!editor) return showPandaError(T.error, null, true);
+    // The editor can be on a different host. Only the opener and this one-use key may supply the preview.
+    const receive = (message) => {
+      if (message.source !== editor || message.data?.previewKey !== previewKey || !message.data.event) return;
+      window.removeEventListener("message", receive);
+      clearTimeout(timeout);
+      window.opener = null;
+      renderEvent(message.data.event);
+    };
+    window.addEventListener("message", receive);
+    editor.postMessage({ previewReady: previewKey }, "*");
+    const timeout = setTimeout(() => {
+      window.removeEventListener("message", receive);
+      showPandaError(T.error, null, true);
+    }, 60000);
+    return;
+  }
   const slug = new URLSearchParams(location.search).get("e");
   slug ? showEvent(slug) : showEventList();
 }

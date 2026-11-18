@@ -127,7 +127,7 @@ function invalidateTickets_(session, req) {
       writes.push({ table: "Refunds", add: refund });
     }
     const plan = {
-      writes: writes,
+      op: "invalidateTickets:" + (rid || newId_("OP")), writes: writes,
       log: [wasPaid ? "order.refunded" : "order.cancelled", order.code, { total: order.total, tickets: chosen.length, whole: whole, owed: dollars_(owedCents), reason: reason }],
       reply: {
         ok: true, invalidated: chosen.length, paidInvalidated: paidOnes.length, whole: whole,
@@ -142,9 +142,14 @@ function invalidateTickets_(session, req) {
 
 /** Carries out a planned invalidation (inside the lock). Running it again for the same plan changes nothing more. */
 function carryOutInvalidate_(session, rid, plan) {
-  const skipped = applyWrites_(plan.writes);
-  log_(session.name, plan.log[0], plan.log[1], plan.log[2]);
-  const reply = skipped.length ? Object.assign({}, plan.reply, { changedMeanwhile: skipped }) : plan.reply;
+  const result = applyWrites_(plan.writes, plan.op);
+  let reply = plan.reply;
+  if (result.conflicts.length) {   // the order or a ticket changed since: write nothing more (no refund owed) and ask Finance to check
+    log_(session.name, "refund.needsReview", plan.log[1], { conflicts: result.conflicts, planned: plan.log[2] });
+    reply = needsReviewReply_(result.conflicts, result.done);
+  } else {
+    log_(session.name, plan.log[0], plan.log[1], plan.log[2]);
+  }
   finishRequest_("invalidateTickets", rid, session.name, reply);
   return reply;
 }

@@ -62,7 +62,8 @@ async function apiOnce(action, details = {}) {
   const key = action + JSON.stringify(details);
   const requestId = pendingPressIds[key] || (pendingPressIds[key] = newRequestId());
   const reply = await api(action, { ...details, requestId });
-  if (reply && reply.ok) delete pendingPressIds[key];   // done: the next press is a new one
+  // Done, or "check this order first": either way the next press is a new one (after checking, Finance records it afresh).
+  if (reply && (reply.ok || reply.error === "NEEDS_REVIEW")) delete pendingPressIds[key];
   return reply;
 }
 

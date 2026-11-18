@@ -30,6 +30,7 @@ function applyTransfer_(session, req) {
   const full = req.full === "confirm" || req.full === "refund" ? req.full : "";
   const force = full === "confirm";
   const rid = cleanRequestId_(req.requestId);
+  const op = "applyTransfer:" + (rid || newId_("OP"));   // marks the orders this press changes (see applyWrites_)
 
   const outcome = withLock_(function () {
     // The same press again (the answer got lost, or it stopped halfway): never add the money a second time.
@@ -75,7 +76,7 @@ function applyTransfer_(session, req) {
         reason: allClosed ? "Payment arrived after the registration was cancelled" : "Payment arrived but the event is full", createdAt: now, createdBy: session.name, closedAt: ""
       };
       writes.push({ table: "Refunds", add: rec });
-      const plan = { writes: writes, paidIds: [], force: false, log: ["payment.refund", first.code, { amount: dollars_(amountC), why: rec.kind }],
+      const plan = { op: op, writes: writes, paidIds: [], force: false, log: ["payment.refund", first.code, { amount: dollars_(amountC), why: rec.kind }],
         outcome: { mode: "refund", refund: { id: rec.id, owed: rec.owed } } };
       startRequest_("applyTransfer", rid, session.name, plan);
       return carryOutTransfer_(session, plan);
@@ -155,7 +156,7 @@ function applyTransfer_(session, req) {
       refund = { id: rec.id, owed: rec.owed };
     }
     const plan = {
-      writes: writes, paidIds: paidOrders.map(function (o) { return o.id; }), force: force,
+      op: op, writes: writes, paidIds: paidOrders.map(function (o) { return o.id; }), force: force,
       log: ["order.payment", orders.map(function (o) { return o.code; }).join(","), {
         amount: dollars_(amountC), due: dollars_(sumDue), sender: sender, short: diff < 0 ? short : "", over: diff > 0 ? over : "", paid: paidOrders.length
       }],
@@ -165,6 +166,10 @@ function applyTransfer_(session, req) {
     return carryOutTransfer_(session, plan);
   });
   if (outcome.repeat) return outcome.repeat;
+  if (outcome.review) {   // kept, so pressing the same button again gives the same "check it" answer instead of guessing
+    finishRequest_("applyTransfer", rid, session.name, outcome.review);
+    return outcome.review;
+  }
 
   // Emails go out after the lock is released, like every other payment.
   let sent = 0, waiting = 0, notEmailed = 0;
@@ -177,7 +182,6 @@ function applyTransfer_(session, req) {
     shortBy: outcome.shortBy || 0, extra: outcome.extra || 0,
     emailsSent: sent, emailsWaiting: waiting, notEmailed: notEmailed, emailsLeftToday: emailsLeftToday_()
   };
-  if (outcome.changedMeanwhile.length) reply.changedMeanwhile = outcome.changedMeanwhile;
   finishRequest_("applyTransfer", rid, session.name, reply);
   return reply;
 }
@@ -185,17 +189,18 @@ function applyTransfer_(session, req) {
 /**
  * Carries out a planned payment (call it while holding the lock). Safe to run again for the same plan: money already added is
  * not added again, a refund already written is not written again, and an order already paid stays paid.
- * `changedMeanwhile` lists orders someone else changed since the plan was made: those were left alone for Finance to check.
+ * If an order changed since the plan was made (and not by this press), nothing more is written and `review` holds the "check it" reply.
  */
 function carryOutTransfer_(session, plan) {
-  const skipped = applyWrites_(plan.writes);
+  const result = applyWrites_(plan.writes, plan.op);
+  if (result.conflicts.length) {   // someone changed an order since: record nothing more, no refund, no "paid"; Finance checks
+    log_(session.name, "payment.needsReview", plan.log[1], { conflicts: result.conflicts, planned: plan.log[2] });
+    return { review: needsReviewReply_(result.conflicts, result.done) };
+  }
   let confirmed = 0;
-  plan.paidIds.forEach(function (id) {
-    if (skipped.indexOf(id) !== -1) return;
-    confirmed += markPaidLocked_(session, id, plan.force).confirmed || 0;
-  });
+  plan.paidIds.forEach(function (id) { confirmed += markPaidLocked_(session, id, plan.force).confirmed || 0; });
   log_(session.name, plan.log[0], plan.log[1], plan.log[2]);
-  return Object.assign({}, plan.outcome, { paidIds: plan.paidIds.filter(function (id) { return skipped.indexOf(id) === -1; }), confirmed: confirmed, changedMeanwhile: skipped });
+  return Object.assign({}, plan.outcome, { paidIds: plan.paidIds, confirmed: confirmed });
 }
 
 // ---- Finding the order for a payment ----------------------------------------------------------
