@@ -19,6 +19,7 @@ These run the API code (`api/*.js`) in Node with a fake Google (in-memory tables
 | `mytickets.test.js` | My tickets: tickets belong to the attendee, ambiguous ones are not added, cancelled ones are shown as cancelled |
 | `retry.test.js` | pressing a button twice or a retry: Add registration, Mark paid, waitlist offers, e-transfers, refunds owed and money returned give one record and the same answer (answer lost, busy email step, stopped halfway) |
 | `membership.test.js` | the membership year (September to August), the membership fee in Settings and where it shows |
+| `memberchanges.test.js` | shared member notes, author/time, sign-in and door permissions, successful/failed card sends, a row moving during a send, cached card status, and the different contents of Awaiting payment and Not paid |
 | `questions.test.js` | questions limited to certain ticket types: who sees them, required only when they apply, answers dropped otherwise, walk-in ticket choice and answers, free walk-ins |
 | `publicform.test.js` | the event site sign-up form offline: which questions show, what blocks Register, the "Choose tickets" total, the kept form, the ticket page's Find my tickets button |
 | `feedback.test.js` | a step-by-step walkthrough of star ratings: who can rate, changing a rating, bad input, member linking, what execs see in the results, report and member history |
@@ -44,5 +45,9 @@ node tests/questions.test.js
 node tests/publicform.test.js
 ```
 
-Each prints PASS/FAIL lines and exits with an error if anything fails. Run all eighteen before a deploy.
+Each prints PASS/FAIL lines and exits with an error if anything fails. Run every suite before a deploy:
+
+```bash
+for f in tests/*.test.js; do node "$f"; done
+```
 The fake Google replaces the spreadsheet, cache expiry and locks, so a pass here does not prove real Google concurrency or production settings: check Settings → System health after a deploy.

@@ -11,12 +11,13 @@ async function switchTab(name) {
   document.querySelectorAll(".tab").forEach((b) => b.classList.toggle("active", b.dataset.tab === name));
   $("tab-overview").hidden = name !== "overview";
   $("tab-members").hidden = name !== "members";
+  $("tab-partners").hidden = name !== "partners";
   $("tab-events").hidden = name !== "events";
   $("tab-payments").hidden = name !== "payments";
   $("tab-door").hidden = name !== "door";
   $("tab-activity").hidden = name !== "activity";
   $("tab-settings").hidden = name !== "settings";
-  $("crumb").textContent = { overview: T.tabOverview, members: T.tabMembers, events: T.tabEvents, payments: T.tabPayments, door: T.tabDoor, activity: T.tabActivity, settings: T.tabSettings }[name] || "";
+  $("crumb").textContent = { overview: T.tabOverview, members: T.tabMembers, partners: T.tabPartners, events: T.tabEvents, payments: T.tabPayments, door: T.tabDoor, activity: T.tabActivity, settings: T.tabSettings }[name] || "";
   document.body.classList.remove("nav-open");
   try { if (!SCANNER_MODE) sessionStorage.setItem("css_tab", name); } catch (e) { /* private window: the tab just isn't remembered */ }
   window.scrollTo(0, 0);
@@ -28,6 +29,7 @@ async function switchTab(name) {
   if (name === "activity") openActivityTab();
   if (name === "settings") openSettingsTab();
   if (name === "members") openMembersTab();
+  if (name === "partners") loadPartners();
 }
 
 // ---- List -------------------------------------------------------------------

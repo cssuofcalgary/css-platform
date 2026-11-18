@@ -13,14 +13,18 @@ The **sun/moon button** (bottom of the menu) switches light and dark. Tap the **
 ## Members tab: sign-ups, payments and search
 Membership costs the fee set in **Settings → Membership** for the school year (September to August). People join on their own at **member.ucalgarycss.ca/create** (this replaces the Google Form), or an exec adds them here. Both end up as one row on the Membership sheet.
 
-**Pending** (opens first when someone is waiting): everyone who signed up and hasn't been confirmed yet. A red number on **Members** in the left menu, and a line on the Overview, show how many.
+**Awaiting payment** (opens first when someone is waiting): unpaid members with a member ID and an “Awaiting…” status. A red number on **Members** in the left menu, and a line on the Overview, show how many.
 - Each card shows how they said they'd pay. **Cash:** when, where, and who took it. **E-transfer:** when they signed up, their email and UCID.
 - Check the payment (the CSS Gmail for an e-transfer, or the exec who took the cash), then tap **Mark paid**. They get their member pass by email and the card slides away. **Details** opens their full page.
-- Only sign-ups from the website and **Add member** show here. Older members who are not marked paid are under **Search**.
+- **All members → Not paid** also includes unpaid rows with a blank status or no member ID. Those rows stay out of Awaiting payment until they have an ID and an “Awaiting…” status.
 
-**Add member** (top right): for someone joining at the table. Enter name, UCID (8 digits), email, and cash or e-transfer. Leave **Payment received** ticked if you have the money: they're marked paid and emailed their pass in one step. Untick it to add them as unpaid and confirm later from Pending. Someone already on the sheet is refused, and it tells you who they are.
+**Add member** (top right): for someone joining at the table. Enter name, UCID (8 digits), email, and cash or e-transfer. Leave **Payment received** ticked if you have the money: they're marked paid and emailed their pass in one step. Untick it to add them as unpaid and confirm later from Awaiting payment. Someone already on the sheet is refused, and it tells you who they are.
 
 **Search:** type part of a **name**, a **UCID**, a **member ID** (CSS…) or an **email**, then tap a person to see their details. Anyone not marked paid also has a **Mark paid** button on their page.
+
+**Notes:** on a member's page, enter up to 500 characters and press **Add note**. Other execs can read it with your sign-in name and the date and time. Notes belong to that member ID and membership year. A row without an ID needs **Create member ID** first. Notes are saved in the platform's own data sheet, without adding columns to the membership list.
+
+**Resend membership pass:** a successful send saves **Sent** on the membership sheet and updates the member page and All members list. A failed send keeps the previous card status.
 
 If the pass email can't be sent (the daily email limit), the person is still marked paid and the message tells you the email did not go. They can get their pass later from **member.ucalgarycss.ca → Find my pass**. See **RUNBOOK.md**.
 
@@ -101,9 +105,9 @@ If you see "ticket emails waiting", the daily email limit was reached. The bar s
 ## Cancel requests
 On the ticket page of an **unpaid** ticket there is a **Cancel my registration** button. It does **not** cancel anything: it records that the person asked. Payments shows **Asked to cancel (n)** (and an alert on Overview). Press **Refund / cancel** to cancel the order, or **Dismiss request** to keep it. Nobody is emailed.
 
-## Partner deals and the redemption log (Members tab)
-At the bottom of **Members**: the partners and their offers. Any exec can **Add a partner**, **Edit**, or switch one **On/Off** (Off hides it from members without deleting it). Only the admin can **Delete**. Members see the On partners on their pass page (when they opened it from their emailed link or signed in with UCID + last name).
-**Redemption log:** each time a member shows a deal it is recorded (who, which partner, when). The latest 25 show here with a count per partner; **Download all (CSV)** gives everything. Members who opened their pass some other way are not in this log (they are in the old one).
+## Partners tab: partner deals and the redemption log
+Open **Partners** in the left menu for the partners and their offers. Any exec can **Add a partner**, **Edit**, or switch one **On/Off** (Off hides it from members without deleting it). Only the admin can **Delete**. Members see the On partners on their pass page (when they opened it from their emailed link or signed in with UCID + last name).
+**Redemption log:** each time a member shows a deal it is recorded (who, which partner, when). Browse 10 at a time with a count per partner; **Download all (CSV)** gives everything. A member's own redemption log is also on their member page.
 
 ## Feedback, the event report and member history
 - After someone is checked in, their ticket page shows five stars and an optional comment. Open an event's **Attendees** page to see the average, the spread and the comments.

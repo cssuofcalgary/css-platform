@@ -450,6 +450,12 @@ body.scanner-mode .content { max-width: 520px; }
 .partner-list .p-main { flex: 1 1 260px; }
 .partner-list .p-off { opacity: .55; }
 
+.member-notes-list li { padding: 10px 0; border-bottom: 1px solid var(--border); overflow-wrap: anywhere; }
+.member-notes-list p { margin: 0 0 4px; }
+#member-note-form { display: grid; gap: 10px; margin-top: 12px; }
+#member-note-text { width: 100%; min-width: 0; resize: vertical; }
+#member-note-save { justify-self: start; }
+
 /* Panda loader (loading, slow, success, error) */
 .pl { text-align: center; padding: 12px 0 8px; color: inherit; }
 .pl-stage { position: relative; width: 64px; height: 62px; margin: 0 auto; animation: plBob 2s ease-in-out infinite; }

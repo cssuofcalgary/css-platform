@@ -18,7 +18,7 @@
  * Set automatically by the system (don't edit): DATA_SHEET_ID, IMAGE_FOLDER_ID.
  */
 
-const API_VERSION = "0.18.0";
+const API_VERSION = "0.18.1";
 const MEMBER_CACHE_SECONDS = 300;   // search data is re-read from the sheet at most every 5 min
 const SESSION_SECONDS = 21600;      // signed out after 6 h without use (the Apps Script cache maximum)
 const SESSION_RENEW_MS = 600000;    // while in use, those 6 h restart at most this often

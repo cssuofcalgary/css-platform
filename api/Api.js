@@ -140,6 +140,13 @@ function route_(req) {
     case "updateMember":
       return updateMember_(requireSession_(req.token), req.member);
 
+    case "listMemberNotes":
+      requireSession_(req.token);
+      return listMemberNotes_(req.memberId);
+
+    case "addMemberNote":
+      return addMemberNote_(requireSession_(req.token), req.memberId, req.text);
+
     case "getMember": {
       requireSession_(req.token);
       const member = findMemberById_(loadMembers_(), req.memberId);

@@ -104,6 +104,7 @@ Lists (`ticketTypes`, `questions`, `answers`, `summary`) are stored as JSON text
 | Feedback | id (= the ticket id), eventId, memberId, name, rating (1 to 5), comment, createdAt, updatedAt |
 | Waitlist | id, eventId, name, email, ucid, memberId, ticketTypeId, ticketType, answers, status (`waiting`/`offered`/`removed`), createdAt, offeredAt, offeredBy, orderId, orderCode, notes |
 | Partners | id, name, offer, address, active, sort, createdAt, createdBy, updatedAt, updatedBy. (`active` can come back as `true` or `TRUE`: read it with `isOn_`) |
+| MemberNotes | id, memberId, year, text (up to 500 characters), createdBy, createdAt. Exec-only; linked by member ID and membership year, never by row number. No new columns in the Membership sheet. Keep these IDs and the year when migrating members into platform storage. |
 | Redemptions | id, time, receivedAt, memberId, memberName, partnerId, partnerName, offer |
 
 Also added in Oct 2026: Orders `cancelRequestedAt`, `cancelRequestedBy` (a ticket page "cancel" request; shown to Finance while the order is `awaiting`), Events `waitlist` (TRUE/FALSE), and a ticket's `emailedAt` can read `claim:<time>` while an email is being sent (a claim older than 10 minutes counts as unsent). **New columns only appear after `API_VERSION` (api/Config.js) changes**, because column names are cached per version.
@@ -130,9 +131,12 @@ Also added in Oct 2026: Orders `cancelRequestedAt`, `cancelRequestedBy` (a ticke
 | `searchMembers` `{query}` | yes | Up to 25 members + `total` |
 | `registerMember` `{name, ucid, email, method ("etransfer" or "cash"), when?, where?, who?, website?}` | no | **Join CSS** (`member.ucalgarycss.ca/create`, in the member portal repo). Adds one row to the Membership sheet (Paid Status `Awaiting E-transfer` / `Awaiting Cash`, Mail Status `Pending`, a new `CSS…` member ID). A UCID or email already on the sheet: paid gives `ALREADY_MEMBER`, unpaid gives `existing: true` and adds nothing. Limits: 5 tries per UCID and 40 sign-ups per 10 minutes in total. Logged as `member.signup` |
 | `addMember` `{member: {name, ucid, email, method, when?, where?, who?}, paidNow}` | yes (exec) | The Members tab's **Add member** button. Same row as a web sign-up; with `paidNow` it is marked paid and the pass is emailed in the same step. An existing UCID or email is refused (`ALREADY_MEMBER` / `ALREADY_SIGNED_UP`). Logged as `member.add` |
-| `listPendingMembers` `{offset?, limit?}` | yes | Members whose Paid Status starts with `Awaiting` (online sign-ups and unpaid Add member), newest first, 20 a page, plus `total` and `hasMore`. Feeds the Members tab's Pending list, the sidebar count and the Overview alert |
+| `listPendingMembers` `{offset?, limit?}` | yes | Unpaid members with a member ID whose Paid Status starts with `Awaiting`, newest first, 20 a page, plus `total` and `hasMore`. Feeds Members → Awaiting payment, the sidebar count and the Overview alert. All members → Not paid is broader: it includes blank statuses and missing IDs. |
 | `markMemberPaid` `{memberId}` | yes (exec) | Sets Paid Status to `PAID`, emails the member their pass (Mail Status `Sent`), logs `member.paid` with who confirmed it |
 | `getMember` `{memberId}` | yes | One member |
+| `listMemberNotes` `{memberId}` | yes (exec) | Shared notes for that member ID and membership year, newest first, with author and time. Notes stay out of public member replies. |
+| `addMemberNote` `{memberId, text}` | yes (exec) | Adds a note of up to 500 characters to the platform's MemberNotes tab. Author comes from the session; time comes from the server. |
+| `resendMemberPass` `{memberId}` | yes (exec) | Emails the pass and saves Mail Status `Sent` after success, then returns the updated member. Re-reads the row by member ID before writing, and clears the member cache. A failed send leaves Mail Status unchanged. |
 | `listEvents` | yes | All events incl. drafts + `counts[eventId] = {awaiting, paid, checkedIn}` |
 | `saveEvent` `{event}` | yes | Create (no id) or update (with id). The slug (public link) never changes after creation |
 | `setEventStatus` `{eventId, status}` | yes | draft / published / closed / **archived** (archiving or restoring needs the **admin** password). Archived events vanish from the public site and the day-to-day tabs; nothing is deleted |

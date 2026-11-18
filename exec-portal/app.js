@@ -301,6 +301,7 @@ function showMember(m) {
   state.member = m;
   loadMemberHistory(m);
   loadMemberRedemptions(m);
+  loadMemberNotes(m);
   $("member-pay").hidden = m.paid || !m.memberId;
   $("member-assign").hidden = !!m.memberId || m.row === undefined;   // a row with no member ID yet: give it one first
   $("member-assign-error").hidden = true;
@@ -398,6 +399,11 @@ async function resendMemberPass() {
     if (reply.error === "NOT_LOGGED_IN") { signOutLocally(); return showLogin(errorText(reply)); }
     return showToast(errorText(reply));
   }
+  Object.assign(m, reply.member || {}, { cardSent: true, mailStatus: "Sent" });
+  const listed = allState.members.find((x) => x.memberId === m.memberId);
+  if (listed) Object.assign(listed, m);
+  allState.stale = true;
+  if (state.member === m) showMember(m);
   showToast(T.passEmailed(m.email), "success");
 }
 
