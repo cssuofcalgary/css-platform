@@ -121,6 +121,13 @@ function route_(req) {
       requireSession_(req.token);
       return listPendingMembers_(req.offset, req.limit);
 
+    case "listAllMembers":
+      requireSession_(req.token);
+      return listAllMembers_();
+
+    case "assignMemberId":
+      return assignMemberId_(requireSession_(req.token), req.row, req.name);
+
     case "addMember":
       return addMember_(requireSession_(req.token), req.member, !!req.paidNow);
 

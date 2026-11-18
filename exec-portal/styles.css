@@ -498,3 +498,21 @@ body.scanner-mode .content { max-width: 520px; }
 .attn.done { opacity: 0.55; }
 .attn.done .attn-actions { display: none; }
 @media (max-width: 600px) { .attn-actions { margin-left: 48px; } }
+.button-pair { display: inline-flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+/* Members → All members: the sheet as a clickable list */
+.all-tools { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.all-tools .search { flex: 1 1 220px; width: auto; margin: 0; }
+.all-tools select, .all-tools button { width: auto; flex: none; margin: 0; }
+#all-filters { margin: 10px 0 4px; flex-wrap: wrap; }
+.all-table { display: grid; gap: 4px; margin-top: 8px; }
+.all-row { display: grid; grid-template-columns: minmax(0, 2.2fr) 1.2fr 1.2fr .8fr 1fr 1fr; gap: 10px; align-items: center; padding: 10px 12px;
+  border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); color: var(--text); font: inherit; text-align: left; width: 100%; cursor: pointer; }
+button.all-row:hover { border-color: var(--border-2); }
+.all-row.all-head { background: none; border-color: transparent; cursor: default; font-size: .8rem; color: var(--muted); padding-top: 0; padding-bottom: 0; }
+.all-name { display: grid; min-width: 0; } .all-name b, .all-name small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .all-name small { color: var(--text-2); }
+@media (max-width: 760px) {
+  .all-row { grid-template-columns: 1fr auto; } .all-row.all-head { display: none; }
+  .all-row > span:nth-child(n+4) { display: none; }
+  .all-row > span:nth-child(2) { grid-column: 2; grid-row: 1; } .all-row > span:nth-child(3) { grid-column: 2; grid-row: 2; justify-self: end; }
+  .all-name { grid-row: 1 / span 2; }
+}

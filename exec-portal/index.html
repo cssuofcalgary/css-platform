@@ -9,7 +9,7 @@
   <link rel="icon" href="assets/css-logo.png" type="image/png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Fraunces:opsz,wght@9..144,500;9..144,600&family=JetBrains+Mono:wght@400;500&display=swap">
-  <link rel="stylesheet" href="styles.css?v=1.7.3">
+  <link rel="stylesheet" href="styles.css?v=1.7.4">
   <link rel="stylesheet" href="theme.css?v=0.13.5">
   <link rel="stylesheet" href="peekaboo.css?v=1.0.1">
   <link rel="stylesheet" href="forest.css?v=1.0.7">
@@ -124,6 +124,7 @@
         <div class="chips" id="mem-filters">
           <button class="chip" type="button" data-mem-view="pending"><span data-t="pendingTab"></span> <span id="mem-pending-count" class="chip-count"></span></button>
           <button class="chip active" type="button" data-mem-view="search" data-t="searchTab"></button>
+          <button class="chip" type="button" data-mem-view="all" data-t="allMembersTab"></button>
         </div>
         <button id="pending-refresh" class="link small" type="button" data-t="pendingRefresh"></button>
       </div>
@@ -137,6 +138,19 @@
         <input id="search-input" class="search" type="search" autocomplete="off" enterkeyhint="search">
         <p id="search-status" class="muted small" aria-live="polite"></p>
         <ul id="results" class="results"></ul>
+      </section>
+      <section id="all-view" hidden>
+        <div class="all-tools">
+          <label for="all-search" class="visually-hidden" data-t="searchLabel"></label>
+          <input id="all-search" class="search" type="search" autocomplete="off" enterkeyhint="search" data-ph="searchPlaceholder">
+          <label for="all-sort" class="visually-hidden" data-t="allSort"></label>
+          <select id="all-sort"></select>
+          <button id="all-csv" class="secondary small-button" type="button" data-t="allCsv"></button>
+        </div>
+        <div class="chips" id="all-filters"></div>
+        <p id="all-status" class="muted small" aria-live="polite"></p>
+        <div id="all-table" class="all-table" role="table"></div>
+        <button id="all-more" class="secondary" type="button" hidden></button>
       </section>
       <section id="partners-section" class="detail-block">
         <div class="row-between"><h3 class="section-title" data-t="partnersHeading"></h3><button id="partner-add" class="link" type="button" data-t="partnerAdd"></button></div>
@@ -162,6 +176,10 @@
           <div class="button-row">
             <button id="member-edit-button" class="secondary small-button" type="button" data-t="editMember"></button>
             <button id="member-resend-pass" class="secondary small-button" type="button" data-t="resendPass" hidden></button>
+          </div>
+          <div id="member-assign" class="member-pay" hidden>
+            <button id="member-assign-id" class="primary" type="button" data-t="assignId"></button>
+            <p id="member-assign-error" class="error" role="alert" hidden></p>
           </div>
           <div id="member-pay" class="member-pay" hidden>
             <button id="member-mark-paid" class="primary" type="button"></button>
@@ -979,11 +997,11 @@
     </form>
   </dialog>
   <script src="config.js?v=0.3.7"></script>
-  <script src="strings.js?v=1.11.11"></script>
+  <script src="strings.js?v=1.11.12"></script>
   <script src="mock.js?v=0.3.7"></script>
   <script src="panda.js?v=1.5.1"></script>
   <script src="peekaboo.js?v=1.0.0"></script>
-  <script src="app.js?v=1.7.4"></script>
+  <script src="app.js?v=1.7.5"></script>
   <script src="events.js?v=1.7.4"></script>
   <script src="emailstatus.js?v=1.0.1"></script>
   <script src="waitlist.js?v=1.5.3"></script>
@@ -1001,7 +1019,7 @@
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" defer></script>
   <script src="door.js?v=0.12.6"></script>
-  <script src="members.js?v=1.2.2"></script>
+  <script src="members.js?v=1.2.3"></script>
   <script src="overview.js?v=1.2.2"></script>
   <script src="shell.js?v=0.9.3"></script>
 </body>

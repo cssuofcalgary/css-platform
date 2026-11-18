@@ -302,6 +302,9 @@ function showMember(m) {
   loadMemberHistory(m);
   loadMemberRedemptions(m);
   $("member-pay").hidden = m.paid || !m.memberId;
+  $("member-assign").hidden = !!m.memberId || m.row === undefined;   // a row with no member ID yet: give it one first
+  $("member-assign-error").hidden = true;
+  $("member-assign-id").disabled = false;
   $("member-edit-button").hidden = !m.memberId;
   $("member-resend-pass").hidden = !(m.memberId && m.email && m.paid);
   $("member-resend-pass").disabled = false;

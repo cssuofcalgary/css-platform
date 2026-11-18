@@ -241,6 +241,55 @@ function listPendingMembers_(offset, limit) {
   return { ok: true, members: waiting.slice(from, from + size), total: waiting.length, hasMore: from + size < waiting.length, membershipFee: getConfig_().membershipFee };
 }
 
+// ---- Exec: everyone on the sheet, and giving a row its member ID ------------------------------------
+
+const MEMBER_LIST_MAX = 3000;
+
+/** Every row of the Membership sheet, for the All members list (filtered and sorted in the browser: a club-sized sheet). */
+function listAllMembers_() {
+  let all = loadMembers_();
+  if (all.length && all[0].row === undefined) { forgetMembers_(); all = loadMembers_(); }
+  return {
+    ok: true, total: all.length, membershipFee: getConfig_().membershipFee, year: membershipYear_(),
+    members: all.slice(-MEMBER_LIST_MAX).map(function (m) {
+      return { row: m.row, memberId: m.memberId, name: m.name, ucid: m.ucid, email: m.email, paid: m.paid, status: m.status,
+        cardSent: m.cardSent, mailStatus: m.mailStatus || "", signedUp: m.signedUp, payment: m.payment };
+    })
+  };
+}
+
+/**
+ * A row that reached the sheet without a member ID (a form outside this site, or typed in by hand) gets one, so it can be
+ * marked paid and gets a pass link. `row` + `name` must still match (rows can move when someone sorts the sheet).
+ * An unpaid row with no Paid Status becomes "Awaiting <method>", so it shows in Pending; its card is marked Pending.
+ */
+function assignMemberId_(session, row, name) {
+  const done = withIntakeLock_(function () {
+    const book = openMemberSheet_();
+    const member = book.members.filter(function (m) { return m.row === Number(row); })[0];
+    if (!member || normalizeName_(member.name) !== normalizeName_(name)) {
+      throw new ApiError_("NOT_FOUND", "That row changed on the sheet (someone may have sorted it). Refresh the list and try again.");
+    }
+    if (member.memberId) return { member: member, already: true };
+    const used = {};
+    book.members.forEach(function (m) { if (m.memberId) used[m.memberId] = true; });
+    const prefix = "CSS" + String(member.row - 1).padStart(3, "0");
+    let id = "";
+    for (let i = 0; i < 50 && (!id || used[id]); i++) id = prefix + (1000 + Math.floor(Math.random() * 9000));
+    if (used[id]) id = prefix + String(Date.now()).slice(-5);
+    const changes = { memberId: id };
+    if (!member.mailStatus || !String(member.mailStatus).trim()) changes.mailStatus = "Pending";
+    if (!member.paid && !String(member.status || "").trim()) changes.paid = MEMBER_STATUS_WAITING[methodKey_(member.payment.method)];
+    setMemberCells_(book, member, changes);
+    if (book.portalColumn !== -1) book.sheet.getRange(member.row, book.portalColumn + 1).setValue(MEMBER_PORTAL_URL.replace(/[/]+$/, "") + "/" + encodeURIComponent(id));
+    Object.assign(member, { memberId: id, mailStatus: changes.mailStatus || member.mailStatus });
+    if (changes.paid) member.status = changes.paid;
+    return { member: member };
+  });
+  if (!done.already) log_(session.name, "member.assignId", done.member.memberId, { name: done.member.name, row: done.member.row });
+  return { ok: true, already: !!done.already, member: done.member };
+}
+
 // ---- Exec: resend the pass, edit a member -----------------------------------------------
 
 /** Emails a paid member their pass link again (lost email, new phone). Any exec (checked by the caller). */
