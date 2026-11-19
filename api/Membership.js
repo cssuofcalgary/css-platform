@@ -298,16 +298,19 @@ function resendMemberPass_(session, memberId) {
   if (!member) throw new ApiError_("NOT_FOUND", "No member with that ID.");
   if (!member.email) throw new ApiError_("BAD_REQUEST", "This member has no email address on file.");
   if (!sendMemberWelcomeEmail_(member)) throw new ApiError_("EMAIL_FAILED", "Email failed to send. Check email allowance.");
-  withIntakeLock_(function () {
-    const book = openMemberSheet_();
-    const fresh = findMemberById_(book.members, member.memberId);
-    if (!fresh) throw new ApiError_("NOT_FOUND", "The card was emailed, but this member is no longer on the sheet. Refresh the list.");
-    setMemberCells_(book, fresh, { mailStatus: "Sent" });
-  });
+  // The email has gone. From here nothing may report a failure, or the exec would send a second card.
+  let marked = true;
+  try {
+    withIntakeLock_(function () {
+      const book = openMemberSheet_();
+      const fresh = findMemberById_(book.members, member.memberId);
+      if (fresh) setMemberCells_(book, fresh, { mailStatus: "Sent" }); else marked = false;
+    });
+  } catch (e) { marked = false; console.error("Card sent, but couldn't mark it Sent: " + e.message); }
   member.cardSent = true;
   member.mailStatus = "Sent";
   log_(session.name, "member.resendPass", member.memberId, { name: member.name, email: member.email });
-  return { ok: true, emailed: true, member: member };
+  return { ok: true, emailed: true, member: member, markedSent: marked };
 }
 
 /**

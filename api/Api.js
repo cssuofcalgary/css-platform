@@ -147,6 +147,9 @@ function route_(req) {
     case "addMemberNote":
       return addMemberNote_(requireSession_(req.token), req.memberId, req.text);
 
+    case "removeMemberNote":
+      return removeMemberNote_(requireSession_(req.token), req.noteId);
+
     case "getMember": {
       requireSession_(req.token);
       const member = findMemberById_(loadMembers_(), req.memberId);

@@ -76,5 +76,40 @@ run('__sheetRows[1][3] = "Awaiting Cash"; __sheetRows[3][3] = ""; forgetMembers_
 ok(run('listPendingMembers_(0,20).total') === 1 && run('listAllMembers_().members.filter(function(m) {return !m.paid;}).length') === 3,
   "Awaiting payment keeps its existing contents; Not paid still includes blank statuses and missing IDs");
 
+// ---- Review fixes: notes keep their shape, can be removed by their writer or the admin
+run('TBL.MemberNotes = [];');
+reply = run('route_({action:"addMemberNote", token:__notesToken, memberId:"CSS001", text:"- called, will pay Fri\\nsecond line"})');
+let listed = run('route_({action:"listMemberNotes", token:__otherToken, memberId:"CSS001"}).notes');
+ok(listed.length === 1 && listed[0].text === "- called, will pay Fri\nsecond line", "a note keeps its leading dash and its line break: " + JSON.stringify(listed[0] && listed[0].text));
+ok(run('TBL.MemberNotes[0].text').indexOf("'-") === 0, "…and is stored so the sheet can't read it as a formula");
+const noteId = listed[0].id;
+ok(attempt(`route_({action:"removeMemberNote", token:__otherToken, noteId:${JSON.stringify(noteId)}})`).error === "ADMIN_ONLY", "another exec can't remove someone else's note");
+ok(run(`route_({action:"removeMemberNote", token:__notesToken, noteId:${JSON.stringify(noteId)}})`).ok &&
+  run('route_({action:"listMemberNotes", token:__otherToken, memberId:"CSS001"}).notes.length') === 0, "the writer can remove their own note; it disappears for everyone");
+ok(run('TBL.MemberNotes.length') === 1 && run('TBL.MemberNotes[0].removedBy') === "TEST Exec Ann", "…and it's kept in the sheet, marked removed (not deleted)");
+run('route_({action:"addMemberNote", token:__otherToken, memberId:"CSS001", text:"Bo wrote this"}); var __adminToken = startSession_("TEST Admin", "admin");');
+const boNote = run('TBL.MemberNotes[1].id');
+ok(run(`route_({action:"removeMemberNote", token:__adminToken, noteId:${JSON.stringify(boNote)}})`).ok, "the admin can remove anyone's note");
+ok(attempt(`route_({action:"removeMemberNote", token:__adminToken, noteId:${JSON.stringify(boNote)}})`).error === "NOT_FOUND", "removing it again says it's no longer there");
+
+// ---- Resend card: once the email has gone, a busy sheet can't turn it into a failure
+run('withIntakeLock_ = function () { throw new ApiError_("BUSY", "TEST busy"); }; __mailWorks = true;');
+reply = attempt('resendMemberPass_(S, "CSS001")');
+ok(reply.value && reply.value.ok && reply.value.emailed && reply.value.markedSent === false, "card sent but the sheet was busy: still reported as sent (no second card)");
+run('withIntakeLock_ = function (f) { return f(); };');
+
+// ---- Activity: sent emails only under Emails, failed ones everywhere, readable wording
+run(`TBL.Log = [
+  { time:"2026-11-19T10:00:00Z", who:"email", action:"email.sent", target:"a@example.com", details:JSON.stringify({ subject:"Your ticket" }) },
+  { time:"2026-11-19T10:01:00Z", who:"email", action:"email.failed", target:"b@example.com", details:JSON.stringify({ subject:"Your pass" }) },
+  { time:"2026-11-19T10:02:00Z", who:"TEST Exec Ann", action:"member.note", target:"CSS001", details:"{}" }];
+readLastRows_ = function (name, n) { return (TBL[name] || []).slice(-n); };`);
+const allAct = run('activityLog_({ group: "all" }).entries');
+const emailAct = run('activityLog_({ group: "emails" }).entries');
+ok(!allAct.some((e) => e.action === "email.sent") && allAct.some((e) => e.action === "email.failed"), "All hides sent emails but shows failed ones");
+ok(emailAct.length === 2 && emailAct.every((e) => e.who === "Email") && /sent to a@example.com: Your ticket/.test(emailAct.find((e) => e.action === "email.sent").summary),
+  "Emails shows both, readable: " + JSON.stringify(emailAct.map((e) => e.summary)));
+ok(/added a note for member CSS001/.test(allAct.find((e) => e.action === "member.note").summary), "a new note reads as a sentence in Activity");
+
 console.log(fails ? "\n" + fails + " FAILED" : "\nALL PASSED");
 process.exit(fails ? 1 : 0);

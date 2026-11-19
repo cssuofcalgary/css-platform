@@ -399,11 +399,12 @@ async function resendMemberPass() {
     if (reply.error === "NOT_LOGGED_IN") { signOutLocally(); return showLogin(errorText(reply)); }
     return showToast(errorText(reply));
   }
-  Object.assign(m, reply.member || {}, { cardSent: true, mailStatus: "Sent" });
+  Object.assign(m, { cardSent: true, mailStatus: "Sent" });
   const listed = allState.members.find((x) => x.memberId === m.memberId);
-  if (listed) Object.assign(listed, m);
+  if (listed) Object.assign(listed, { cardSent: true, mailStatus: "Sent" });
   allState.stale = true;
-  if (state.member === m) showMember(m);
+  // Only the badges change: redrawing the whole page would wipe a note someone is halfway through typing
+  if (state.member === m) $("member-badges").innerHTML = paidPill(m) + `<span class="pill good">${T.cardSent}</span>`;
   showToast(T.passEmailed(m.email), "success");
 }
 

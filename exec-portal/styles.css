@@ -451,7 +451,8 @@ body.scanner-mode .content { max-width: 520px; }
 .partner-list .p-off { opacity: .55; }
 
 .member-notes-list li { padding: 10px 0; border-bottom: 1px solid var(--border); overflow-wrap: anywhere; }
-.member-notes-list p { margin: 0 0 4px; }
+.member-notes-list p { margin: 0 0 4px; white-space: pre-line; }
+.member-notes-list .link { margin-left: 8px; }
 #member-note-form { display: grid; gap: 10px; margin-top: 12px; }
 #member-note-text { width: 100%; min-width: 0; resize: vertical; }
 #member-note-save { justify-self: start; }
