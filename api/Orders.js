@@ -21,7 +21,7 @@ function register_(req) {
 
   // A page that retries (slow network, "busy") sends the same requestId each time, so a retry can never create a second registration.
   const rawRid = /^[A-Za-z0-9-]{8,64}$/.test(String(req.requestId || "")) ? String(req.requestId) : "";
-  const requestId = rawRid ? "regreq_" + rawRid : "";
+  const requestId = rawRid ? "regreq_" + String(req.slug || "").toLowerCase() + "_" + rawRid : "";
   if (requestId) {
     const seen = CacheService.getScriptCache().get(requestId);
     if (seen) return JSON.parse(seen);
@@ -39,12 +39,10 @@ function register_(req) {
   const prep = prepareRegistration_(rawPeople, event, members, memberRec);
   throttle_(prep.everyone[0].email);
 
-  // Everything slow happens BEFORE the lock, where many requests can run side by side: open the tabs, and read
-  // who is already registered (a duplicate email is only a warning, so a snapshot a moment old is fine).
+  // Open the tabs before the lock, where many requests can run side by side.
+  // Duplicate people and payment codes are checked again on fresh data inside the lock.
   table_("Orders"); table_("Tickets");
   const etransferEmailNow = getConfig_().etransferEmail;
-  const snapshotTickets = readRows_("Tickets");
-  const snapshotOrders = readRows_("Orders");
 
   // A free order makes paid tickets straight away, which uses up room just like Mark paid does, so it also takes the
   // main lock (always after the intake lock, never the other way round). Orders that wait for payment don't need it.
@@ -71,14 +69,19 @@ function register_(req) {
     delete DB_.rows["Orders"]; delete DB_.rows["Tickets"];   // counted and checked on fresh data, inside the lock
 
     // A retry of a registration that was only half written (the script stopped between the order and its tickets) finishes it.
-    const prior = rawRid ? readRows_("Orders").filter(function (o) { return o.requestId === rawRid && !isFailedOrder_(o); })[0] : null;
+    const prior = rawRid ? readRows_("Orders").filter(function (o) { return o.eventId === ev.id && o.requestId === rawRid && !isFailedOrder_(o); })[0] : null;
     if (prior) {
+      if (prior.status !== "awaiting" && prior.status !== "paid") {
+        throw new ApiError_("BAD_REQUEST", "This registration was " + prior.status + ". Start a new registration to book again.");
+      }
       const resumed = resumeRegistration_(prior, plan, ev);
       const reply = registrationReply_(prior, resumed.tickets, etransferEmailNow, ev);
       if (requestId) { try { CacheService.getScriptCache().put(requestId, JSON.stringify(reply), 600); } catch (e) { /* fine */ } }
       if (resumed.madeAny) logEntry = ["Public: " + prior.payerName, "order.resumed", prior.code, { event: ev.name, tickets: resumed.tickets.length }];
       return { reply: reply, order: prior, created: resumed.tickets, noEmail: !resumed.madeAny };
     }
+
+    assertNoDuplicateRegistration_(everyone, ev.id, readRows_("Tickets"));
 
     if (ev.capacity && ev.capacityRule === "paid") {
       // SEC-02: "paid" counts only confirmed tickets, but sign-ups must not pile up without limit.
@@ -105,20 +108,12 @@ function register_(req) {
           : "Sorry, this event is full.");
       }
     }
-    const tickets = snapshotTickets;
-    everyone.forEach(function (p) {
-      const already = tickets.some(function (t) {
-        return t.eventId === ev.id && t.email.toLowerCase() === p.email && (t.status === "awaiting" || t.status === "paid");
-      });
-      if (already) p.flag = joinFlags_(p.flag, "Already registered with this email");
-    });
-
     const now = new Date().toISOString();
     const total = plan.total;
     const isFree = plan.isFree;   // a $0 order with a membership flag stays "awaiting" until an exec checks it
     const order = {
       id: newId_("OR"),
-      code: issueOrderCode_(ev, snapshotOrders),
+      code: issueOrderCode_(ev, readRows_("Orders")),
       eventId: ev.id,
       payerName: everyone[0].name,
       payerEmail: everyone[0].email,
@@ -196,7 +191,7 @@ function prepareRegistration_(rawPeople, event, members, memberRec) {
     p.flag = membershipFlag_(p, members, verified ? memberRec : null);
   });
   const total = everyone.reduce(function (sum, p) { return sum + p.price; }, 0);
-  const needsReview = everyone.some(function (p) { return !!p.flag; });   // SEC-01: taken before the duplicate-email note, which is only a warning
+  const needsReview = everyone.some(function (p) { return !!p.flag; });
   return { everyone: everyone, total: total, needsReview: needsReview, isFree: total === 0 && !needsReview };
 }
 
@@ -251,8 +246,16 @@ function isFailedOrder_(o) {
  * so a retry of the same request fills only the gaps and never doubles anyone.
  */
 function resumeRegistration_(prior, plan, ev) {
-  const have = readRows_("Tickets").filter(function (t) { return t.orderId === prior.id; });
+  const allTickets = readRows_("Tickets");
+  const have = allTickets.filter(function (t) { return t.orderId === prior.id; });
   const same = function (t, p) { return String(t.email || "").toLowerCase() === p.email && normalizeName_(t.name) === normalizeName_(p.name); };
+  if (prior.eventId !== ev.id || Number(prior.total) !== Number(plan.total) ||
+      String(prior.payerEmail || "").toLowerCase() !== plan.everyone[0].email ||
+      normalizeName_(prior.payerName) !== normalizeName_(plan.everyone[0].name) ||
+      have.some(function (t) { return !plan.everyone.some(function (p) { return same(t, p); }); })) {
+    throw new ApiError_("BAD_REQUEST", "These registration details changed. Start a new registration to make changes.");
+  }
+  assertNoDuplicateRegistration_(plan.everyone, ev.id, allTickets.filter(function (t) { return t.orderId !== prior.id; }));
   const missing = plan.everyone.filter(function (p) { return !have.some(function (t) { return same(t, p); }); });
   if (!missing.length) return { tickets: have, madeAny: false };
   const made = ticketRowsFor_(prior, missing, new Date().toISOString());
@@ -288,17 +291,14 @@ function addOrder_(session, eventId, input, force, siteUrl) {
   const note = String(input.notes || "").trim().slice(0, 200);
 
   const order = withIntakeAndScriptLock_(function () {
+    delete DB_.rows["Orders"]; delete DB_.rows["Tickets"];
+    assertNoDuplicateRegistration_([person], event.id, readRows_("Tickets"));
     if (event.capacity && !force) {
       const taken = spotsTaken_(event);
       if (taken + 1 > event.capacity) {
         throw new ApiError_("OVER_CAPACITY", "This would make " + (taken + 1) + " tickets, over the capacity of " + event.capacity + ".");
       }
     }
-    const tickets = readRows_("Tickets");
-    if (tickets.some(function (t) {
-      return t.eventId === event.id && t.email.toLowerCase() === person.email && (t.status === "awaiting" || t.status === "paid");
-    })) person.flag = joinFlags_(person.flag, "Already registered with this email");
-
     const now = new Date().toISOString();
     const created = {
       id: newId_("OR"), code: uniqueCode_(event, readRows_("Orders")), eventId: event.id,
@@ -327,15 +327,18 @@ function cleanPerson_(p, event, index, lenient) {
   p = p || {};
   const who = index === 0 ? "Your" : "Friend " + index + "'s";
   const name = String(p.name || "").trim().replace(/\s+/g, " ").slice(0, 80);
-  const email = String(p.email || "").trim().toLowerCase().slice(0, 120);
+  const email = String(p.email || "").trim().toLowerCase();
   if (!name) throw new ApiError_("BAD_REQUEST", who + " name is missing.");
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new ApiError_("BAD_REQUEST", who + " email doesn't look right.");
+  const emailProblem = emailProblem_(email);
+  if (emailProblem) throw new ApiError_("BAD_REQUEST", who + " email: " + emailProblem);
 
   const type = event.ticketTypes.filter(function (t) { return t.id === p.ticketTypeId; })[0];
   if (!type) throw new ApiError_("BAD_REQUEST", "Pick a ticket type for " + name + ".");
 
-  const ucid = String(p.ucid || "").replace(/\D/g, "").slice(0, 12);
+  const ucid = String(p.ucid || "").trim();
   const memberId = String(p.memberId || "").trim().toUpperCase().slice(0, 20);
+  if (ucid && !/^\d{8}$/.test(ucid)) throw new ApiError_("BAD_REQUEST", who + " UCID must be exactly 8 digits.");
+  if (!lenient && !ucid && !memberId) throw new ApiError_("BAD_REQUEST", who + " UCID or CSS member ID is required.");
 
   const answers = {};
   const usedKeys = {};

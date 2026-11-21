@@ -396,8 +396,9 @@ function updateTicket_(session, ticketId, changes, siteUrl, orderChanges) {
   changes = changes || {};
   orderChanges = orderChanges || {};
   const isAdmin = session.role === "admin";
+  const recheckMembership = changes.recheckMembership === true;
+  if (recheckMembership && !isAdmin) throw new ApiError_("ADMIN_ONLY", "Rechecking membership needs the admin password.");
   const clean = function (v, max) { return String(v === undefined || v === null ? "" : v).trim().replace(/\s+/g, " ").slice(0, max); };
-  const looksLikeEmail = function (v) { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v); };
 
   const result = withLock_(function () {
     const ticket = readRows_("Tickets").filter(function (t) { return t.id === ticketId; })[0];
@@ -416,9 +417,12 @@ function updateTicket_(session, ticketId, changes, siteUrl, orderChanges) {
       if (name !== ticket.name) next.name = name;
     }
     if (changes.email !== undefined) {
-      const email = clean(changes.email, 120).toLowerCase();
-      if (email && !looksLikeEmail(email)) throw new ApiError_("BAD_REQUEST", "That email doesn't look right.");
-      if (email !== ticket.email) next.email = email;
+      const email = clean(changes.email, 121).toLowerCase();
+      if (email !== ticket.email) {
+        const problem = email && emailProblem_(email);
+        if (problem) throw new ApiError_("BAD_REQUEST", problem);
+        next.email = email;
+      }
     }
 
     // -- admin: UCID, member ID, ticket type, answers, flag
@@ -453,18 +457,21 @@ function updateTicket_(session, ticketId, changes, siteUrl, orderChanges) {
       });
       if (JSON.stringify(answers) !== JSON.stringify(ticket.answers || {})) { next.answers = answers; adminOnly.push("answers"); }
     }
-    if (changes.flag !== undefined) {
-      const flag = clean(changes.flag, 200);
-      if (flag !== (ticket.flag || "")) { next.flag = flag; adminOnly.push("help-desk flag"); }
-    } else if (next.ucid !== undefined || next.memberId !== undefined || next.ticketType !== undefined) {
-      // The member details changed: check the Membership sheet again. Other flags (e.g. duplicate email) stay.
+    const requestedFlag = changes.flag !== undefined ? clean(changes.flag, 200) : undefined;
+    if (requestedFlag !== undefined && requestedFlag !== (ticket.flag || "")) {
+      next.flag = requestedFlag;
+      adminOnly.push("help-desk flag");
+    } else if (recheckMembership || next.ucid !== undefined || next.memberId !== undefined || next.ticketType !== undefined || (isAdmin && next.name !== undefined)) {
+      // Save can deliberately recheck a membership warning. An explicitly edited flag always wins.
+      if (recheckMembership && !type) throw new ApiError_("BAD_REQUEST", "Choose a current ticket type before rechecking membership.");
       const kept = String(ticket.flag || "").split("; ").filter(function (f) { return f && f.indexOf("Member price") !== 0; });
       const person = {
+        name: next.name !== undefined ? next.name : ticket.name,
         memberId: next.memberId !== undefined ? next.memberId : ticket.memberId,
         ucid: next.ucid !== undefined ? next.ucid : ticket.ucid,
         needsMembership: !!(type && type.needsMembership)
       };
-      const fresh = membershipFlag_(person, loadMembers_());
+      const fresh = membershipFlag_(person, person.needsMembership ? loadMembers_(recheckMembership) : []);
       const flag = (fresh ? kept.concat([fresh]) : kept).join("; ");
       if (flag !== (ticket.flag || "")) next.flag = flag;
     }
@@ -477,9 +484,13 @@ function updateTicket_(session, ticketId, changes, siteUrl, orderChanges) {
         if (v !== order.payerName) { orderNext.payerName = v; adminOnly.push("payer name"); }
       }
       if (orderChanges.payerEmail !== undefined) {
-        const v = clean(orderChanges.payerEmail, 120).toLowerCase();
-        if (v && !looksLikeEmail(v)) throw new ApiError_("BAD_REQUEST", "The payer's email doesn't look right.");
-        if (v !== order.payerEmail) { orderNext.payerEmail = v; adminOnly.push("payer email"); }
+        const v = clean(orderChanges.payerEmail, 121).toLowerCase();
+        if (v !== order.payerEmail) {
+          const problem = v && emailProblem_(v);
+          if (problem) throw new ApiError_("BAD_REQUEST", problem);
+          orderNext.payerEmail = v;
+          adminOnly.push("payer email");
+        }
       }
       if (orderChanges.etransferName !== undefined) {
         const v = clean(orderChanges.etransferName, 80);

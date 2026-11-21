@@ -71,12 +71,9 @@ function joinWaitlist_(req) {
   const done = withIntakeLock_(function () {
     delete DB_.rows["Tickets"]; delete DB_.rows["Waitlist"];   // counted on fresh data, inside the lock
     if (!eventFull_(event)) throw new ApiError_("NOT_FULL", "There are spots available again. Please register instead.");
-    const hasTicket = readRows_("Tickets").some(function (t) {
-      return t.eventId === event.id && String(t.email).toLowerCase() === person.email && (t.status === "awaiting" || t.status === "paid");
-    });
-    if (hasTicket) throw new ApiError_("BAD_REQUEST", "You already have a ticket for this event.");
+    assertNoDuplicateRegistration_([person], event.id, readRows_("Tickets"));
     const entries = readRows_("Waitlist").filter(function (w) { return w.eventId === event.id; });
-    const mine = entries.filter(function (w) { return String(w.email).toLowerCase() === person.email && (w.status === "waiting" || w.status === "offered"); })[0];
+    const mine = entries.filter(function (w) { return sameRegistrationPerson_(w, person) && (w.status === "waiting" || w.status === "offered"); })[0];
     if (mine) return { already: true };
     if (entries.filter(function (w) { return w.status === "waiting"; }).length >= WAITLIST_MAX_PER_EVENT) throw new ApiError_("WAITLIST_FULL", "The waitlist is full.");
     insertRow_("Waitlist", {
@@ -134,6 +131,7 @@ function offerWaitlistSpot_(session, entryId, force, siteUrl) {
   rememberSiteUrl_(siteUrl);
   const members = membersQuietly_();
   const made = withIntakeAndScriptLock_(function () {
+    delete DB_.rows["Orders"]; delete DB_.rows["Tickets"]; delete DB_.rows["Waitlist"];
     const entry = readRows_("Waitlist").filter(function (w) { return w.id === entryId; })[0];
     if (!entry) throw new ApiError_("NOT_FOUND", "That waitlist entry no longer exists.");
     if (entry.status !== "waiting") throw new ApiError_("BAD_REQUEST", "This person is already " + entry.status + ".");
@@ -143,13 +141,14 @@ function offerWaitlistSpot_(session, entryId, force, siteUrl) {
     const type = event.ticketTypes.filter(function (t) { return t.id === entry.ticketTypeId; })[0];
     if (!type) throw new ApiError_("BAD_REQUEST", "The ticket type this person picked no longer exists on the event. Remove them or add it back.");
 
+    const person = { name: entry.name, email: entry.email, ucid: entry.ucid, memberId: entry.memberId, needsMembership: !!type.needsMembership };
+    assertNoDuplicateRegistration_([person], event.id, readRows_("Tickets"));
     if (event.capacity && !force) {
       const room = waitlistRoom_(event);
       if (room.free < 1) {
         throw new ApiError_("OVER_CAPACITY", "No spot looks free right now (" + room.outstanding + " earlier offer(s) still waiting for payment). Offer anyway?");
       }
     }
-    const person = { name: entry.name, email: entry.email, ucid: entry.ucid, memberId: entry.memberId, needsMembership: !!type.needsMembership };
     const flag = membershipFlag_(person, members);
     const price = Number(type.price) || 0;
     const needsReview = price === 0 && !!flag;

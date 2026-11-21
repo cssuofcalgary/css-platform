@@ -42,18 +42,18 @@ ok(c.mailRegistration === true && c.mailTickets === false && c.mailReminders ===
 
 // ---- Signing up
 const reg = (slug, people) => run(`register_(${JSON.stringify({ slug, people })})`);
-let r = reg("defaults", [{ name: "Alex Guest", email: "alex@x.ca", ticketTypeId: "TG", answers: {} }]);
+let r = reg("defaults", [{ name: "Alex Guest", email: "alex@x.ca", ucid: "30000001", ticketTypeId: "TG", answers: {} }]);
 ok(r.ok && r.emailSent === false && run("__reg.length") === 0, "paid signup, default settings: no registration email goes out");
 ok(r.emails.confirmation === false && r.emails.ticket === true, "the page is told: no confirmation email, ticket email after payment");
 ok(r.order.total === 8 && r.etransferEmail && r.order.code && /^ticket\.html\?t=/.test(r.tickets[0].page), "and it still has the amount, e-transfer address, payment code and ticket link to show");
-r = reg("reg-on", [{ name: "Bea Guest", email: "bea@x.ca", ticketTypeId: "TG", answers: {} }]);
+r = reg("reg-on", [{ name: "Bea Guest", email: "bea@x.ca", ucid: "30000002", ticketTypeId: "TG", answers: {} }]);
 ok(r.emailSent === true && run("__reg.length") === 1 && r.emails.confirmation === true, "with the registration email ticked, it is sent");
-r = reg("tickets-off", [{ name: "Cy Guest", email: "cy@x.ca", ticketTypeId: "TG", answers: {} }]);
+r = reg("tickets-off", [{ name: "Cy Guest", email: "cy@x.ca", ucid: "30000003", ticketTypeId: "TG", answers: {} }]);
 ok(r.emails.ticket === false, "with ticket emails off the page is told no ticket will be emailed");
 
 // ---- Free event: one email only, the ticket
 run("__tix.length = 0; __reg.length = 0;");
-r = reg("free-night", [{ name: "Free Person", email: "free@x.ca", ticketTypeId: "FG", answers: {} }]);
+r = reg("free-night", [{ name: "Free Person", email: "free@x.ca", ucid: "30000004", ticketTypeId: "FG", answers: {} }]);
 ok(r.order.status === "paid" && run("__tix.length") === 1 && run("__reg.length") === 0, "a free signup gets just the ticket email, never a confirmation as well");
 ok(r.emails.confirmation === false && r.emails.ticket === true, "and says so");
 

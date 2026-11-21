@@ -30,7 +30,18 @@ function sendRegistrationEmail_(event, order, tickets) { __mail.push("reg:" + or
 function sendPendingTicketEmails_(orderId) { __mail.push("tix:" + orderId); return { sent: 1, waiting: 0 }; }
 function person(over) { return Object.assign({ name:"Alex Guest", email:"alex@x.ca", ticketTypeId:"TG", answers:{} }, over || {}); }
 `);
-const reg = (slug, people, extra) => run(`register_(${JSON.stringify(Object.assign({ slug, people }, extra || {}))})`);
+// Ordinary guest fixtures have UCIDs; the dedicated signup validation suite covers missing IDs.
+const guestUcids = new Map();
+const reg = (slug, people, extra) => {
+  const identified = people.map((person) => {
+    if (person.ucid || person.memberId) return person;
+    const key = person.email || person.name || "portal-member";
+    if (!guestUcids.has(key)) guestUcids.set(key, String(30900000 + guestUcids.size));
+    return Object.assign({ ucid: guestUcids.get(key) }, person);
+  });
+  return run(`register_(${JSON.stringify(Object.assign({ slug, people: identified }, extra || {}))})`);
+};
+const clearRegistrations = () => run("TBL.Orders=[]; TBL.Tickets=[]");
 const orders = () => run("TBL.Orders.length");
 const cache = (k) => run(`CacheService.getScriptCache().remove(${JSON.stringify(k)})`);
 const live = (orderId) => run(`TBL.Tickets.filter(function (t) { return t.orderId === ${JSON.stringify(orderId)}; })`);
@@ -53,31 +64,38 @@ const t1 = viaPortal.ok && live(run("TBL.Orders[TBL.Orders.length - 1].id"))[0];
 ok(viaPortal.ok && t1.name === "Mia Member" && t1.email === "mia@x.ca" && t1.memberId === "CSS0011234" && t1.ucid === "30111222", "from the portal (valid key) the details come from the Membership sheet");
 ok(viaPortal.order.status === "paid" && t1.flag === "" && !viaPortal.needsReview, "and the free member ticket is issued at once, unflagged");
 
+clearRegistrations();
 const spoof = reg("free-night", [{ name: "Zed Stranger", email: "zed@x.ca", ticketTypeId: "FM", memberId: "CSS0011234", answers: {} }]);
 ok(spoof.needsReview === true && spoof.order.status === "awaiting" && /name doesn't match/.test(spoof.tickets[0].flag) && spoof.tickets[0].page === "", "someone else's member ID with a different name: flagged, held for review, no ticket yet");
 
+clearRegistrations();
 const sameName = reg("free-night", [{ name: "Mia Member", email: "mia2@x.ca", ticketTypeId: "FM", memberId: "CSS0011234", answers: {} }]);
 ok(sameName.order.status === "paid" && !sameName.needsReview, "a typed ID with the matching name still goes straight through (nothing new for honest members)");
 
+clearRegistrations();
 const mixed = reg("free-night", [{ name: "Mia Member", email: "mia3@x.ca", ticketTypeId: "FM", memberId: "CSS0011234", ucid: "30333444", answers: {} }]);
 ok(mixed.needsReview === true && /UCID/.test(mixed.tickets[0].flag), "a member ID with another member's UCID is flagged: " + mixed.tickets[0].flag);
 
+clearRegistrations();
 const twoMembers = reg("free-night", [{ name: "Mia Member", email: "mia4@x.ca", ticketTypeId: "FM", ucid: "30333444", memberId: "CSS0033333", answers: {} }]);
 ok(twoMembers.needsReview === true && /different members|doesn't match/.test(twoMembers.tickets[0].flag), "an ID and a UCID of two different members are flagged: " + twoMembers.tickets[0].flag);
 
+clearRegistrations();
 const badKey = reg("free-night", [{ name: "Zed Stranger", email: "zed2@x.ca", ticketTypeId: "FM", memberId: "CSS0011234", answers: {} }], { member: { memberId: "CSS0011234", k: "not-the-key" } });
 ok(badKey.needsReview === true, "a wrong key is just 'not verified': the typed ID is checked against the name");
 
+clearRegistrations();
 const unpaid = reg("free-night", [{ name: "Pat Unpaid", email: "pat@x.ca", ticketTypeId: "FM", answers: {} }], { member: { memberId: "CSS0033333", k: run('linkKey_("pass", "CSS0033333")') } });
 ok(unpaid.needsReview === true && /isn't paid/.test(unpaid.tickets[0].flag), "a verified member whose membership is unpaid is still flagged");
 
-const guestOfMember = reg("free-night", [{ ticketTypeId: "FG", answers: {} }, { name: "Their Friend", email: "fr@x.ca", ticketTypeId: "FM", memberId: "CSS0011234", answers: {} }], { member: { memberId: "CSS0011234", k: KEY } });
+clearRegistrations();
+const guestOfMember = reg("free-night", [{ ticketTypeId: "FG", answers: {} }, { name: "Their Friend", email: "fr@x.ca", ticketTypeId: "FM", memberId: "CSS0022222", answers: {} }], { member: { memberId: "CSS0011234", k: KEY } });
 ok(guestOfMember.needsReview === true && /name doesn't match/.test(guestOfMember.tickets[1].flag), "a member's friend can't borrow the member's ID: only the verified person is exempt");
 
 // ---- A retry never makes a second order, even after the 10-minute cache is gone
 const before = orders();
 const first = reg("paid-night", [{ name: "Retry Person", email: "r@x.ca", ticketTypeId: "TG", answers: {} }], { requestId: "retry-aaaa-1111" });
-cache("regreq_retry-aaaa-1111");   // as if ten minutes had passed
+cache("regreq_paid-night_retry-aaaa-1111");   // as if ten minutes had passed
 const again = reg("paid-night", [{ name: "Retry Person", email: "r@x.ca", ticketTypeId: "TG", answers: {} }], { requestId: "retry-aaaa-1111" });
 ok(again.order.code === first.order.code && orders() === before + 1, "same requestId after the cache expired returns the same order (no duplicate)");
 ok(run("TBL.Tickets.filter(function (t) { return t.email === 'r@x.ca'; }).length") === 1, "and still just one ticket");

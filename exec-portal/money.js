@@ -200,19 +200,33 @@ async function runFindTransfer() {
 
 // ---- Cancel registration / invalidate tickets -------------------------------------------------
 
-const invDlg = { order: null, refundEdited: false };
+const invDlg = { order: null, refundEdited: false, ticketId: "", onSaved: null, saving: false };
 
-function openInvalidateDialog(order) {
+function canDisableTicket(ticket) {
+  return !!ticket && (ticket.status === "paid" || ticket.status === "awaiting") && !ticket.checkedInAt;
+}
+
+function openSingleTicketDialog(order, ticketId, onSaved) {
+  const ticket = order.tickets.find((t) => t.id === ticketId);
+  if ((order.status !== "paid" && order.status !== "awaiting") || !canDisableTicket(ticket)) return showToast(T.disableTicketUnavailable);
+  openInvalidateDialog(order, { ticketId, onSaved });
+}
+
+function openInvalidateDialog(order, options = {}) {
   invDlg.order = order;
   invDlg.refundEdited = false;
+  invDlg.ticketId = options.ticketId || "";
+  invDlg.onSaved = options.onSaved || null;
+  invDlg.saving = false;
   const paid = order.status === "paid";
-  $("inv-title").textContent = paid ? T.invTitlePaid(order.code) : T.invTitleUnpaid(order.code);
-  $("inv-intro").textContent = paid ? T.invIntroPaid : T.invIntroUnpaid;
+  $("inv-title").textContent = invDlg.ticketId ? T.disableTicketTitle(order.code) : paid ? T.invTitlePaid(order.code) : T.invTitleUnpaid(order.code);
+  $("inv-intro").textContent = invDlg.ticketId ? T.disableTicketIntro : paid ? T.invIntroPaid : T.invIntroUnpaid;
+  $("inv-all").hidden = !!invDlg.ticketId;
   $("inv-partpaid").hidden = paid || !(order.received > 0);
   if (order.received > 0 && !paid) $("inv-partpaid").textContent = T.invIntroPartPaid(dollars(order.received));
   const live = order.tickets.filter((t) => t.status === "paid" || t.status === "awaiting");
-  $("inv-tickets").innerHTML = live.map((t) => `
-    <li><label class="check-row pay-order"><input type="checkbox" data-inv="${t.id}" ${t.checkedInAt ? "disabled" : ""}>
+  $("inv-tickets").innerHTML = live.filter((t) => !invDlg.ticketId || t.id === invDlg.ticketId).map((t) => `
+    <li><label class="check-row pay-order"><input type="checkbox" data-inv="${t.id}" ${t.id === invDlg.ticketId ? "checked" : ""} ${t.checkedInAt ? "disabled" : ""}>
       <span>${escapeHtml(t.name)} · ${escapeHtml(t.ticketType)} ${money(t.price)}${t.status === "awaiting" ? "" : ""}
       ${t.checkedInAt ? `<small class="muted"> · ${escapeHtml(T.invCheckedIn)}</small>` : ""}</span></label></li>`).join("");
   $("inv-refund").value = "";
@@ -224,7 +238,7 @@ function openInvalidateDialog(order) {
 
 function invChosen() {
   const ids = [...document.querySelectorAll("#inv-tickets input[data-inv]:checked")].map((i) => i.dataset.inv);
-  return invDlg.order.tickets.filter((t) => ids.indexOf(t.id) !== -1);
+  return invDlg.order.tickets.filter((t) => ids.indexOf(t.id) !== -1 && (!invDlg.ticketId || t.id === invDlg.ticketId));
 }
 
 function updateInvalidate() {
@@ -239,17 +253,20 @@ function updateInvalidate() {
   $("inv-refund-box").hidden = !showRefund;
   if (!invDlg.refundEdited) $("inv-refund").value = suggested ? String(suggested) : (showRefund ? "0" : "");
   $("inv-save").disabled = !picked.length;
-  $("inv-save").textContent = paid ? T.invConfirmPaid(picked.length) : T.invConfirmUnpaid(picked.length, whole);
+  $("inv-save").textContent = invDlg.ticketId ? T.btnDisableTicket : paid ? T.invConfirmPaid(picked.length) : T.invConfirmUnpaid(picked.length, whole);
 }
 
 async function submitInvalidate(e) {
   e.preventDefault();
+  if (invDlg.saving) return;
   const picked = invChosen();
   if (!picked.length) return setInvError(T.invPickSome);
   $("inv-save").disabled = true;
+  invDlg.saving = true;
   const payload = { orderId: invDlg.order.id, ticketIds: picked.map((t) => t.id), reason: $("inv-reason").value };
   if (!$("inv-refund-box").hidden) payload.refundAmount = $("inv-refund").value;
   const reply = await api("invalidateTickets", payload);
+  invDlg.saving = false;
   if (!reply.ok) {
     $("inv-save").disabled = false;
     if (reply.error === "NOT_LOGGED_IN") { $("invalidate-dialog").close(); return handleEventError(reply, $("inv-error")); }
@@ -258,7 +275,8 @@ async function submitInvalidate(e) {
   $("invalidate-dialog").close();
   eventsState.loaded = false;
   showToast(T.invOutcome(reply), "success");
-  loadOrders();
+  if (invDlg.onSaved) invDlg.onSaved();
+  else loadOrders();
 }
 
 function setInvError(text) {

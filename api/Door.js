@@ -210,7 +210,7 @@ function walkIn_(session, eventId, input) {
   if (!name) throw new ApiError_("BAD_REQUEST", "Walk-in needs a name.");
   const method = input.method === "etransfer" ? "e-transfer" : "cash";
 
-  return withIntakeLock_(function () {
+  return withIntakeAndScriptLock_(function () {
     const event = findEvent_(function (e) { return e.id === eventId; });
     if (!event) throw new ApiError_("NOT_FOUND", "Event not found.");
     assertNotArchived_(event);
@@ -224,6 +224,8 @@ function walkIn_(session, eventId, input) {
       memberId: String(input.memberId || "").trim().toUpperCase().slice(0, 20),
       needsMembership: !!type.needsMembership
     };
+    delete DB_.rows["Orders"]; delete DB_.rows["Tickets"];
+    assertNoDuplicateRegistration_([person], event.id, readRows_("Tickets"));
     const flag = type.needsMembership ? membershipFlag_(person, loadMembers_()) : "";
 
     const order = {

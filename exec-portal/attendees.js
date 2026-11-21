@@ -94,14 +94,28 @@ function attendeeCard(a) {
         ${answers ? `<div class="sub">${answers}</div>` : ""}
         ${a.flag ? `<span class="flag">⚠ ${escapeHtml(a.flag)}</span>` : ""}
       </div>
-      ${editable ? `<button class="link" data-att-edit="${a.id}">${T.editPerson}</button>` : ""}
+      ${editable ? `<div class="row-buttons"><button class="link" data-att-edit="${a.id}">${T.editPerson}</button>
+        ${!a.checkedInAt ? `<button class="link danger" data-att-disable="${a.id}">${T.btnDisableTicket}</button>` : ""}</div>` : ""}
     </li>`;
 }
 
-function onAttendeeClick(event) {
-  const button = event.target.closest("button[data-att-edit]");
-  if (!button) return;
-  const a = attState.data.attendees.find((x) => x.id === button.dataset.attEdit);
+async function onAttendeeClick(event) {
+  const button = event.target.closest("button[data-att-edit], button[data-att-disable]");
+  if (!button || button.disabled) return;
+  const a = attState.data.attendees.find((x) => x.id === (button.dataset.attEdit || button.dataset.attDisable));
+  if (!a) return;
+  if (button.dataset.attDisable) {
+    if (attState.data.event.archived || !canDisableTicket(a)) return;
+    const eventId = attState.event.id;
+    button.disabled = true;
+    const reply = await api("listOrders", { eventId, filter: "all", q: a.order.code, offset: 0, limit: 200 });
+    button.disabled = false;
+    if (attState.event.id !== eventId) return;
+    if (!reply.ok) return handleEventError(reply, $("detail-status"));
+    const order = reply.orders.find((o) => o.id === a.order.id);
+    if (!order) return showToast(T.disableTicketUnavailable);
+    return openSingleTicketDialog(order, a.id, () => loadAttendees());
+  }
   openEditDialog({ ticket: a, order: a.order, event: attState.data.event }, (message) => {
     showToast(message);
     eventsState.loaded = false;   // counts on the Events list are out of date now

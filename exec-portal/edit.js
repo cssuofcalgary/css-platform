@@ -1,6 +1,6 @@
 // CSS Exec Portal — the "Edit person" panel (used from Payments and from the attendee list).
 // Every exec can fix a name or email. Admins also get UCID, member ID, ticket type, answers,
-// the help-desk flag and the order's payer details. Only what really changed is sent.
+// the help-desk flag and the order's payer details. Save also rechecks an unchanged membership warning.
 
 const editState = { ctx: null, onSaved: null };
 
@@ -64,6 +64,9 @@ function collectEditChanges() {
     diff(changes, "ucid", $("ed-ucid").value, ticket.ucid);
     diff(changes, "memberId", $("ed-member").value, ticket.memberId);
     diff(changes, "flag", $("ed-flag").value, ticket.flag);
+    if (changes.flag === undefined && String(ticket.flag || "").split("; ").some((flag) => flag.indexOf("Member price") === 0)) {
+      changes.recheckMembership = true;
+    }
     const current = (event.ticketTypes || []).find((t) => t.name === ticket.ticketType);
     const picked = $("ed-type").value;
     if (picked && (!current || picked !== current.id)) changes.ticketTypeId = picked;

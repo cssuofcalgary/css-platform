@@ -73,6 +73,7 @@ The Events list shows how many people have **paid** and how many are **awaiting 
 2. **Invalidate tickets…** (a paid order): tick the people whose tickets should stop working. Their QR codes are rejected at the door the moment you confirm. The window pre-fills the refund amount (what those tickets cost); change it to keep a fee, or enter 0 for no refund. You can invalidate one person of a group and leave the others valid. A person already checked in can't be invalidated: undo their check-in first. Afterwards the order shows a red **Refund owed $X**.
 3. **Record refund:** send the money back yourself (e-transfer or cash), then press **Record refund** and enter the amount, how, the date, and who did it. If you only returned part, the rest stays owed. **Not owed after all…** cancels the refund with a reason.
 Made a mistake? **Put back** next to an invalidated ticket works until its refund was returned; **Restore** on a closed order puts the whole order back (paid again if the money was never returned).
+To stop just one person's ticket, press **Disable ticket** beside their name in **Events → Attendees** or **Payments**. Check the selected person and refund amount, then confirm. Only that ticket stops working; the others in their group stay valid. Enter 0 if no money is owed back.
 Orders refunded before refunds were tracked show a grey "return not recorded" line, not an alert. **Money already returned** records it with the date unknown.
 The **Refunds owed** bar and the **Needs sorting** filter list everything still to return or still to collect.
 
@@ -89,6 +90,7 @@ The **Refunds owed** bar and the **Needs sorting** filter list everything still 
 **Edit** (next to a person, here and in Attendees): opens a form.
 - **Any exec:** name and email. A new email gets their ticket sent again automatically.
 - **Admin password only:** UCID, member ID (the membership is checked again), **ticket type** (the price and the order total change; the message tells you whether to collect or refund the difference), answers to the event's questions, the help-desk warning (clear it if it was sorted out), and the order's payer name/email, e-transfer name and notes. Everything is saved in the change log with the old and new values.
+If membership has since been paid but a ticket still has a membership warning, unlock admin editing, open **Edit** and press **Save changes** with the warning unchanged. This checks the current membership sheet and keeps any unrelated warnings. A free ticket held for review still needs **Mark paid** to issue it.
 If you see "ticket emails waiting", the daily email limit was reached. The bar shows how many are waiting and **how many emails are left today**. Press **Send now**: it asks how many to send (it suggests the smaller of the two numbers) and sends the oldest first. You can send fewer to keep some allowance for reminders. Gmail allows about 100 emails a day and resets about a day after the first send.
 **Search by amount:** type `$25` (orders totalling exactly $25) or just `25` (that amount, or that text) in the Payments search. Handy when a parent e-transfers under another name with no message.
 

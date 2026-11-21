@@ -8,9 +8,10 @@
  * read-only is up to this code: nothing in v0.1 writes to a sheet.
  */
 
-function loadMembers_() {
+/** `fresh` is for a deliberate membership recheck: an older copy must not undo a payment correction. */
+function loadMembers_(fresh) {
   const cache = CacheService.getScriptCache();
-  const cached = cacheGetJson_(cache, "members");
+  const cached = fresh ? null : cacheGetJson_(cache, "members");
   if (cached) return cached;
 
   const config = getConfig_();
@@ -26,7 +27,7 @@ function loadMembers_() {
     });
   } catch (err) {
     // Google is having a moment: an older copy (up to 6 h) beats an error page.
-    const older = cacheGetJson_(cache, "members_old");
+    const older = fresh ? null : cacheGetJson_(cache, "members_old");
     if (older) return older;
     throw err;
   }
@@ -78,7 +79,7 @@ function setMemberCells_(book, member, changes) {
 
 /** The member list is cached for a few minutes: forget it so the next search sees the change. */
 function forgetMembers_() {
-  try { CacheService.getScriptCache().removeAll(["members_count"]); } catch (e) { /* the cache expires on its own */ }
+  try { CacheService.getScriptCache().removeAll(["members_count", "members_old_count"]); } catch (e) { /* the cache expires on its own */ }
 }
 
 // Apps Script caches hold at most 100 KB per entry, so big values are split into chunks.

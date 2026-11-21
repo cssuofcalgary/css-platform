@@ -105,6 +105,7 @@ function orderCard(o) {
           ${Object.entries(t.answers || {}).map(([k, v]) => ` · ${escapeHtml(k)}: ${escapeHtml(v)}`).join("")}
           ${t.status === "paid" ? ` · <a class="link" target="_blank" rel="noopener" href="${ticketUrl(t)}">${T.openTicket}</a>` : ""}
           ${t.status === "paid" || t.status === "awaiting" ? ` · <button class="link" data-edit-ticket="${t.id}">${T.editPerson}</button>` : ""}
+          ${canDisableTicket(t) && (o.status === "paid" || o.status === "awaiting") ? ` · <button class="link danger" data-act="disable" data-ticket="${t.id}">${T.btnDisableTicket}</button>` : ""}
           ${t.checkedInAt ? ` · ${T.checkedInMark}` : ""}${stoppedTicketMark(o, t)}${t.emailedAt && !t.emailedAt.startsWith("test") && !t.emailedAt.startsWith("claim:") ? ` · ${T.emailedMark}` : ""}
           ${t.flag ? `<br><span class="flag">${escapeHtml(t.flag)}</span>` : ""}</li>`).join("")}
       </ul>
@@ -160,6 +161,7 @@ async function onOrdersClick(event) {
   const act = button.dataset.act;
   if (act === "pay") return openPayDialog(order);
   if (act === "invalidate") return openInvalidateDialog(order);
+  if (act === "disable") return openSingleTicketDialog(order, button.dataset.ticket);
   if (act === "recordrefund") return openRefundDialog(order);
   if (act === "histrefund") return markAlreadyReturned(order);
   if (act === "putback") return putTicketBack(order, button.dataset.ticket);

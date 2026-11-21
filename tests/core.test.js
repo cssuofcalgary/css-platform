@@ -26,13 +26,13 @@ ok(r.v && r.v.order.status === "paid" && !r.v.needsReview, "SEC-01: a real paid 
 // ---- SEC-02: capacity 4, rule paid: hard stop at 4 paid, queue ceiling 5 (floor(4*1.25))
 run(`TBL.Orders=[]; TBL.Tickets=[];`);
 for (let i = 0; i < 5; i++) {
-  r = J(`register_({ slug:"mj", people:[{ name:"Person ${i}", email:"p${i}@x.ca", ticketTypeId:"T2", answers:{} }] })`);
+  r = J(`register_({ slug:"mj", people:[{ name:"Person ${i}", email:"p${i}@x.ca", ucid:"3000000${i}", ticketTypeId:"T2", answers:{} }] })`);
   ok(r.v && r.v.ok, "SEC-02: sign-up " + (i + 1) + " accepted (queue below ceiling)");
 }
-r = J(`register_({ slug:"mj", people:[{ name:"Person 6", email:"p6@x.ca", ticketTypeId:"T2", answers:{} }] })`);
+r = J(`register_({ slug:"mj", people:[{ name:"Person 6", email:"p6@x.ca", ucid:"30000006", ticketTypeId:"T2", answers:{} }] })`);
 ok(r.err === "SOLD_OUT" && /queue is full/i.test(r.msg), "SEC-02: sixth unpaid sign-up refused: " + r.msg);
 run(`TBL.Tickets.forEach(function(t,i){ if(i<4) t.status="paid"; });`);
-r = J(`register_({ slug:"mj", people:[{ name:"Late", email:"late@x.ca", ticketTypeId:"T2", answers:{} }] })`);
+r = J(`register_({ slug:"mj", people:[{ name:"Late", email:"late@x.ca", ucid:"30000007", ticketTypeId:"T2", answers:{} }] })`);
 ok(r.err === "SOLD_OUT" && /full/i.test(r.msg), "SEC-02: hard cap once paid tickets reach capacity: " + r.msg);
 
 // ---- Cancel request

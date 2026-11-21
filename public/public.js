@@ -117,6 +117,7 @@ function showMessage(text, withBack) {
 
 let currentEvent = null;
 let guestCount = 0;
+let pendingRegistration = null;
 
 function showRegisterForm(e) {
   guestCount = 0;
@@ -154,6 +155,7 @@ function showRegisterForm(e) {
   $("back-to-event").addEventListener("click", () => showEvent(e.slug));
   $("add-guest").addEventListener("click", addGuest);
   $("register-form").addEventListener("change", onFormChange);
+  $("register-form").addEventListener("input", updateMemberFields);
   $("register-form").addEventListener("click", onFormClick);
   $("register-form").addEventListener("submit", onSubmit);
   updateMemberFields();
@@ -181,6 +183,7 @@ function showWaitlistForm(e) {
     </form>`;
   $("back-to-event").addEventListener("click", () => showEvent(e.slug));
   $("register-form").addEventListener("change", onFormChange);
+  $("register-form").addEventListener("input", updateMemberFields);
   $("register-form").addEventListener("submit", onWaitlistSubmit);
   updateMemberFields();
   window.scrollTo(0, 0);
@@ -188,12 +191,13 @@ function showWaitlistForm(e) {
 
 async function onWaitlistSubmit(ev) {
   ev.preventDefault();
+  const button = $("submit");
+  if (button.disabled) return;
   const people = readPeople();
   const problem = firstProblem(people);
   const error = $("form-error");
-  if (problem) { error.textContent = T.pleaseFill(problem); error.hidden = false; return; }
+  if (problem) { error.textContent = problem; error.hidden = false; return; }
   error.hidden = true;
-  const button = $("submit");
   button.disabled = true;
   button.textContent = T.submitting;
   let reply;
@@ -226,9 +230,8 @@ function personFields(e, i, waitlist) {
     <input id="${id("email")}" data-f="email" type="email" inputmode="email" autocomplete="${i ? "off" : "email"}" maxlength="120" required>
     <p class="hint">${waitlist ? T.waitlistEmailHint : i ? T.guestEmailHint : T.emailHint}</p>
 
-    <label for="${id("ucid")}">${T.ucid}</label>
-    <input id="${id("ucid")}" data-f="ucid" inputmode="numeric" maxlength="12">
-    <p class="hint">${T.ucidHint}</p>
+    <label for="${id("ucid")}">${T.ucid} <span class="req" data-identity-required>*</span></label>
+    <input id="${id("ucid")}" data-f="ucid" inputmode="numeric" maxlength="8" pattern="[0-9]{8}" required>
 
     <fieldset class="ticket-choice">
       <legend>${T.ticket} <span class="req">*</span></legend>
@@ -240,10 +243,10 @@ function personFields(e, i, waitlist) {
         </label>`).join("")}
     </fieldset>
 
-    <div class="member-fields" hidden>
+    <div class="member-fields">
       <label for="${id("member")}">${T.memberId}</label>
       <input id="${id("member")}" data-f="memberId" autocomplete="off" maxlength="20" placeholder="CSS…">
-      <p class="hint">${T.memberCheckNote}</p>
+      <p class="hint" data-member-note hidden>${T.memberCheckNote}</p>
     </div>
 
     ${e.questions.map((q) => `
@@ -294,7 +297,10 @@ function chosenType(section) {
 function updateMemberFields() {
   document.querySelectorAll("#register-form .person").forEach((s) => {
     const type = chosenType(s);
-    s.querySelector(".member-fields").hidden = !(type && type.needsMembership);
+    s.querySelector("[data-member-note]").hidden = !(type && type.needsMembership);
+    const needsUcid = !s.querySelector('[data-f="memberId"]').value.trim();
+    s.querySelector('[data-f="ucid"]').required = needsUcid;
+    s.querySelector("[data-identity-required]").hidden = !needsUcid;
   });
 }
 
@@ -328,37 +334,56 @@ function firstProblem(people) {
   for (let i = 0; i < people.length; i++) {
     const p = people[i];
     const who = i === 0 ? "" : ` (${T.guestTitle(i)})`;
-    if (!p.name) return T.fullName + who;
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(p.email || "")) return T.email + who;
-    if (!p.ticketTypeId) return T.ticket + who;
+    if (!p.name) return T.pleaseFill(T.fullName + who);
+    if (String(p.email || "").length > 120 || !/^[^\s@]+@[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)*\.[a-z]{2,63}$/i.test(p.email || "")) return T.emailInvalid + who;
+    const email = String(p.email).toLowerCase();
+    const split = email.lastIndexOf("@");
+    const correctedDomain = EMAIL_DOMAIN_TYPOS[email.slice(split + 1)];
+    if (correctedDomain) return T.emailTypo(email.slice(0, split + 1) + correctedDomain) + who;
+    if (!p.ucid && !p.memberId) return T.identityRequired + who;
+    if (p.ucid && !/^[0-9]{8}$/.test(p.ucid)) return T.ucidInvalid + who;
+    if (!p.ticketTypeId) return T.pleaseFill(T.ticket + who);
     const missing = currentEvent.questions.find((q) => q.required && !p.answers[q.id]);
-    if (missing) return missing.label + who;
+    if (missing) return T.pleaseFill(missing.label + who);
   }
   return "";
 }
 
+// Only known misspellings: unfamiliar schools, companies and personal domains are allowed.
+const EMAIL_DOMAIN_TYPOS = {
+  "gnail.com": "gmail.com", "gmial.com": "gmail.com", "gamil.com": "gmail.com",
+  "gmaill.com": "gmail.com", "gmai.com": "gmail.com", "gmail.con": "gmail.com", "gmail.cmo": "gmail.com",
+  "hotmial.com": "hotmail.com", "hotmail.con": "hotmail.com",
+  "outlok.com": "outlook.com", "outlook.con": "outlook.com",
+  "yaho.com": "yahoo.com", "yahoo.con": "yahoo.com", "ucalgary.con": "ucalgary.ca"
+};
+
 async function onSubmit(ev) {
   ev.preventDefault();
+  const button = $("submit");
+  if (button.disabled) return;
   const people = readPeople();
   const problem = firstProblem(people);
   const error = $("form-error");
-  if (problem) { error.textContent = T.pleaseFill(problem); error.hidden = false; return; }
+  if (problem) { error.textContent = problem; error.hidden = false; return; }
   error.hidden = true;
 
-  const button = $("submit");
   button.disabled = true;
   button.textContent = T.submitting;
   // Busy or slow? Try again by itself. The same requestId on every try means the server can never create two registrations.
-  const requestId = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : String(Date.now()) + "-" + Math.random().toString(16).slice(2);
+  const details = {
+    slug: currentEvent.slug, people,
+    etransferName: $("etransfer-name") ? $("etransfer-name").value.trim() : "",
+    website: $("website").value
+  };
+  const signature = JSON.stringify(details);
+  if (!pendingRegistration || pendingRegistration.signature !== signature) {
+    pendingRegistration = { signature, requestId: (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : String(Date.now()) + "-" + Math.random().toString(16).slice(2) };
+  }
+  const requestId = pendingRegistration.requestId;
   let reply;
   for (let attempt = 1; attempt <= 4; attempt++) {
-    reply = await api("register", {
-      slug: currentEvent.slug,
-      people,
-      etransferName: $("etransfer-name") ? $("etransfer-name").value.trim() : "",
-      website: $("website").value,
-      requestId
-    });
+    reply = await api("register", { ...details, requestId });
     if (reply.ok || !["BUSY", "TEMPORARY", "NETWORK"].includes(reply.error) || attempt === 4) break;
     button.textContent = T.submittingAgain;
     await new Promise((resolve) => setTimeout(resolve, 1500 * attempt));
@@ -372,6 +397,7 @@ async function onSubmit(ev) {
     error.hidden = false;
     return;
   }
+  pendingRegistration = null;
   showPaymentScreen(reply);
 }
 

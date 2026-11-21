@@ -35,6 +35,8 @@ function cleanMemberInput_(input) {
   if (name.length < 2 || name.indexOf(" ") === -1) throw new ApiError_("BAD_REQUEST", "Please enter your full name (first and last).");
   if (!/^\d{8}$/.test(ucid)) throw new ApiError_("BAD_REQUEST", "Your UCID is the 8-digit student number on your UCard.");
   if (email.length > 120 || !/^[a-z0-9][a-z0-9._%+'-]*@[a-z0-9-]+(\.[a-z0-9-]+)*\.[a-z]{2,}$/.test(email)) throw new ApiError_("BAD_REQUEST", "That email doesn't look right.");
+  const emailProblem = emailProblem_(email);
+  if (emailProblem) throw new ApiError_("BAD_REQUEST", emailProblem);
   if (!MEMBER_METHODS[method]) throw new ApiError_("BAD_REQUEST", "Choose how you are paying: e-transfer or cash.");
 
   const clean = { name: name, ucid: ucid, email: email, method: method, when: "", where: "", who: "" };

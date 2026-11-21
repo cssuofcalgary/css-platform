@@ -35,7 +35,7 @@ run(`
 var oldEvent = { id:"EV", name:"Old", ticketTypes:[{ id:"T", name:"G", price:0 }], questions:[
   { id:"q1", label:"Meal", type:"text", options:[], required:false }, { id:"q2", label:"Meal", type:"text", options:[], required:false }, { id:"q3", label:"Meal", type:"text", options:[], required:false }] };
 `);
-const person = run('cleanPerson_({ name: "A B", email: "a@x.ca", ticketTypeId: "T", answers: { q1: "Veg", q2: "Chicken", q3: "Fish" } }, oldEvent, 0)');
+const person = run('cleanPerson_({ name: "A B", email: "a@x.ca", ucid: "30000001", ticketTypeId: "T", answers: { q1: "Veg", q2: "Chicken", q3: "Fish" } }, oldEvent, 0)');
 ok(person.answers.Meal === "Veg" && person.answers["Meal (2)"] === "Chicken" && person.answers["Meal (3)"] === "Fish", "same-worded questions on an existing event each keep their own answer: " + JSON.stringify(person.answers));
 
 // ---- Paid-ticket count is separate from places taken

@@ -20,15 +20,15 @@ ok(v.soldOut === true, "public view: sold out when paid tickets reach capacity")
 ok(v.waitlistOpen === true, "public view: waitlistOpen");
 
 // ---- 2. join
-let r = J(`joinWaitlist_({ slug:"mj", person:{ name:"Wendy Wait", email:"wendy@x.ca", ticketTypeId:"T2", answers:{Q1:"Tea"} } })`);
+let r = J(`joinWaitlist_({ slug:"mj", person:{ name:"Wendy Wait", email:"wendy@x.ca", ucid:"30111111", ticketTypeId:"T2", answers:{Q1:"Tea"} } })`);
 ok(r.v && r.v.ok && !r.v.already, "join waitlist ok");
 ok(sent.length === 1 && /waitlist/i.test(sent[0].subject), "join sends one waitlist email: " + (sent[0] && sent[0].subject));
-r = J(`joinWaitlist_({ slug:"mj", person:{ name:"Wendy Wait", email:"wendy@x.ca", ticketTypeId:"T2", answers:{Q1:"Tea"} } })`);
+r = J(`joinWaitlist_({ slug:"mj", person:{ name:"Wendy Wait", email:"wendy@x.ca", ucid:"30111111", ticketTypeId:"T2", answers:{Q1:"Tea"} } })`);
 ok(r.v && r.v.already === true && sent.length === 1, "joining twice says already and sends no second email");
-r = J(`joinWaitlist_({ slug:"mj", person:{ name:"Missing Drink", email:"md@x.ca", ticketTypeId:"T2", answers:{} } })`);
+r = J(`joinWaitlist_({ slug:"mj", person:{ name:"Missing Drink", email:"md@x.ca", ucid:"30222222", ticketTypeId:"T2", answers:{} } })`);
 ok(r.err === "BAD_REQUEST", "required question enforced on the waitlist form");
-r = J(`joinWaitlist_({ slug:"mj", person:{ name:"Has Ticket", email:"A0@x.ca", ticketTypeId:"T2", answers:{Q1:"Tea"} } })`);
-ok(r.err === "BAD_REQUEST", "someone with a ticket can't join the waitlist");
+r = J(`joinWaitlist_({ slug:"mj", person:{ name:"NA0", email:"A0@x.ca", ucid:"30333333", ticketTypeId:"T2", answers:{Q1:"Tea"} } })`);
+ok(r.err === "ALREADY_REGISTERED", "someone with a ticket can't join the waitlist");
 J(`joinWaitlist_({ slug:"mj", person:{ name:"Mem Ber", email:"mem@x.ca", ucid:"12345678", memberId:"CSS0011234", ticketTypeId:"T1", answers:{Q1:"Taro"} } })`);
 
 // ---- 3. list
@@ -66,7 +66,7 @@ const mt = run(`TBL.Tickets.filter(function(t){return t.email==="mem@x.ca"})[0]`
 ok(mt && mt.flag === "" && mt.price === 4, "member ticket has no flag and member price");
 
 // remove
-J(`joinWaitlist_({ slug:"mj", person:{ name:"Zed", email:"zed@x.ca", ticketTypeId:"T2", answers:{Q1:"Tea"} } })`);
+J(`joinWaitlist_({ slug:"mj", person:{ name:"Zed", email:"zed@x.ca", ucid:"30444444", ticketTypeId:"T2", answers:{Q1:"Tea"} } })`);
 const zed = J(`listWaitlist_("EV1")`).v.entries.filter((e) => e.email === "zed@x.ca")[0];
 r = J(`removeWaitlistEntry_(${JSON.stringify(sess)}, "${zed.id}")`);
 ok(r.v && r.v.ok && J(`listWaitlist_("EV1")`).v.entries.every((e) => e.email !== "zed@x.ca"), "remove hides the entry");
@@ -77,7 +77,7 @@ ok(lo.v && lo.v.waitlist && lo.v.waitlist.enabled === true, "listOrders carries 
 
 // waitlist off -> join refused
 run(`TBL.Events[0].waitlist = "FALSE"`);
-r = J(`joinWaitlist_({ slug:"mj", person:{ name:"No Wl", email:"nw@x.ca", ticketTypeId:"T2", answers:{Q1:"Tea"} } })`);
+r = J(`joinWaitlist_({ slug:"mj", person:{ name:"No Wl", email:"nw@x.ca", ucid:"30555555", ticketTypeId:"T2", answers:{Q1:"Tea"} } })`);
 ok(r.err === "BAD_REQUEST", "join refused when the event has no waitlist");
 
 console.log(fails ? "\n" + fails + " FAILED" : "\nALL PASSED");
