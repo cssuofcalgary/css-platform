@@ -125,19 +125,48 @@ function emailsLeftToday_() {
  * The limit is Google's and is counted over a rolling day, so this never claims a reset time.
  */
 function emailStatus_() {
-  const today = Utilities.formatDate(new Date(), "America/Edmonton", "yyyy-MM-dd");
-  const live = {};
-  allEvents_().forEach(function (e) { if (!e.archivedAt && e.date >= today) live[e.id] = true; });
+  const live = upcomingEventIds_();
   const waiting = readRows_("Tickets").filter(function (t) { return t.status === "paid" && live[t.eventId] && ticketUnsent_(t); }).length;
   return { ok: true, left: emailsLeftToday_(), waiting: waiting, checkedAt: new Date().toISOString() };
 }
 
+/** The events that haven't happened yet, as { event id: true }. */
+function upcomingEventIds_() {
+  const today = Utilities.formatDate(new Date(), "America/Edmonton", "yyyy-MM-dd");
+  const live = {};
+  allEvents_().forEach(function (e) { if (!e.archivedAt && e.date >= today) live[e.id] = true; });
+  return live;
+}
+
+/**
+ * Ticket emails right after something was saved. The save has already happened, so a problem here (the email step is busy,
+ * Google hiccups) never turns it into an error that makes someone press the button again: the tickets just stay waiting.
+ */
+function emailsAfterSave_(orderId) {
+  try {
+    return sendPendingTicketEmails_(orderId);
+  } catch (err) {
+    console.error("Ticket emails after a save failed: " + (err && err.message || err)); rememberError_("email", err);
+    let waiting = 0;
+    try { delete DB_.rows["Tickets"]; waiting = readRows_("Tickets").filter(function (t) { return t.orderId === orderId && t.status === "paid" && ticketUnsent_(t); }).length; } catch (e) { /* unknown */ }
+    return { sent: 0, waiting: waiting, notEmailed: 0 };
+  }
+}
+
 /** Finance: the e-transfer arrived. `force` = go over capacity anyway (Finance was warned). */
-function markOrderPaid_(session, orderId, force, siteUrl) {
+function markOrderPaid_(session, orderId, force, siteUrl, requestId) {
   rememberSiteUrl_(siteUrl);
-  const result = withLock_(function () { return markPaidLocked_(session, orderId, force); });
-  const sent = sendPendingTicketEmails_(result.order.id);
-  return { ok: true, alreadyPaid: result.already, repaired: result.repaired || 0, confirmed: result.confirmed || 0, emailsSent: sent.sent, emailsWaiting: sent.waiting, notEmailed: sent.notEmailed || 0, emailsLeftToday: emailsLeftToday_() };
+  const rid = cleanRequestId_(requestId);
+  const result = withLock_(function () {
+    const saved = savedRequest_("markOrderPaid", rid);
+    if (saved && saved.status === "done") return { repeat: saved.reply };   // the same press again: same answer, nothing new
+    return markPaidLocked_(session, orderId, force);
+  });
+  if (result.repeat) return result.repeat;
+  const sent = emailsAfterSave_(result.order.id);
+  const reply = { ok: true, alreadyPaid: result.already, repaired: result.repaired || 0, confirmed: result.confirmed || 0, emailsSent: sent.sent, emailsWaiting: sent.waiting, notEmailed: sent.notEmailed || 0, emailsLeftToday: emailsLeftToday_() };
+  finishRequest_("markOrderPaid", rid, session.name, reply);
+  return reply;
 }
 
 /** The part of "mark paid" that changes data. Call it while holding the lock. */
@@ -175,14 +204,17 @@ function markPaidLocked_(session, orderId, force) {
  */
 const MAX_BULK_ORDERS = 10;
 
-function markOrdersPaid_(session, orderIds, siteUrl) {
+function markOrdersPaid_(session, orderIds, siteUrl, requestId) {
   rememberSiteUrl_(siteUrl);
   const ids = [];
   (Array.isArray(orderIds) ? orderIds : []).forEach(function (id) { if (id && ids.indexOf(id) === -1) ids.push(String(id)); });
   if (!ids.length) throw new ApiError_("BAD_REQUEST", "Pick at least one order.");
   if (ids.length > MAX_BULK_ORDERS) throw new ApiError_("BAD_REQUEST", "Up to " + MAX_BULK_ORDERS + " orders at a time.");
+  const rid = cleanRequestId_(requestId);
 
   const outcomes = withLock_(function () {
+    const saved = savedRequest_("markOrdersPaid", rid);
+    if (saved && saved.status === "done") return { repeat: saved.reply };
     return ids.map(function (id) {
       try {
         const r = markPaidLocked_(session, id, false);
@@ -195,14 +227,18 @@ function markOrdersPaid_(session, orderIds, siteUrl) {
     });
   });
 
+  if (outcomes.repeat) return outcomes.repeat;
+
   let sent = 0, waiting = 0, notEmailed = 0, confirmed = 0;
   outcomes.forEach(function (o) {
     if (!o.ok || (o.already && !o.repaired)) return;
     confirmed += o.confirmed || 0;
-    const r = sendPendingTicketEmails_(o.orderId);
+    const r = emailsAfterSave_(o.orderId);
     sent += r.sent; waiting += r.waiting; notEmailed += r.notEmailed || 0;
   });
-  return { ok: true, results: outcomes, confirmed: confirmed, emailsSent: sent, emailsWaiting: waiting, notEmailed: notEmailed, emailsLeftToday: emailsLeftToday_() };
+  const reply = { ok: true, results: outcomes, confirmed: confirmed, emailsSent: sent, emailsWaiting: waiting, notEmailed: notEmailed, emailsLeftToday: emailsLeftToday_() };
+  finishRequest_("markOrdersPaid", rid, session.name, reply);
+  return reply;
 }
 
 /**
@@ -214,7 +250,7 @@ function sendReminders_(session, eventId, dryRun) {
   if (!event) throw new ApiError_("NOT_FOUND", "Event not found.");
   const today = Utilities.formatDate(new Date(), "America/Edmonton", "yyyy-MM-dd");
   if (event.date < today) throw new ApiError_("BAD_REQUEST", "This event is over. No reminders needed.");
-  if (!eventMails_(event).reminders) throw new ApiError_("BAD_REQUEST", "Payment reminders are turned off for this event. To use them, edit the event and tick \"Send payment reminders\" under Emails.");
+  if (!eventMails_(event).reminders) throw new ApiError_("BAD_REQUEST", "Payment reminders are turned off for this event. To use them, edit the event and tick \"Enable reminders for unpaid orders.\" under Emails.");
 
   const isDue = reminderDue_;
 
@@ -331,12 +367,13 @@ function ticketUnsent_(t) {
  * Sends ticket emails for paid tickets that haven't had one yet (one order, or all). Each ticket is CLAIMED under the lock
  * before it is sent, so two people pressing Send now at the same moment can never email the same person twice.
  * `again` = send even tickets that were emailed before (resend); a ticket another run is sending right now is still skipped.
+ * `eventIds` = { event id: true }: only tickets of these events are sent and counted as waiting.
  */
-function sendPendingTicketEmails_(orderId, limit, again) {
+function sendPendingTicketEmails_(orderId, limit, again, eventIds) {
   const claimed = withLock_(function () {
     delete DB_.rows["Tickets"];   // decide on fresh data, inside the lock
     let tickets = readRows_("Tickets").filter(function (t) {
-      if (t.status !== "paid" || (orderId && t.orderId !== orderId)) return false;
+      if (t.status !== "paid" || (orderId && t.orderId !== orderId) || (eventIds && !eventIds[t.eventId])) return false;
       return again ? !freshClaim_(t) : ticketUnsent_(t);
     });
     if (limit > 0) tickets = tickets.slice(0, limit);   // oldest first: new rows go at the bottom of the sheet
@@ -369,7 +406,7 @@ function sendPendingTicketEmails_(orderId, limit, again) {
   });
   delete DB_.rows["Tickets"];
   const waiting = readRows_("Tickets").filter(function (t) {
-    return t.status === "paid" && ticketUnsent_(t) && (!orderId || t.orderId === orderId);
+    return t.status === "paid" && ticketUnsent_(t) && (!orderId || t.orderId === orderId) && (!eventIds || eventIds[t.eventId]);
   }).length;
   return { sent: sent, waiting: waiting, notEmailed: notEmailed };
 }

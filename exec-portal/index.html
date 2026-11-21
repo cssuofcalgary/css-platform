@@ -9,7 +9,7 @@
   <link rel="icon" href="assets/css-logo.png" type="image/png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Fraunces:opsz,wght@9..144,500;9..144,600&family=JetBrains+Mono:wght@400;500&display=swap">
-  <link rel="stylesheet" href="styles.css?v=1.7.0">
+  <link rel="stylesheet" href="styles.css?v=1.7.7">
   <link rel="stylesheet" href="theme.css?v=0.13.5">
   <link rel="stylesheet" href="peekaboo.css?v=1.0.1">
   <link rel="stylesheet" href="forest.css?v=1.0.7">
@@ -20,6 +20,7 @@
     <symbol id="i-users" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.6-3.6 3.2-5.5 6.5-5.5s5.9 1.9 6.5 5.5M16 4.8a3.5 3.5 0 010 6.4M18 14.8c2 .6 3.2 2.3 3.5 5.2"/></symbol>
     <symbol id="i-cal" viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15.5" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/></symbol>
     <symbol id="i-card" viewBox="0 0 24 24"><rect x="3" y="5.5" width="18" height="13" rx="2.5"/><path d="M3 10h18M7 15h4"/></symbol>
+    <symbol id="i-tag" viewBox="0 0 24 24"><path d="M3.5 12.2V4.5a1 1 0 0 1 1-1h7.7l8.3 8.3a1.5 1.5 0 0 1 0 2.1l-6.2 6.2a1.5 1.5 0 0 1-2.1 0z"/><circle cx="8" cy="8" r="1.4"/></symbol>
     <symbol id="i-scan" viewBox="0 0 24 24"><path d="M4 8V5.5A1.5 1.5 0 015.5 4H8M16 4h2.5A1.5 1.5 0 0120 5.5V8M20 16v2.5a1.5 1.5 0 01-1.5 1.5H16M8 20H5.5A1.5 1.5 0 014 18.5V16M7 12h10"/></symbol>
     <symbol id="i-pulse" viewBox="0 0 24 24"><path d="M3 12h4l2.5-7 5 14L17 12h4"/></symbol>
     <symbol id="i-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M9.5 3h5l.6 2.4 1.7 1 2.4-.7 2.5 4.3-1.8 1.7v2l1.8 1.7-2.5 4.3-2.4-.7-1.7 1-.6 2.4h-5l-.6-2.4-1.7-1-2.4.7-2.5-4.3 1.8-1.7v-2L2.3 10l2.5-4.3 2.4.7 1.7-1Z"/></symbol>
@@ -65,6 +66,7 @@
       <nav class="tabs" aria-label="Main">
         <button class="tab active" data-tab="overview"><svg><use href="#i-home"/></svg><span data-t="tabOverview"></span></button>
         <button class="tab" data-tab="members"><svg><use href="#i-users"/></svg><span data-t="tabMembers"></span><span id="mem-nav-count" class="nav-pill" hidden></span></button>
+        <button class="tab" data-tab="partners"><svg><use href="#i-tag"/></svg><span data-t="tabPartners"></span></button>
         <button class="tab" data-tab="events"><svg><use href="#i-cal"/></svg><span data-t="tabEvents"></span></button>
         <button class="tab" data-tab="payments"><svg><use href="#i-card"/></svg><span data-t="tabPayments"></span><span id="pay-nav-count" class="nav-pill" hidden></span></button>
         <button class="tab" data-tab="door"><svg><use href="#i-scan"/></svg><span data-t="tabDoor"></span><span id="door-nav-live" class="nav-live" hidden></span></button>
@@ -124,6 +126,7 @@
         <div class="chips" id="mem-filters">
           <button class="chip" type="button" data-mem-view="pending"><span data-t="pendingTab"></span> <span id="mem-pending-count" class="chip-count"></span></button>
           <button class="chip active" type="button" data-mem-view="search" data-t="searchTab"></button>
+          <button class="chip" type="button" data-mem-view="all" data-t="allMembersTab"></button>
         </div>
         <button id="pending-refresh" class="link small" type="button" data-t="pendingRefresh"></button>
       </div>
@@ -138,6 +141,57 @@
         <p id="search-status" class="muted small" aria-live="polite"></p>
         <ul id="results" class="results"></ul>
       </section>
+      <section id="all-view" hidden>
+        <div class="all-tools">
+          <label for="all-search" class="visually-hidden" data-t="searchLabel"></label>
+          <input id="all-search" class="search" type="search" autocomplete="off" enterkeyhint="search" data-ph="searchPlaceholder">
+          <label for="all-sort" class="visually-hidden" data-t="allSort"></label>
+          <select id="all-sort"></select>
+          <button id="all-csv" class="secondary small-button" type="button" data-t="allCsv"></button>
+        </div>
+        <div class="chips" id="all-filters"></div>
+        <p id="all-status" class="muted small" aria-live="polite"></p>
+        <div id="all-table" class="all-table" role="table"></div>
+        <button id="all-more" class="secondary" type="button" hidden></button>
+      </section>
+      </div>
+
+      <section id="member-view" hidden>
+        <button id="back-button" class="link" data-t="back"></button>
+        <article class="card member-card">
+          <h2 id="member-name"></h2>
+          <div id="member-badges" class="badges"></div>
+          <dl id="member-fields" class="fields"></dl>
+          <section id="member-notes" class="detail-block">
+            <h3 id="member-notes-heading" class="section-title" data-t="memberNotes"></h3>
+            <form id="member-note-form">
+              <textarea id="member-note-text" rows="3" maxlength="500" required aria-labelledby="member-notes-heading"></textarea>
+              <p id="member-note-error" class="error" role="alert" hidden></p>
+              <button id="member-note-save" type="submit" class="secondary small-button" data-t="memberNoteAdd"></button>
+            </form>
+            <p id="member-notes-status" class="muted small" aria-live="polite"></p>
+            <ul id="member-notes-list" class="plain-list member-notes-list"></ul>
+          </section>
+          <div id="member-history" class="detail-block"></div>
+          <div id="member-redemptions" class="detail-block"></div>
+          <div class="button-row">
+            <button id="member-edit-button" class="secondary small-button" type="button" data-t="editMember"></button>
+            <button id="member-resend-pass" class="secondary small-button" type="button" data-t="resendPass" hidden></button>
+          </div>
+          <div id="member-assign" class="member-pay" hidden>
+            <button id="member-assign-id" class="primary" type="button" data-t="assignId"></button>
+            <p id="member-assign-error" class="error" role="alert" hidden></p>
+          </div>
+          <div id="member-pay" class="member-pay" hidden>
+            <button id="member-mark-paid" class="primary" type="button"></button>
+            <p id="member-pay-error" class="error" role="alert" hidden></p>
+          </div>
+        </article>
+      </section>
+     </div>
+
+     <div id="tab-partners" hidden>
+      <div class="head"><h1 data-t="tabPartners"></h1></div>
       <section id="partners-section" class="detail-block">
         <div class="row-between"><h3 class="section-title" data-t="partnersHeading"></h3><button id="partner-add" class="link" type="button" data-t="partnerAdd"></button></div>
         <ul id="partners-list" class="plain-list partner-list"></ul>
@@ -148,26 +202,6 @@
         <ul id="redeem-list" class="plain-list"></ul>
         <div id="redeem-pages" class="row-between"></div>
         </div>
-      </section>
-      </div>
-
-      <section id="member-view" hidden>
-        <button id="back-button" class="link" data-t="back"></button>
-        <article class="card member-card">
-          <h2 id="member-name"></h2>
-          <div id="member-badges" class="badges"></div>
-          <dl id="member-fields" class="fields"></dl>
-          <div id="member-history" class="detail-block"></div>
-          <div id="member-redemptions" class="detail-block"></div>
-          <div class="button-row">
-            <button id="member-edit-button" class="secondary small-button" type="button" data-t="editMember"></button>
-            <button id="member-resend-pass" class="secondary small-button" type="button" data-t="resendPass" hidden></button>
-          </div>
-          <div id="member-pay" class="member-pay" hidden>
-            <button id="member-mark-paid" class="primary" type="button" data-t="markPaid"></button>
-            <p id="member-pay-error" class="error" role="alert" hidden></p>
-          </div>
-        </article>
       </section>
      </div>
 
@@ -474,6 +508,7 @@
           <button class="chip" data-group="edits" data-t="actEdits"></button>
           <button class="chip" data-group="events" data-t="actEvents"></button>
           <button class="chip" data-group="settings" data-t="actSettings"></button>
+          <button class="chip" data-group="emails" data-t="actEmails"></button>
         </div>
       </div>
       <p id="act-status" class="muted small" aria-live="polite"></p>
@@ -512,6 +547,10 @@
         <input id="set-sheet" maxlength="300" autocomplete="off">
         <label for="set-tab" data-t="setTab"></label>
         <input id="set-tab" maxlength="80" autocomplete="off">
+        <label for="set-year" data-t="setYear"></label>
+        <input id="set-year" maxlength="9" autocomplete="off" data-ph="setYearPlaceholder">
+        <label for="set-fee" data-t="setFee"></label>
+        <input id="set-fee" inputmode="decimal" maxlength="10" autocomplete="off">
         <p id="set-membership-result" class="muted small"></p>
         <button type="submit" id="set-membership-save" class="primary" data-t="setTestSave"></button>
       </form>
@@ -731,6 +770,11 @@
       <p id="mail-waiting"></p>
       <p id="mail-checked" class="muted small"></p>
       <p id="mail-result" class="muted small" aria-live="polite"></p>
+      <section class="detail-block">
+        <h3 class="section-title" data-t="mailHistoryHeading"></h3>
+        <p id="mail-history-status" class="muted small" aria-live="polite"></p>
+        <ul id="mail-history-list" class="plain-list email-history-list"></ul>
+      </section>
       <div class="button-row">
         <button type="button" id="mail-refresh" class="secondary" data-t="mailRefresh"></button>
         <button type="button" id="mail-send-pending" class="secondary" data-t="mailSendPending" hidden></button>
@@ -784,7 +828,7 @@
         <label for="ma-where" data-t="maWhere"></label>
         <input id="ma-where" maxlength="120" autocomplete="off">
       </div>
-      <label class="check-row"><input id="ma-paid" type="checkbox" checked> <span data-t="maPaidNow"></span></label>
+      <label class="check-row"><input id="ma-paid" type="checkbox" checked> <span id="ma-paid-label"></span></label>
       <p id="ma-error" class="error" role="alert" hidden></p>
       <div class="button-row">
         <button type="button" id="ma-cancel" class="secondary" data-t="cancel"></button>
@@ -975,29 +1019,31 @@
     </form>
   </dialog>
   <script src="config.js?v=0.3.7"></script>
-  <script src="strings.js?v=1.11.6"></script>
+  <script src="strings.js?v=1.11.16"></script>
   <script src="mock.js?v=0.3.7"></script>
-  <script src="panda.js?v=1.5.0"></script>
+  <script src="panda.js?v=1.5.1"></script>
   <script src="peekaboo.js?v=1.0.0"></script>
-  <script src="app.js?v=1.7.1"></script>
-  <script src="events.js?v=1.7.1"></script>
-  <script src="emailstatus.js?v=1.0.1"></script>
-  <script src="waitlist.js?v=1.5.0"></script>
-  <script src="payments.js?v=1.9.1"></script>
-  <script src="edit.js?v=0.9.7"></script>
-  <script src="finance.js?v=1.4.0"></script>
-  <script src="money.js?v=1.0.1"></script>
+  <script src="app.js?v=1.7.8"></script>
+  <script src="events.js?v=1.7.5"></script>
+  <script src="emailstatus.js?v=1.0.2"></script>
+  <script src="waitlist.js?v=1.5.3"></script>
+  <script src="payments.js?v=1.9.3"></script>
+  <script src="edit.js?v=0.9.9"></script>
+  <script src="finance.js?v=1.4.2"></script>
+  <script src="money.js?v=1.0.3"></script>
   <script src="activity.js?v=0.5.0"></script>
-  <script src="settings.js?v=0.9.1"></script>
+  <script src="settings.js?v=0.9.4"></script>
   <script src="emails.js?v=0.4.0"></script>
-  <script src="mailall.js?v=0.3.7"></script>
-  <script src="partners.js?v=1.6.0"></script>
+  <script src="mailall.js?v=0.3.8"></script>
+  <script src="partners.js?v=1.6.2"></script>
   <script src="insights.js?v=1.0.0"></script>
   <script src="attendees.js?v=1.0.2"></script>
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
-  <script src="door.js?v=0.12.3"></script>
-  <script src="members.js?v=1.2.0"></script>
-  <script src="overview.js?v=1.2.1"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" defer></script>
+  <script src="door.js?v=0.12.6"></script>
+  <script src="members.js?v=1.2.4"></script>
+  <script src="membernotes.js?v=1.0.1"></script>
+  <script src="overview.js?v=1.2.2"></script>
   <script src="shell.js?v=0.9.3"></script>
 </body>
 </html>

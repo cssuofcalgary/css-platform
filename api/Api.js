@@ -87,6 +87,12 @@ function route_(req) {
     case "memberProfile":
       return memberProfile_(req);
 
+    case "memberCard":
+      return memberCard_(req);
+
+    case "membershipInfo":
+      return membershipInfo_();
+
     case "openMyAccess":
       return openMyAccess_(req);
 
@@ -108,12 +114,19 @@ function route_(req) {
     case "searchMembers": {
       const session = requireSession_(req.token);
       const matches = searchMembers_(loadMembers_(), req.query, 100000);
-      return { ok: true, name: session.name, results: matches.slice(0, 25), total: matches.length };
+      return { ok: true, name: session.name, results: matches.slice(0, 25), total: matches.length, membershipFee: getConfig_().membershipFee };
     }
 
     case "listPendingMembers":
       requireSession_(req.token);
       return listPendingMembers_(req.offset, req.limit);
+
+    case "listAllMembers":
+      requireSession_(req.token);
+      return listAllMembers_();
+
+    case "assignMemberId":
+      return assignMemberId_(requireSession_(req.token), req.row, req.name);
 
     case "addMember":
       return addMember_(requireSession_(req.token), req.member, !!req.paidNow);
@@ -127,11 +140,21 @@ function route_(req) {
     case "updateMember":
       return updateMember_(requireSession_(req.token), req.member);
 
+    case "listMemberNotes":
+      requireSession_(req.token);
+      return listMemberNotes_(req.memberId);
+
+    case "addMemberNote":
+      return addMemberNote_(requireSession_(req.token), req.memberId, req.text);
+
+    case "removeMemberNote":
+      return removeMemberNote_(requireSession_(req.token), req.noteId);
+
     case "getMember": {
       requireSession_(req.token);
       const member = findMemberById_(loadMembers_(), req.memberId);
       if (!member) throw new ApiError_("NOT_FOUND", "No member with that ID.");
-      return { ok: true, member: member };
+      return { ok: true, member: member, membershipFee: getConfig_().membershipFee };
     }
 
     case "listEvents": {
@@ -161,10 +184,10 @@ function route_(req) {
       return listOrders_(req.eventId, req);
 
     case "markOrderPaid":
-      return markOrderPaid_(requireSession_(req.token), req.orderId, !!req.force, req.siteUrl);
+      return markOrderPaid_(requireSession_(req.token), req.orderId, !!req.force, req.siteUrl, req.requestId);
 
     case "markOrdersPaid":
-      return markOrdersPaid_(requireSession_(req.token), req.orderIds, req.siteUrl);
+      return markOrdersPaid_(requireSession_(req.token), req.orderIds, req.siteUrl, req.requestId);
 
     case "sendReminders":
       return sendReminders_(requireSession_(req.token), req.eventId, !!req.dryRun);
@@ -173,7 +196,7 @@ function route_(req) {
       return emailAttendees_(requireSession_(req.token), req.eventId, req.audience, req.subject, req.message, !!req.dryRun);
 
     case "addOrder":
-      return addOrder_(requireSession_(req.token), req.eventId, req.order, !!req.force, req.siteUrl);
+      return addOrder_(requireSession_(req.token), req.eventId, req.order, !!req.force, req.siteUrl, req.requestId);
 
     case "refundOrder":
       return refundOrder_(requireSession_(req.token), req.orderId, req.reason);
@@ -190,7 +213,9 @@ function route_(req) {
     case "sendPendingEmails": {
       requireSession_(req.token);
       const count = Math.floor(Number(req.count));   // optional: send only this many, oldest first
-      const result = sendPendingTicketEmails_(null, count > 0 ? count : 0);
+      // One event's Payments page sends that event's tickets; the top-bar indicator sends upcoming events' (the ones it counts)
+      const eventIds = req.eventId ? { [req.eventId]: true } : upcomingEventIds_();
+      const result = sendPendingTicketEmails_(null, count > 0 ? count : 0, false, eventIds);
       return { ok: true, emailsSent: result.sent, emailsWaiting: result.waiting, emailsLeftToday: emailsLeftToday_() };
     }
 
@@ -216,6 +241,10 @@ function route_(req) {
     case "emailStatus":
       requireSession_(req.token);
       return emailStatus_();
+
+    case "listRecentEmails":
+      requireSession_(req.token);
+      return listRecentEmails_();
 
     case "restoreOrder":
       return restoreOrder_(requireSession_(req.token), req.orderId, !!req.force);
@@ -297,10 +326,23 @@ function route_(req) {
       return listWaitlist_(req.eventId);
 
     case "offerWaitlistSpot":
-      return offerWaitlistSpot_(requireSession_(req.token), req.entryId, !!req.force, req.siteUrl);
+      return offerWaitlistSpot_(requireSession_(req.token), req.entryId, !!req.force, req.siteUrl, req.requestId);
 
     case "removeWaitlistEntry":
       return removeWaitlistEntry_(requireSession_(req.token), req.entryId);
+
+    case "resendWaitlistOffer":
+      return resendWaitlistOffer_(requireSession_(req.token), req.entryId);
+
+    case "attentionList":
+      requireSession_(req.token);
+      return attentionList_();
+
+    case "dismissReview":
+      return dismissReview_(requireSession_(req.token), req.requestId);
+
+    case "resendMemberCard":
+      return resendMemberCard_(requireSession_(req.token), req.memberId);
 
     case "eventReport":
       return eventReport_(requireSession_(req.token), req.eventId);
@@ -362,7 +404,7 @@ function login_(password, name) {
   cache.remove(userKey);
 
   warmCaches_(false);   // sign-in may take a moment longer; every screen after it is quick
-  return { ok: true, token: startSession_(who, role), name: who, role: role };
+  return { ok: true, token: startSession_(who, role), name: who, role: role, membershipFee: config.membershipFee };
 }
 
 /** Reads the tables into the shared cache now, so the first click after signing in is not the slow one. */
@@ -388,7 +430,16 @@ function requireSession_(token) {
   if ((session.epoch || "0") !== currentEpoch_()) throw new ApiError_("NOT_LOGGED_IN", "Please log in again.");   // everyone was signed out
   touchSession_(token, session);
   if (session.role === "door") checkDoorSession_(ROUTE_ACTION_);
+  renewSession_(token, session);
   return session;
+}
+
+/** Someone still using the portal stays signed in: the session's 6 hours restart (at most every 10 minutes, to spare the cache). */
+function renewSession_(token, session) {
+  const last = Number(session.renewedAt) || Date.parse(session.since) || 0;
+  if (Date.now() - last < SESSION_RENEW_MS) return;
+  session.renewedAt = Date.now();
+  try { CacheService.getScriptCache().put("session_" + token, JSON.stringify(session), SESSION_SECONDS); } catch (e) { /* tried again on the next request */ }
 }
 
 /** For admin-only actions (settings, change log, deleting, year rollover). */

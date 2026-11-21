@@ -14,22 +14,25 @@ const TABLES = {
            "registrationCloses", "archivedAt", "archiveYear", "summary", "waitlist",
            "mailRegistration", "mailTickets", "mailReminders"],
   Orders: ["id", "code", "eventId", "payerName", "payerEmail", "etransferName", "total", "status",
-           "createdAt", "paidAt", "paidBy", "notes", "remindedAt", "cancelRequestedAt", "cancelRequestedBy", "requestId", "received"],
+           "createdAt", "paidAt", "paidBy", "notes", "remindedAt", "cancelRequestedAt", "cancelRequestedBy", "requestId", "received", "lastWrite"],   // lastWrite stays LAST: see applyWrites_
   Tickets: ["id", "secret", "orderId", "eventId", "name", "email", "ucid", "memberId", "ticketType",
             "price", "answers", "flag", "status", "checkedInAt", "checkedInBy", "createdAt", "emailedAt"],
   Emails: ["id", "subject", "title", "subtitle", "intro", "closing", "updatedBy", "updatedAt"],
   Feedback: ["id", "eventId", "memberId", "name", "rating", "comment", "createdAt", "updatedAt"],
   Partners: ["id", "name", "offer", "address", "active", "sort", "createdAt", "createdBy", "updatedAt", "updatedBy"],
+  MemberNotes: ["id", "memberId", "year", "text", "createdBy", "createdAt", "removedAt", "removedBy"],
   Redemptions: ["id", "time", "receivedAt", "memberId", "memberName", "partnerId", "partnerName", "offer"],
   Waitlist: ["id", "eventId", "name", "email", "ucid", "memberId", "ticketTypeId", "ticketType", "answers", "status",
-             "createdAt", "offeredAt", "offeredBy", "orderId", "orderCode", "notes"],
+             "createdAt", "offeredAt", "offeredBy", "orderId", "orderCode", "notes", "offerEmail"],
   // Money owed back to people (see Refunds.js). One row per decision; "returns" lists each time money was handed back.
   Refunds: ["id", "orderId", "orderCode", "eventId", "payerName", "payerEmail", "kind", "ticketIds", "owed", "returns", "status", "reason", "createdAt", "createdBy", "closedAt"],
+  // One row per press of a button that records money or registrations, so pressing it again (or a retry) can't record it twice.
+  Requests: ["id", "action", "who", "status", "plan", "reply", "createdAt", "doneAt"],
   Log: ["time", "who", "action", "target", "details"]
 };
 
 /** Columns holding lists/objects; stored as JSON text. */
-const JSON_COLUMNS = { ticketTypes: true, questions: true, answers: true, summary: true, returns: true, ticketIds: true };
+const JSON_COLUMNS = { ticketTypes: true, questions: true, answers: true, summary: true, returns: true, ticketIds: true, plan: true, reply: true };
 
 /**
  * Remembered for the rest of this one request only (each request starts fresh),
@@ -428,4 +431,96 @@ function withLock_(fn) {
 
 function newId_(prefix) {
   return prefix + Utilities.getUuid().replace(/-/g, "").slice(0, 10).toUpperCase();
+}
+
+// ---- Pressing a button twice ---------------------------------------------------------------------
+// The dashboard sends a requestId with each press of a button that records money or registrations, and the SAME id when it
+// tries again (busy server, dropped connection). The Requests tab remembers each press: "started" with the list of writes it
+// is about to make, then "done" with the answer it gave. A repeat of a finished press gets that same answer back and records
+// nothing; a repeat of a press that stopped halfway finishes the same list of writes instead of working it all out again.
+
+/** The page's id for one press (letters, digits and dashes), or "" when it sent none (an older page). */
+function cleanRequestId_(value) {
+  const id = String(value || "");
+  return /^[A-Za-z0-9-]{8,64}$/.test(id) ? id : "";
+}
+
+/** What an earlier try of this press saved, or null. Call it inside the lock (it reads fresh). */
+function savedRequest_(action, rid) {
+  if (!rid) return null;
+  delete DB_.rows["Requests"];
+  return readRows_("Requests").filter(function (r) { return r.id === action + ":" + rid; })[0] || null;
+}
+
+/** Writes down what this press is about to do, before doing any of it. */
+function startRequest_(action, rid, who, plan) {
+  if (!rid) return;
+  insertRow_("Requests", { id: action + ":" + rid, action: action, who: who, status: "started", plan: plan || {}, reply: {}, createdAt: new Date().toISOString(), doneAt: "" });
+}
+
+/** Keeps the answer, so a repeat gets the same one. Never fails the press: what it saved already stops anything being recorded twice. */
+function finishRequest_(action, rid, who, reply) {
+  if (!rid) return;
+  try {
+    const row = savedRequest_(action, rid);
+    const done = { status: "done", reply: reply, doneAt: new Date().toISOString() };
+    if (row) updateRow_("Requests", row.id, done, row._row);
+    else insertRow_("Requests", Object.assign({ id: action + ":" + rid, action: action, who: who, plan: {}, createdAt: done.doneAt }, done));
+  } catch (e) { console.error("Could not keep the answer for " + action + ": " + e.message); }
+}
+
+/**
+ * Carries out a list of planned writes: { table, id, set, was } changes a row, { table, add } adds one. `op` names the press
+ * ("applyTransfer:<id>"); every order it changes gets `lastWrite: op`, so a repeat can tell "this press already changed that
+ * order" apart from "a different payment happened to leave the same numbers" (two real $5 payments look identical otherwise).
+ *
+ * All or nothing for what is left: every write is checked first, and if any row was changed by someone else since the plan
+ * was made (it no longer holds `was` and this press didn't change it), NOTHING more is written: no refund, no "paid" for a
+ * payment whose order step can't be finished. The ids are returned in `conflicts` for Finance to check by hand.
+ * Returns { conflicts: [ids], done: [ids already written by an earlier try] }.
+ *
+ * lastWrite is the last Orders column, so updateRow_ writes it after the money columns: if a write stops halfway, the order
+ * never claims a change it didn't get (the repeat then sees a mismatch and asks for a check instead of guessing).
+ */
+function applyWrites_(writes, op) {
+  const rows = {}, todo = [], done = [], conflicts = [];
+  const table = function (name) { return rows[name] || (rows[name] = readRows_(name).slice()); };
+  (writes || []).forEach(function (w) {
+    if (w.add) {
+      if (table(w.table).some(function (r) { return String(r.id) === String(w.add.id); })) done.push(w.add.id); else todo.push(w);
+      return;
+    }
+    const row = table(w.table).filter(function (r) { return String(r.id) === String(w.id); })[0];
+    if (!row) { conflicts.push(w.id); return; }
+    const holds = function (column, value) { return toCell_(column, row[column]) === toCell_(column, value); };
+    const wasHeld = !w.was || Object.keys(w.was).every(function (c) { return holds(c, w.was[c]); });
+    if (op && w.table === "Orders") {
+      if (String(row.lastWrite || "") === op) done.push(w.id);       // this press changed it already
+      else if (wasHeld) todo.push({ w: w, row: row });
+      else conflicts.push(w.id);                                      // someone else changed it: don't guess
+      return;
+    }
+    // Rows without a lastWrite mark (tickets), and plans saved before marks existed: fixed values already there = done.
+    if (Object.keys(w.set).every(function (c) { return holds(c, w.set[c]); })) { done.push(w.id); return; }
+    if (wasHeld) todo.push({ w: w, row: row }); else conflicts.push(w.id);
+  });
+  if (conflicts.length) return { conflicts: conflicts, done: done };
+  todo.forEach(function (x) {
+    if (x.add) return insertRow_(x.table, x.add);
+    const set = op && x.w.table === "Orders" ? Object.assign({}, x.w.set, { lastWrite: op }) : x.w.set;
+    updateRow_(x.w.table, x.w.id, set, x.row._row);
+  });
+  return { conflicts: [], done: done };
+}
+
+/** Plain words for Finance when a repeat can't finish: which orders to check before recording anything again. */
+function needsReviewReply_(conflicts, alreadySaved) {
+  const orderOf = function (id) { return readRows_("Orders").filter(function (x) { return x.id === id; })[0]; };
+  const which = conflicts.map(function (id) { const o = orderOf(id); return o ? o.code : id; }).join(", ");
+  const saved = (alreadySaved || []).map(orderOf).filter(Boolean).map(function (o) { return o.code; });
+  return {
+    ok: false, error: "NEEDS_REVIEW", conflicts: conflicts, alreadySaved: saved,
+    message: "This was cut off last time, and " + which + " has changed since, so it can't tell whether it was saved. Nothing more was recorded. " +
+      "Check " + which + " (amount received and notes) before recording it again."
+  };
 }

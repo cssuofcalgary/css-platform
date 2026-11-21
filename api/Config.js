@@ -8,7 +8,9 @@
  *   EXEC_PASSWORD        The shared exec password for the Exec Portal.        Required.
  *   ADMIN_PASSWORD       Admin password: everything execs can do, plus admin-only tools. Optional.
  *   MEMBERSHIP_TAB       Tab with the member rows. Default: "Form Responses 1".
+ *   MEMBERSHIP_YEAR      Year shown to members, e.g. 2026/2027. Blank: September–August from today's date.
  *   ETRANSFER_EMAIL      Where people send e-transfers. Default: css.uofcalgary@gmail.com.
+ *   MEMBERSHIP_FEE       The yearly membership fee in dollars. Default: 12.
  *   CONTACT_EMAIL, INSTAGRAM_URL   Shown at the bottom of the public pages.
  *
  * All of these (and both passwords) can also be changed from the Exec Portal's Settings tab (admin only).
@@ -16,22 +18,28 @@
  * Set automatically by the system (don't edit): DATA_SHEET_ID, IMAGE_FOLDER_ID.
  */
 
-const API_VERSION = "0.15.0";
+const API_VERSION = "0.18.4";
 const MEMBER_CACHE_SECONDS = 300;   // search data is re-read from the sheet at most every 5 min
-const SESSION_SECONDS = 21600;      // stay logged in for 6 h (the Apps Script cache maximum)
+const SESSION_SECONDS = 21600;      // signed out after 6 h without use (the Apps Script cache maximum)
+const SESSION_RENEW_MS = 600000;    // while in use, those 6 h restart at most this often
 const REMINDER_AFTER_HOURS = 48;   // an unpaid order gets a "please pay" reminder after this long (and again after this long)
 const MAX_FAILED_LOGINS = 30;       // after this many wrong passwords in 10 min, new sign-ins pause for 10 min (people already signed in are unaffected)
 
+const DEFAULT_MEMBERSHIP_FEE = 12;   // until a fee is saved in Settings → Membership
+
 function getConfig_() {
   const props = PropertiesService.getScriptProperties();
+  const fee = String(props.getProperty("MEMBERSHIP_FEE") || "").trim();
   return {
     membershipSheetId: extractSheetId_(props.getProperty("MEMBERSHIP_SHEET_ID")),
     membershipTab: String(props.getProperty("MEMBERSHIP_TAB") || "Form Responses 1").trim(),
+    membershipYear: String(props.getProperty("MEMBERSHIP_YEAR") || "").trim(),
     password: String(props.getProperty("EXEC_PASSWORD") || ""),
     adminPassword: String(props.getProperty("ADMIN_PASSWORD") || ""),
     etransferEmail: String(props.getProperty("ETRANSFER_EMAIL") || "css.uofcalgary@gmail.com").trim(),
     contactEmail: String(props.getProperty("CONTACT_EMAIL") || "css.uofcalgary@gmail.com").trim(),
-    instagramUrl: String(props.getProperty("INSTAGRAM_URL") || "https://www.instagram.com/ucalgary.css/").trim()
+    instagramUrl: String(props.getProperty("INSTAGRAM_URL") || "https://www.instagram.com/ucalgary.css/").trim(),
+    membershipFee: fee !== "" && isFinite(Number(fee)) && Number(fee) >= 0 ? Number(fee) : DEFAULT_MEMBERSHIP_FEE
   };
 }
 

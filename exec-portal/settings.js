@@ -13,6 +13,9 @@ async function openSettingsTab() {
   $("set-instagram").value = s.instagramUrl;
   $("set-sheet").value = s.membershipSheetId;
   $("set-tab").value = s.membershipTab;
+  $("set-year").value = s.membershipYear || "";
+  $("set-year").placeholder = T.setYearPlaceholder;
+  $("set-fee").value = s.membershipFee;
   $("set-pw-note").textContent = T.setPwNote(s.execPasswordSet, s.adminPasswordSet);
   ["set-exec-pw", "set-exec-pw2", "set-admin-pw", "set-admin-pw2"].forEach((id) => { $(id).value = ""; });
   $("set-door-note").textContent = s.doorPasswordSet ? T.setDoorNoteSet : T.setDoorNoteNone;
@@ -55,7 +58,7 @@ $("set-general-form").addEventListener("submit", (e) => {
 
 $("set-membership-form").addEventListener("submit", (e) => {
   e.preventDefault();
-  saveSettings({ membershipSheet: $("set-sheet").value, membershipTab: $("set-tab").value }, "set-membership-result", $("set-membership-save"));
+  saveSettings({ membershipSheet: $("set-sheet").value, membershipTab: $("set-tab").value, membershipYear: $("set-year").value, membershipFee: $("set-fee").value }, "set-membership-result", $("set-membership-save"));
 });
 
 // ---- Security: each password is a row; Change opens its boxes right there ----
@@ -83,7 +86,7 @@ async function saveCredential(kind) {
   if (!$(first).value) return fail(T.secNeedPw);
   if (again && $(first).value !== $(again).value) return fail(T.setPwMismatch);
   const fields = { [kind === "exec" ? "execPassword" : kind === "admin" ? "adminPassword" : "doorPassword"]: $(first).value };
-  if (kind !== "door" && !confirm(T.setPwConfirm)) return;
+  if (kind !== "door" && !(await askConfirm(T.setPwConfirm))) return;
   const button = document.querySelector(`#set-password-form [data-save="${kind}"]`);
   const ok = await saveSettings(fields, "set-password-result", button);
   if (ok) { const msg = $("set-password-result").textContent; await openSettingsTab(); closeCredEditors(); $("set-password-result").className = "good-text small"; $("set-password-result").textContent = msg; }
@@ -105,12 +108,12 @@ $("set-password-form").addEventListener("submit", (e) => {
 });
 
 $("set-door-clear").addEventListener("click", async () => {
-  if (!confirm(T.setDoorClearConfirm)) return;
+  if (!(await askConfirm(T.setDoorClearConfirm))) return;
   if (await saveSettings({ clearDoorPassword: true }, "set-password-result", $("set-door-clear"))) openSettingsTab();
 });
 
 $("set-signout-all").addEventListener("click", async () => {
-  if (!confirm(T.setSignOutConfirm)) return;
+  if (!(await askConfirm(T.setSignOutConfirm))) return;
   const button = $("set-signout-all");
   button.disabled = true;
   const reply = await api("signOutAll");
@@ -137,8 +140,8 @@ $("set-nav").addEventListener("click", (ev) => {
 
 // ---- System health: run it by hand; every run is written to Activity ----
 
-function healthTile(ok, name, detail) {
-  return `<div class="hc ${ok ? "ok" : "bad"}"><span class="pill ${ok ? "good" : "warn"}">${ok ? T.setOk : T.setProblem}</span><b>${escapeHtml(name)}</b><small>${escapeHtml(detail)}</small></div>`;
+function healthTile(ok, name, detail, warning = false) {
+  return `<div class="hc ${ok ? "ok" : warning ? "" : "bad"}"><span class="pill ${ok ? "good" : "warn"}">${ok ? T.setOk : warning ? T.setWarning : T.setProblem}</span><b>${escapeHtml(name)}</b><small>${escapeHtml(detail)}</small></div>`;
 }
 
 async function loadHealthHistory() {
@@ -163,7 +166,7 @@ $("set-health-button").addEventListener("click", async () => {
   const err = reply.lastError;
   box.innerHTML = `<div class="health-grid">
       <div class="hc"><small>${T.healthVersion}</small><b class="mono">${escapeHtml(reply.version)}</b></div>
-      ${reply.checks.map((c) => healthTile(c.ok, c.name, c.detail)).join("")}
+      ${reply.checks.map((c) => healthTile(c.ok, c.name, c.detail, c.warning)).join("")}
       ${healthTile(!!reply.setup.publicSiteUrl, T.healthSite, reply.setup.publicSiteUrl || T.setNoSiteUrl)}
       ${healthTile(!err, T.healthLastError, err ? `${shortTime(err.time)} · ${err.action} · ${err.message}` : T.setNoError)}
     </div>`;

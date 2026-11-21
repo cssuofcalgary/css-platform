@@ -245,6 +245,7 @@ a.link { color: var(--accent); font-weight: 600; text-decoration: none; }
 .editor { display: grid; gap: 8px; margin-top: 8px; }
 .editor h2 { margin: 0 0 4px; }
 .editor label { margin-top: 6px; display: block; }
+#wi-answers { display: contents; }   /* the walk-in questions space out like the form's other fields */
 textarea {
   width: 100%;
   padding: 12px 14px;
@@ -449,6 +450,19 @@ body.scanner-mode .content { max-width: 520px; }
 .partner-list .p-main { flex: 1 1 260px; }
 .partner-list .p-off { opacity: .55; }
 
+.member-notes-list li { padding: 10px 0; border-bottom: 1px solid var(--border); overflow-wrap: anywhere; }
+.member-notes-list p { margin: 0 0 4px; white-space: pre-line; }
+.member-notes-list .link { margin-left: 8px; }
+#member-note-form { display: grid; gap: 10px; margin-top: 12px; }
+#member-note-text { width: 100%; min-width: 0; resize: vertical; }
+#member-note-save { justify-self: start; }
+
+.email-history-list { max-height: 300px; overflow-y: auto; }
+.email-history-list li { padding: 10px 0; border-bottom: 1px solid var(--border); overflow-wrap: anywhere; }
+.email-history-top { display: flex; align-items: baseline; gap: 10px; justify-content: space-between; }
+.email-history-top strong { min-width: 0; }
+.email-history-top .pill { flex: none; }
+
 /* Panda loader (loading, slow, success, error) */
 .pl { text-align: center; padding: 12px 0 8px; color: inherit; }
 .pl-stage { position: relative; width: 64px; height: 62px; margin: 0 auto; animation: plBob 2s ease-in-out infinite; }
@@ -487,4 +501,31 @@ body.scanner-mode .content { max-width: 520px; }
   .pl-frames-2 .pl-f0, .pl-frames-2 .pl-f1 { animation: none; }
   .pl-frames-2 .pl-f1 { opacity: 0; }
   .pl-dots i { animation: none; transform: scale(1); opacity: 1; }
+}
+.ticket-actions { display: flex; flex-wrap: wrap; gap: 0.5rem 1rem; }
+.ticket-actions button:disabled { opacity: 0.4; cursor: default; }
+/* Needs attention lines with their own buttons */
+.attn.has-actions { cursor: default; flex-wrap: wrap; }
+.attn.has-actions:hover { transform: none; }
+.attn-actions { margin-left: auto; display: flex; flex-wrap: wrap; gap: 8px; }
+.attn.done { opacity: 0.55; }
+.attn.done .attn-actions { display: none; }
+@media (max-width: 600px) { .attn-actions { margin-left: 48px; } }
+.button-pair { display: inline-flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+/* Members → All members: the sheet as a clickable list */
+.all-tools { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.all-tools .search { flex: 1 1 220px; width: auto; margin: 0; }
+.all-tools select, .all-tools button { width: auto; flex: none; margin: 0; }
+#all-filters { margin: 10px 0 4px; flex-wrap: wrap; }
+.all-table { display: grid; gap: 4px; margin-top: 8px; }
+.all-row { display: grid; grid-template-columns: minmax(0, 2.2fr) 1.2fr 1.2fr .8fr 1fr 1fr; gap: 10px; align-items: center; padding: 10px 12px;
+  border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); color: var(--text); font: inherit; text-align: left; width: 100%; cursor: pointer; }
+button.all-row:hover { border-color: var(--border-2); }
+.all-row.all-head { background: none; border-color: transparent; cursor: default; font-size: .8rem; color: var(--muted); padding-top: 0; padding-bottom: 0; }
+.all-name { display: grid; min-width: 0; } .all-name b, .all-name small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .all-name small { color: var(--text-2); }
+@media (max-width: 760px) {
+  .all-row { grid-template-columns: 1fr auto; } .all-row.all-head { display: none; }
+  .all-row > span:nth-child(n+4) { display: none; }
+  .all-row > span:nth-child(2) { grid-column: 2; grid-row: 1; } .all-row > span:nth-child(3) { grid-column: 2; grid-row: 2; justify-self: end; }
+  .all-name { grid-row: 1 / span 2; }
 }

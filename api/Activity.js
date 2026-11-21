@@ -15,8 +15,11 @@ const ACTIVITY_GROUPS = {
   system: ["backup"],
   edits: ["ticket.edit"],
   events: ["event.create", "event.update", "event.status", "image.upload", "event.email", "event.archive", "event.restore", "event.delete"],
-  settings: ["settings.save", "sessions.clear", "health.check", "session.kick"]
+  settings: ["settings.save", "sessions.clear", "health.check", "session.kick"],
+  emails: ["email.sent", "email.failed"]
 };
+// Members: notes, IDs and cards count with payments (the money-and-people side of the club).
+ACTIVITY_GROUPS.payments.push("member.note", "member.noteRemoved", "member.assignId", "member.resendPass", "payment.needsReview", "refund.needsReview", "payment.reviewed", "waitlist.resend", "waitlist.offer", "waitlist.remove");
 
 function activityGroup_(action) {
   const groups = Object.keys(ACTIVITY_GROUPS);
@@ -40,15 +43,19 @@ function activityLog_(filters) {
   const people = {};
 
   rows.forEach(function (r) {
-    people[r.who] = true;
-    const eventId = events[r.target] ? r.target : (byTicket[r.target] || byOrderCode[r.target] || "");
     const group = activityGroup_(r.action);
+    // Every email the platform sends is logged. Sent ones only show under Emails, so a big batch can't bury real actions
+    // in All; a failed send shows everywhere (someone may need to act on it).
+    if (r.action === "email.sent" && filters.group !== "emails") return;
+    if (group !== "emails") people[r.who] = true;
+    const eventId = events[r.target] ? r.target : (byTicket[r.target] || byOrderCode[r.target] || "");
     if (filters.eventId && eventId !== filters.eventId) return;
     if (filters.who && r.who !== filters.who) return;
     if (filters.group && filters.group !== "all" && group !== filters.group) return;
     const summary = activitySummary_(r, events);
     if (q && (summary + " " + r.target + " " + r.who).toLowerCase().indexOf(q) === -1) return;
-    if (out.length < max) out.push({ time: r.time, who: r.who, action: r.action, group: group, target: r.target, eventId: eventId, summary: summary });
+    const who = group === "emails" ? "Email" : r.who;
+    if (out.length < max) out.push({ time: r.time, who: who, action: r.action, group: group, target: r.target, eventId: eventId, summary: summary });
   });
 
   return { ok: true, entries: out, people: Object.keys(people).sort(), truncated: out.length >= max };
@@ -108,6 +115,18 @@ function activitySummary_(r, events) {
     case "sessions.clear": return "signed everyone out";
     case "session.kick": return "signed out " + (d.name || "a device") + " (" + (d.role || "") + ")";
     case "health.check": return "ran a health check" + (d.problems ? " (" + d.problems + " problem" + (d.problems === 1 ? "" : "s") + " found)" : " (all good)");
+    case "email.sent": return "sent to " + r.target + (d.subject ? ": " + d.subject : "");
+    case "email.failed": return "could NOT be sent to " + r.target + (d.subject ? ": " + d.subject : "");
+    case "member.note": return "added a note for member " + r.target;
+    case "member.noteRemoved": return "removed a note from member " + r.target;
+    case "member.assignId": return "created member ID " + r.target + (d.name ? " for " + d.name : "");
+    case "member.resendPass": return "resent the membership card to " + (d.name || r.target);
+    case "payment.needsReview": return "a cut-off payment for " + r.target + " needs checking (nothing more was recorded)";
+    case "refund.needsReview": return "a cut-off refund for " + r.target + " needs checking (nothing more was recorded)";
+    case "payment.reviewed": return "marked the payment check for " + r.target + " as done";
+    case "waitlist.resend": return "resent the waitlist offer for " + r.target + (d.emailed ? "" : " (email failed)");
+    case "waitlist.offer": return "offered a waitlist spot to " + (d.name || "someone") + " (" + r.target + ")";
+    case "waitlist.remove": return "removed " + (d.name || "someone") + " from the waitlist";
     default: return r.action + (r.target ? " " + r.target : "");
   }
 }

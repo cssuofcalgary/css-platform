@@ -64,7 +64,7 @@ async function sendReminders() {
   const dry = await api("sendReminders", { eventId: payState.eventId, dryRun: true });
   if (!dry.ok) { button.disabled = false; return handleEventError(dry, $("pay-status")); }
   if (!dry.due) { button.disabled = false; return showToast(T.remindersNone); }
-  if (!confirm(T.confirmReminders(dry.toEmail, dry.due - dry.toEmail, dry.emailsLeftToday))) { button.disabled = false; return; }
+  if (!(await askConfirm(T.confirmReminders(dry.toEmail, dry.due - dry.toEmail, dry.emailsLeftToday)))) { button.disabled = false; return; }
 
   const reply = await api("sendReminders", { eventId: payState.eventId });
   button.disabled = false;
@@ -92,7 +92,7 @@ async function markSelectedPaid() {
   const orders = payState.data.orders.filter((o) => payState.selected.has(o.id) && o.status === "awaiting");
   if (!orders.length) return;
   const total = orders.reduce((sum, o) => sum + o.total, 0);
-  if (!confirm(T.confirmBulk(orders.length, money(total), orders.map((o) => `${o.code} ${money(o.total)}`).join("\n")))) return;
+  if (!(await askConfirm(T.confirmBulk(orders.length, money(total), orders.map((o) => `${o.code} ${money(o.total)}`).join("\n"))))) return;
 
   $("bulk-bar").querySelectorAll("button").forEach((b) => { b.disabled = true; });
   const siteUrl = new URL(PUBLIC_SITE_URL, location.href).href;
@@ -101,7 +101,7 @@ async function markSelectedPaid() {
   const tally = { confirmed: 0, emailsSent: 0, emailsWaiting: 0, notEmailed: 0 };
   for (let i = 0; i < orders.length; i += BULK_CHUNK) {
     const ids = orders.slice(i, i + BULK_CHUNK).map((o) => o.id);
-    const reply = await api("markOrdersPaid", { orderIds: ids, siteUrl });
+    const reply = await apiOnce("markOrdersPaid", { orderIds: ids, siteUrl });
     if (!reply.ok) { error = reply; break; }
     emails += reply.emailsSent;
     tally.confirmed += reply.confirmed || 0; tally.emailsSent += reply.emailsSent || 0; tally.emailsWaiting += reply.emailsWaiting || 0; tally.notEmailed += reply.notEmailed || 0;
@@ -152,9 +152,9 @@ async function onAddSubmit(e) {
     siteUrl: new URL(PUBLIC_SITE_URL, location.href).href
   };
   setAddBusy(true);
-  let reply = await api("addOrder", payload);
-  if (!reply.ok && reply.error === "OVER_CAPACITY" && confirm(T.overCapacity(reply.message))) {
-    reply = await api("addOrder", { ...payload, force: true });
+  let reply = await apiOnce("addOrder", payload);
+  if (!reply.ok && reply.error === "OVER_CAPACITY" && await askConfirm(T.overCapacity(reply.message))) {
+    reply = await apiOnce("addOrder", { ...payload, force: true });
   }
   if (!reply.ok) {
     setAddBusy(false);

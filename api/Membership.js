@@ -8,12 +8,23 @@
  * This is the only code that WRITES to the Membership sheet (the sheet access itself lives in Store.js).
  */
 
-const MEMBERSHIP_FEE = 12;
-const MEMBERSHIP_YEAR = "2026/2027";
 const MEMBER_PAID_STATUS = "PAID";
 const MEMBER_METHODS = { etransfer: "E-transfer", cash: "Cash" };
 const MEMBER_STATUS_WAITING = { etransfer: "Awaiting E-transfer", cash: "Awaiting Cash" };
 const MEMBER_SIGNUP_BURST = 40;   // sign-ups from everyone together, per 10 minutes (keeps bots from filling the sheet)
+
+/** The year shown to members: the admin's choice, or today's school year until one is saved. */
+function membershipYear_(when) {
+  return getConfig_().membershipYear || membershipYearFromDate_(when);
+}
+
+/** The school year on a date (default today), used as the default and for the handover warning. */
+function membershipYearFromDate_(when) {
+  const ym = Utilities.formatDate(when || new Date(), "America/Edmonton", "yyyy-MM");
+  const y = parseInt(ym.slice(0, 4), 10), m = parseInt(ym.slice(5, 7), 10);
+  const start = m >= 9 ? y : y - 1;
+  return start + "/" + (start + 1);
+}
 
 // ---- Checking what was typed -------------------------------------------------------------
 
@@ -99,12 +110,41 @@ function publicRegisterMember_(input) {
   memberSignupThrottle_(clean);
 
   const done = withIntakeLock_(function () { return addMemberRowLocked_(clean); });
-  if (done.existing && done.existing.paid) throw new ApiError_("ALREADY_MEMBER", "You are already an active CSS member for " + MEMBERSHIP_YEAR + "!");
+  if (done.existing && done.existing.paid) throw new ApiError_("ALREADY_MEMBER", "You are already an active CSS member for " + membershipYear_() + ".");
 
   if (done.memberId) log_("public", "member.signup", done.memberId, { method: clean.method });
   const reply = { ok: true, name: done.existing ? done.existing.name : clean.name, method: done.existing ? methodKey_(done.existing.payment.method) : clean.method,
-    fee: MEMBERSHIP_FEE, year: MEMBERSHIP_YEAR, etransferEmail: getConfig_().etransferEmail, site: siteInfo_() };
+    fee: getConfig_().membershipFee, year: membershipYear_(), etransferEmail: getConfig_().etransferEmail, site: siteInfo_() };
   if (done.existing) reply.existing = true; else reply.memberId = done.memberId;   // someone already signed up and unpaid gets no ID back
+  return reply;
+}
+
+/** Public (no login): the fee, year and e-transfer address the Join CSS page shows before anyone signs up. Same Settings as the sign-up reply. */
+function membershipInfo_() {
+  const config = getConfig_();
+  return { ok: true, fee: config.membershipFee, year: membershipYear_(), etransferEmail: config.etransferEmail, site: siteInfo_() };
+}
+
+/**
+ * Public, for the member portal's pass screen: the member card from the Membership sheet chosen in Settings, whether
+ * deals are on (activePartners_), and the deals themselves for a paid member. Needs the member's own pass link key.
+ * A wrong key is NOT_ALLOWED; a right key for someone not on the current sheet is NOT_FOUND.
+ */
+function memberCard_(req) {
+  const memberId = String(req.memberId || "").trim().toUpperCase();
+  if (!memberId || !linkKeyOk_("pass", memberId, req.k)) throw new ApiError_("NOT_ALLOWED", "This link isn't valid. Ask for a new one.");
+  const member = findMemberById_(loadMembers_(), memberId);
+  if (!member) throw new ApiError_("NOT_FOUND", "We couldn't find this membership for " + membershipYear_() + ". Enter your email to get your pass link again.");
+  const partners = activePartners_();
+  const reply = {
+    ok: true,
+    member: { memberId: member.memberId, name: member.name, ucid: member.ucid, paid: !!member.paid },
+    year: membershipYear_(), fee: getConfig_().membershipFee,
+    dealsActive: partners.length > 0,
+    partners: member.paid ? partners : [],   // deals are for paid members only
+    site: siteInfo_()
+  };
+  if (member.paid && partners.length) log_("Member: " + member.name, "partners.open", member.memberId, {});
   return reply;
 }
 
@@ -174,7 +214,7 @@ function sendMemberWelcomeEmail_(member) {
   const to = String(member.email).toLowerCase();
   if (!canSendMail_(to)) return false;
   try {
-    const t = mailText_("memberWelcome", { name: member.name, year: MEMBERSHIP_YEAR });
+    const t = mailText_("memberWelcome", { name: member.name, year: membershipYear_() });
     sendStyled_(to, t.subject, emailShell_({
       preheader: "Your CSS membership is confirmed", title: t.title, subtitle: t.subtitle,
       body: t.intro + t.closing,
@@ -200,7 +240,56 @@ function listPendingMembers_(offset, limit) {
     .sort(function (a, b) { return b.row - a.row; });   // new rows go at the bottom of the sheet, so a higher row is newer
   const from = Math.max(0, parseInt(offset, 10) || 0);
   const size = Math.min(100, Math.max(1, parseInt(limit, 10) || PENDING_PAGE_DEFAULT));
-  return { ok: true, members: waiting.slice(from, from + size), total: waiting.length, hasMore: from + size < waiting.length };
+  return { ok: true, members: waiting.slice(from, from + size), total: waiting.length, hasMore: from + size < waiting.length, membershipFee: getConfig_().membershipFee };
+}
+
+// ---- Exec: everyone on the sheet, and giving a row its member ID ------------------------------------
+
+const MEMBER_LIST_MAX = 3000;
+
+/** Every row of the Membership sheet, for the All members list (filtered and sorted in the browser: a club-sized sheet). */
+function listAllMembers_() {
+  let all = loadMembers_();
+  if (all.length && all[0].row === undefined) { forgetMembers_(); all = loadMembers_(); }
+  return {
+    ok: true, total: all.length, membershipFee: getConfig_().membershipFee, year: membershipYear_(),
+    members: all.slice(-MEMBER_LIST_MAX).map(function (m) {
+      return { row: m.row, memberId: m.memberId, name: m.name, ucid: m.ucid, email: m.email, paid: m.paid, status: m.status,
+        cardSent: m.cardSent, mailStatus: m.mailStatus || "", signedUp: m.signedUp, payment: m.payment };
+    })
+  };
+}
+
+/**
+ * A row that reached the sheet without a member ID (a form outside this site, or typed in by hand) gets one, so it can be
+ * marked paid and gets a pass link. `row` + `name` must still match (rows can move when someone sorts the sheet).
+ * An unpaid row with no Paid Status becomes "Awaiting <method>", so it shows in Pending; its card is marked Pending.
+ */
+function assignMemberId_(session, row, name) {
+  const done = withIntakeLock_(function () {
+    const book = openMemberSheet_();
+    const member = book.members.filter(function (m) { return m.row === Number(row); })[0];
+    if (!member || normalizeName_(member.name) !== normalizeName_(name)) {
+      throw new ApiError_("NOT_FOUND", "That row changed on the sheet (someone may have sorted it). Refresh the list and try again.");
+    }
+    if (member.memberId) return { member: member, already: true };
+    const used = {};
+    book.members.forEach(function (m) { if (m.memberId) used[m.memberId] = true; });
+    const prefix = "CSS" + String(member.row - 1).padStart(3, "0");
+    let id = "";
+    for (let i = 0; i < 50 && (!id || used[id]); i++) id = prefix + (1000 + Math.floor(Math.random() * 9000));
+    if (used[id]) id = prefix + String(Date.now()).slice(-5);
+    const changes = { memberId: id };
+    if (!member.mailStatus || !String(member.mailStatus).trim()) changes.mailStatus = "Pending";
+    if (!member.paid && !String(member.status || "").trim()) changes.paid = MEMBER_STATUS_WAITING[methodKey_(member.payment.method)];
+    setMemberCells_(book, member, changes);
+    if (book.portalColumn !== -1) book.sheet.getRange(member.row, book.portalColumn + 1).setValue(MEMBER_PORTAL_URL.replace(/[/]+$/, "") + "/" + encodeURIComponent(id));
+    Object.assign(member, { memberId: id, mailStatus: changes.mailStatus || member.mailStatus });
+    if (changes.paid) member.status = changes.paid;
+    return { member: member };
+  });
+  if (!done.already) log_(session.name, "member.assignId", done.member.memberId, { name: done.member.name, row: done.member.row });
+  return { ok: true, already: !!done.already, member: done.member };
 }
 
 // ---- Exec: resend the pass, edit a member -----------------------------------------------
@@ -211,8 +300,19 @@ function resendMemberPass_(session, memberId) {
   if (!member) throw new ApiError_("NOT_FOUND", "No member with that ID.");
   if (!member.email) throw new ApiError_("BAD_REQUEST", "This member has no email address on file.");
   if (!sendMemberWelcomeEmail_(member)) throw new ApiError_("EMAIL_FAILED", "Email failed to send. Check email allowance.");
+  // The email has gone. From here nothing may report a failure, or the exec would send a second card.
+  let marked = true;
+  try {
+    withIntakeLock_(function () {
+      const book = openMemberSheet_();
+      const fresh = findMemberById_(book.members, member.memberId);
+      if (fresh) setMemberCells_(book, fresh, { mailStatus: "Sent" }); else marked = false;
+    });
+  } catch (e) { marked = false; console.error("Card sent, but couldn't mark it Sent: " + e.message); }
+  member.cardSent = true;
+  member.mailStatus = "Sent";
   log_(session.name, "member.resendPass", member.memberId, { name: member.name, email: member.email });
-  return { ok: true, emailed: true };
+  return { ok: true, emailed: true, member: member, markedSent: marked };
 }
 
 /**

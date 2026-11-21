@@ -73,7 +73,12 @@ function invalidateTickets_(session, req) {
     if (!isFinite(wanted) || wanted < 0 || wanted > REFUND_MAX) throw new ApiError_("BAD_REQUEST", "The refund amount doesn't look right.");
   }
 
+  const rid = cleanRequestId_(req.requestId);
   return withLock_(function () {
+    // The same press again: the answer it gave, nothing invalidated or owed twice; one that stopped halfway is finished.
+    const saved = savedRequest_("invalidateTickets", rid);
+    if (saved && saved.status === "done") return saved.reply;
+    if (saved && saved.status === "started") return carryOutInvalidate_(session, rid, saved.plan);
     delete DB_.rows["Orders"]; delete DB_.rows["Tickets"];
     const order = readRows_("Orders").filter(function (o) { return o.id === req.orderId; })[0];
     if (!order) throw new ApiError_("NOT_FOUND", "Order not found.");
@@ -109,8 +114,8 @@ function invalidateTickets_(session, req) {
     if (receivedBefore > 0 || wasPaid) orderChange.received = String(receivedBefore);   // freeze what really arrived
     if (whole) orderChange.status = wasPaid ? "refunded" : "cancelled";
     else orderChange.total = dollars_(live.filter(function (t) { return chosen.indexOf(t) === -1; }).reduce(function (sum, t) { return sum + cents_(t.price); }, 0));
-    updateRow_("Orders", order.id, orderChange, order._row);
-    chosen.forEach(function (t) { updateRow_("Tickets", t.id, { status: t.status === "paid" ? "refunded" : "cancelled" }, t._row); });
+    const writes = [{ table: "Orders", id: order.id, set: orderChange, was: { status: order.status, total: order.total } }];
+    chosen.forEach(function (t) { writes.push({ table: "Tickets", id: t.id, set: { status: t.status === "paid" ? "refunded" : "cancelled" }, was: { status: t.status } }); });
 
     let refund = null;
     if (owedCents > 0) {
@@ -119,17 +124,34 @@ function invalidateTickets_(session, req) {
         kind: "tickets", ticketIds: chosen.map(function (t) { return t.id; }), owed: dollars_(owedCents), returns: [], status: "owed",
         reason: reason, createdAt: now, createdBy: session.name, closedAt: ""
       };
-      insertRow_("Refunds", refund);
+      writes.push({ table: "Refunds", add: refund });
     }
-    log_(session.name, wasPaid ? "order.refunded" : "order.cancelled", order.code, {
-      total: order.total, tickets: chosen.length, whole: whole, owed: dollars_(owedCents), reason: reason
-    });
-    return {
-      ok: true, invalidated: chosen.length, paidInvalidated: paidOnes.length, whole: whole,
-      orderStatus: whole ? (wasPaid ? "refunded" : "cancelled") : order.status,
-      qrRejected: paidOnes.length > 0, refund: refund ? { id: refund.id, owed: refund.owed } : null
+    const plan = {
+      op: "invalidateTickets:" + (rid || newId_("OP")), writes: writes,
+      log: [wasPaid ? "order.refunded" : "order.cancelled", order.code, { total: order.total, tickets: chosen.length, whole: whole, owed: dollars_(owedCents), reason: reason }],
+      reply: {
+        ok: true, invalidated: chosen.length, paidInvalidated: paidOnes.length, whole: whole,
+        orderStatus: whole ? (wasPaid ? "refunded" : "cancelled") : order.status,
+        qrRejected: paidOnes.length > 0, refund: refund ? { id: refund.id, owed: refund.owed } : null
+      }
     };
+    startRequest_("invalidateTickets", rid, session.name, plan);   // written down first, so a repeat can finish it
+    return carryOutInvalidate_(session, rid, plan);
   });
+}
+
+/** Carries out a planned invalidation (inside the lock). Running it again for the same plan changes nothing more. */
+function carryOutInvalidate_(session, rid, plan) {
+  const result = applyWrites_(plan.writes, plan.op);
+  let reply = plan.reply;
+  if (result.conflicts.length) {   // the order or a ticket changed since: write nothing more (no refund owed) and ask Finance to check
+    log_(session.name, "refund.needsReview", plan.log[1], { conflicts: result.conflicts, planned: plan.log[2] });
+    reply = needsReviewReply_(result.conflicts, result.done);
+  } else {
+    log_(session.name, plan.log[0], plan.log[1], plan.log[2]);
+  }
+  finishRequest_("invalidateTickets", rid, session.name, reply);
+  return reply;
 }
 
 /** The old whole-order button (and any page still on the old version): invalidate every ticket in the order. */
@@ -158,11 +180,24 @@ function recordRefund_(session, req) {
   } else date = "";
   const by = clip_(req.by, 60) || session.name;
   const note = clip_(req.note, 200);
+  const rid = cleanRequestId_(req.requestId);
 
   return withLock_(function () {
+    const saved = savedRequest_("recordRefund", rid);
+    if (saved && saved.status === "done") return saved.reply;   // the same press again: same answer, the money is counted once
     delete DB_.rows["Orders"]; delete DB_.rows["Refunds"];
     let rec = req.refundId ? readRows_("Refunds").filter(function (r) { return r.id === req.refundId; })[0] : null;
-    let order;
+    // Each return carries the press it came from ("ref"), and is saved in ONE write. So if the answer got lost, the return is
+    // found here and the same answer is given again, instead of the amount being added a second time.
+    const mine = function (r) { return rid && (Array.isArray(r.returns) ? r.returns : []).some(function (x) { return x.ref === rid; }); };
+    const earlier = rid ? readRows_("Refunds").filter(function (r) { return (rec ? r.id === rec.id : r.orderId === req.orderId) && mine(r); })[0] : null;
+    if (earlier) {
+      const view = refundView_(earlier);
+      const reply = { ok: true, refund: view, remaining: view.remaining };
+      finishRequest_("recordRefund", rid, session.name, reply);
+      return reply;
+    }
+    let order, fresh = null;
     if (!rec) {
       order = readRows_("Orders").filter(function (o) { return o.id === req.orderId; })[0];
       if (!order) throw new ApiError_("NOT_FOUND", "Nothing to record a refund against.");
@@ -170,13 +205,11 @@ function recordRefund_(session, req) {
         throw new ApiError_("BAD_REQUEST", "This order has no refund waiting to be recorded.");
       }
       const was = receivedOf_(order) || Number(order.total) || 0;
-      rec = {
+      fresh = rec = {
         id: newId_("RF"), orderId: order.id, orderCode: order.code, eventId: order.eventId, payerName: order.payerName, payerEmail: order.payerEmail,
         kind: "history", ticketIds: [], owed: was, returns: [], status: "owed", reason: "Refunded before returns were tracked",
         createdAt: new Date().toISOString(), createdBy: session.name, closedAt: ""
       };
-      insertRow_("Refunds", rec);
-      rec = readRows_("Refunds").filter(function (r) { return r.id === rec.id; })[0] || rec;
     }
     if (rec.status !== "owed") throw new ApiError_("BAD_REQUEST", "This refund is already " + rec.status + ".");
 
@@ -185,12 +218,17 @@ function recordRefund_(session, req) {
     if (!isFinite(amount) || amount <= 0) throw new ApiError_("BAD_REQUEST", "Enter the amount that was returned.");
     if (cents_(amount) > cents_(view.remaining) + 1) throw new ApiError_("BAD_REQUEST", "Only " + usd_(view.remaining) + " is still owed on this refund.");
 
-    const returns = view.returns.concat([{ amount: dollars_(cents_(amount)), method: method, date: date, by: by, note: note, recordedBy: session.name, recordedAt: new Date().toISOString() }]);
+    const entry = { amount: dollars_(cents_(amount)), method: method, date: date, by: by, note: note, recordedBy: session.name, recordedAt: new Date().toISOString() };
+    if (rid) entry.ref = rid;
+    const returns = view.returns.concat([entry]);
     const left = cents_(view.remaining) - cents_(amount);
     const changes = { returns: returns, status: left <= 0 ? "returned" : "owed", closedAt: left <= 0 ? new Date().toISOString() : "" };
-    updateRow_("Refunds", rec.id, changes, rec._row);
+    if (fresh) insertRow_("Refunds", Object.assign({}, fresh, changes));   // an old refund: written in one go, already with its return
+    else updateRow_("Refunds", rec.id, changes, rec._row);
     log_(session.name, "refund.returned", rec.orderCode, { amount: dollars_(cents_(amount)), method: method, remaining: dollars_(left), by: by });
-    return { ok: true, refund: refundView_(Object.assign({}, rec, changes)), remaining: dollars_(left) };
+    const reply = { ok: true, refund: refundView_(Object.assign({}, rec, changes)), remaining: dollars_(left) };
+    finishRequest_("recordRefund", rid, session.name, reply);
+    return reply;
   });
 }
 

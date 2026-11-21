@@ -10,11 +10,11 @@ const PANDA_SLOW_MS = 6000;
 const PANDA_SLEEPY_MS = 15000;
 
 const PANDA_STATES = {
-  loading: { frames: ["munch", "wiggle"], title: "Loading…", sub: "Just a moment, we're working on it!", dots: true },
-  slow:    { frames: ["climb"], title: "Taking a little longer…", sub: "Still working behind the scenes!", dots: true },
-  sleepy:  { frames: ["sleep"], title: "Still working…", sub: "Thanks for your patience!", dots: true },
-  almost:  { frames: ["almost"], title: "Almost there…", sub: "Just a few more seconds!", dots: true },
-  success: { frames: ["success"], title: "All set!", sub: "You're good to go.", dots: false },
+  loading: { frames: ["munch", "wiggle"], title: "Loading…", dots: true },
+  slow:    { frames: ["climb"], title: "Taking a little longer…", dots: true },
+  sleepy:  { frames: ["sleep"], title: "Still working…", dots: true },
+  almost:  { frames: ["almost"], title: "Almost there…", dots: true },
+  success: { frames: ["success"], title: "All set!", dots: false },
   error:   { frames: ["error"], title: "Oops!", sub: "Something went wrong.", dots: false }
 };
 

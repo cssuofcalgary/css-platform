@@ -21,15 +21,11 @@ function findMyTickets_(req) {
   if (byEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new ApiError_("BAD_REQUEST", "That email doesn't look right.");
   if (!byEmail && (ucid.length < 6 || !lastName)) throw new ApiError_("BAD_REQUEST", "Enter your email, or your UCID and last name.");
 
-  const generic = { ok: true, sent: false, message: "If we found tickets, we've emailed them. Check your inbox and spam folder. If you asked in the last 10 minutes, the email is already on its way." };
+  const generic = { ok: true, sent: false, message: "If you have tickets, we'll email them. Allow up to 10 minutes and check your spam folder." };
   const key = lookupKey_("t", byEmail ? "e:" + email : "u:" + ucid);
   if (lookupBlocked_(key)) return generic;
 
-  const today = Utilities.formatDate(new Date(), "America/Edmonton", "yyyy-MM-dd");
-  const events = {};
-  allEvents_().forEach(function (e) {
-    if (e.status === "published" && e.date >= today) events[e.id] = e;
-  });
+  const events = ticketEventsById_();
 
   const matches = readRows_("Tickets").filter(function (t) {
     if ((t.status !== "paid" && t.status !== "awaiting") || !events[t.eventId] || !t.email) return false;   // unpaid ones too: their link shows how to pay
@@ -89,7 +85,7 @@ function findMyPass_(req) {
   if (byEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new ApiError_("BAD_REQUEST", "That email doesn't look right.");
   if (!byEmail && (ucid.length < 6 || !lastName)) throw new ApiError_("BAD_REQUEST", "Enter your email, or your UCID and last name.");
 
-  const generic = { ok: true, sent: false, message: "If we found your membership, we've emailed your pass link. Check your inbox and spam folder. If you asked in the last 10 minutes, it's already on its way." };
+  const generic = { ok: true, sent: false, message: "If you have a membership, we'll email your pass link. Allow up to 10 minutes and check your spam folder." };
   const key = lookupKey_("m", byEmail ? "e:" + email : "u:" + ucid);
   if (lookupBlocked_(key)) return generic;
 
@@ -213,7 +209,7 @@ function memberProfile_(req) {
 
 /**
  * The member portal asks for tickets with {memberId, k} (a member's pass link) or {email, k}
- * (a tickets link). Upcoming published events only: paid tickets, unpaid ones marked as waiting, and cancelled ones
+ * (a tickets link). Upcoming events, published or closed (closing stops sign-ups, not tickets): paid tickets, unpaid ones marked as waiting, and cancelled ones
  * (so "where did my ticket go?" has an answer).
  *
  * A ticket belongs to the ATTENDEE, not the person who paid, so a friend's purchase shows up here when it carries the
@@ -224,10 +220,33 @@ function memberProfile_(req) {
  */
 const LISTED_STATUS_ = { paid: true, awaiting: true, refunded: true, cancelled: true };
 
+/**
+ * THE rule for "is this ticket this member's?", used by My tickets, the door's member-pass scan and a member's history,
+ * so they always agree. Answers:
+ *   "self"  - the member's email, ID or UCID is on it and the name on it fits the member: theirs, and it is them.
+ *   "email" - the member's email is on it but under another name (they registered a friend with their email): it is listed
+ *             in their My tickets, but the door does not let the member in on it (the friend may be the one coming).
+ *   "maybe" - the member's ID or UCID is on it next to someone else's name (a typo?): not theirs; counted, help desk decides.
+ *   ""      - nothing of the member's on it.
+ */
+function ticketOwnership_(ticket, member) {
+  const mail = String(member.email || "").trim().toLowerCase();
+  const ucid = String(member.ucid || "").replace(/\D/g, "");
+  const byEmail = !!mail && String(ticket.email || "").trim().toLowerCase() === mail;
+  const byNumber = (!!member.memberId && String(ticket.memberId || "").trim().toUpperCase() === member.memberId) ||
+    (ucid.length >= 6 && String(ticket.ucid || "").replace(/\D/g, "") === ucid);
+  if (!byEmail && !byNumber) return "";
+  if (namesRelated_(ticket.name, member.name)) return "self";
+  return byEmail ? "email" : "maybe";
+}
+
+/** The ticket is listed as the member's (My tickets, history). */
+function isMembersTicket_(ownership) {
+  return ownership === "self" || ownership === "email";
+}
+
 function myTickets_(req) {
-  const today = Utilities.formatDate(new Date(), "America/Edmonton", "yyyy-MM-dd");
-  const events = {};
-  allEvents_().forEach(function (e) { if (e.status === "published" && e.date >= today) events[e.id] = e; });
+  const events = ticketEventsById_();
 
   let match, name = "", memberEmail = "";
   if (req.memberId) {
@@ -236,14 +255,11 @@ function myTickets_(req) {
     const member = loadMembers_().filter(function (m) { return m.memberId === memberId; })[0];
     if (!member) throw new ApiError_("NOT_FOUND", "Member not found.");
     name = member.name;
-    const ucid = String(member.ucid || "").replace(/\D/g, "");
-    const mail = String(member.email || "").toLowerCase();
     memberEmail = member.email || "";
     match = function (t) {
-      if (mail && String(t.email || "").toLowerCase() === mail) return "yes";
-      const named = t.memberId === memberId || (ucid.length >= 6 && String(t.ucid || "").replace(/\D/g, "") === ucid);
-      if (!named) return "";
-      return namesRelated_(t.name, member.name) ? "yes" : "maybe";   // someone else's name next to this member's number: not added, only counted
+      const owner = ticketOwnership_(t, member);
+      if (isMembersTicket_(owner)) return "yes";
+      return owner === "maybe" ? "maybe" : "";   // someone else's name next to this member's number: not added, only counted
     };
   } else if (req.ucid) {
     const ucid = String(req.ucid).replace(/\D/g, "");
@@ -306,9 +322,7 @@ function openMyAccess_(req) {
     return { ok: true, kind: "pass", memberId: member.memberId, k: linkKey_("pass", member.memberId) };
   }
 
-  const today = Utilities.formatDate(new Date(), "America/Edmonton", "yyyy-MM-dd");
-  const live = {};
-  allEvents_().forEach(function (e) { if (e.status === "published" && e.date >= today) live[e.id] = true; });
+  const live = ticketEventsById_();
   const hasTickets = readRows_("Tickets").some(function (t) {
     return (t.status === "paid" || t.status === "awaiting") && live[t.eventId] &&
       String(t.ucid || "").replace(/\D/g, "") === ucid && nameEndsWith_(t.name, lastName);

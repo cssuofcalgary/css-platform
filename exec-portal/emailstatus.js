@@ -4,6 +4,30 @@
 
 const mailState = { left: -1, waiting: 0, checkedAt: "", loaded: false, last: 0, busy: false };
 const MAIL_REFRESH_MS = 60000;
+let mailHistoryRequest = 0;
+
+async function loadMailHistory() {
+  const request = ++mailHistoryRequest;
+  $("mail-history-status").textContent = T.mailHistoryLoading;
+  $("mail-history-list").innerHTML = "";
+  const reply = await api("listRecentEmails");
+  if (request !== mailHistoryRequest) return;
+  if (!reply.ok) {
+    if (reply.error === "NOT_LOGGED_IN") {
+      $("mail-status-dialog").close(); signOutLocally(); return showLogin(errorText(reply));
+    }
+    $("mail-history-status").textContent = errorText(reply);
+    return;
+  }
+  $("mail-history-status").textContent = (reply.entries.length ? T.mailHistoryCount(reply.entries.length) : T.mailHistoryNone) +
+    (reply.partial ? " · " + T.mailHistoryPartial : "");
+  $("mail-history-list").innerHTML = reply.entries.map((entry) => `<li>
+    <div class="email-history-top"><strong>${escapeHtml(entry.subject || T.mailHistoryNoSubject)}</strong>
+      <span class="pill ${entry.status === "sent" ? "good" : "warn"}">${escapeHtml(entry.status === "sent" ? T.mailHistorySent : T.mailHistoryFailed)}</span></div>
+    <div class="muted small">${escapeHtml(entry.to)}</div>
+    <time class="muted small" datetime="${escapeHtml(entry.time)}">${escapeHtml(formatDate(entry.time))}</time>
+  </li>`).join("");
+}
 
 function startMailStatus() {
   if (state.role === "door" || SCANNER_MODE) return;   // door volunteers only scan
@@ -49,11 +73,12 @@ $("mail-pill").addEventListener("click", () => {
   renderMailDialog();
   $("mail-status-dialog").showModal();
   refreshMailStatus(true);
+  loadMailHistory();
 });
 $("mail-close").addEventListener("click", () => $("mail-status-dialog").close());
 $("mail-refresh").addEventListener("click", async () => {
   $("mail-result").textContent = "";
-  await refreshMailStatus(true);
+  await Promise.all([refreshMailStatus(true), loadMailHistory()]);
   if (!mailState.loaded) $("mail-result").textContent = T.mailNone;
 });
 $("mail-send-pending").addEventListener("click", async () => {
@@ -65,6 +90,7 @@ $("mail-send-pending").addEventListener("click", async () => {
   button.disabled = false;
   if (!reply.ok) { $("mail-result").textContent = errorText(reply); return; }
   $("mail-result").textContent = T.mailSentResult(reply.emailsSent, reply.emailsWaiting);
+  loadMailHistory();
   if (typeof loadOrders === "function" && payState && payState.eventId && !$("tab-payments").hidden) loadOrders(false, true);
 });
 

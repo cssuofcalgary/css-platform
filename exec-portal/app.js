@@ -6,6 +6,7 @@ const SCANNER_MODE = PARAMS.get("mode") === "scanner";
 const FORCE_FULL = PARAMS.get("full") === "1";
 
 const state = {
+  membershipFee: null,   // the fee saved in Settings, as the server last said
   token: sessionStorage.getItem("css_token") || "",
   name: sessionStorage.getItem("css_name") || "",
   role: sessionStorage.getItem("css_role") || "exec",
@@ -18,14 +19,14 @@ const $ = (id) => document.getElementById(id);
 
 // Looking things up is safe to repeat, so a hiccup (Google being slow, a dropped connection) is retried
 // quietly. Anything that changes data (mark paid, scan, edit…) is never repeated automatically.
-const READ_ACTIONS = ["listEvents", "listOrders", "doorList", "eventSummary", "searchMembers", "getMember"];
+const READ_ACTIONS = ["listEvents", "listOrders", "doorList", "eventSummary", "searchMembers", "getMember", "listRecentEmails"];
 const REQUEST_TIMEOUT_MS = 35000;
 const RETRY_PAUSE_MS = 1200;
 
 // The panda shows in the middle when a request takes longer than a moment (and moves on to "taking a little longer" and
 // "still working" the longer it waits). Door scans, searches-as-you-type and the keep-alive stay quiet, and so does the
 // scanner phone page. Jobs that work through a list show "almost there" instead.
-const QUIET_ACTIONS = ["ping", "scan", "doorList", "deskAlerts", "searchMembers", "getMember", "emailStatus"];
+const QUIET_ACTIONS = ["ping", "scan", "doorList", "deskAlerts", "searchMembers", "getMember", "emailStatus", "listRecentEmails"];
 const EMAIL_ACTIONS = ["markOrderPaid", "markOrdersPaid", "sendPendingEmails", "resendTickets", "addOrder", "sendReminders", "editTicket", "offerWaitlist", "mailAll"];   // after these the email indicator is refreshed
 const BATCH_ACTIONS = ["sendPendingEmails", "markOrdersPaid", "sendReminders"];
 const PANDA_DELAY_MS = 700;
@@ -45,9 +46,25 @@ async function api(action, details = {}) {
   if (!quiet) pandaBusy(true, BATCH_ACTIONS.includes(action));
   try {
     const reply = await apiRequest(action, details);
+    if (reply && reply.membershipFee !== undefined) state.membershipFee = reply.membershipFee;
     if (reply && reply.ok && EMAIL_ACTIONS.includes(action) && typeof refreshMailStatus === "function") refreshMailStatus(true);
     return reply;
   } finally { if (!quiet) pandaBusy(false); }
+}
+
+// Buttons that record money or registrations send an id for each press. The same press (same details) keeps its id until the
+// server says it worked, so a retry or a second click after a dropped connection gets the saved answer instead of a duplicate.
+const pendingPressIds = {};
+function newRequestId() {
+  return (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 12);
+}
+async function apiOnce(action, details = {}) {
+  const key = action + JSON.stringify(details);
+  const requestId = pendingPressIds[key] || (pendingPressIds[key] = newRequestId());
+  const reply = await api(action, { ...details, requestId });
+  // Done, or "check this order first": either way the next press is a new one (after checking, Finance records it afresh).
+  if (reply && (reply.ok || reply.error === "NEEDS_REVIEW")) delete pendingPressIds[key];
+  return reply;
 }
 
 async function apiRequest(action, details = {}) {
@@ -284,14 +301,18 @@ function showMember(m) {
   state.member = m;
   loadMemberHistory(m);
   loadMemberRedemptions(m);
+  loadMemberNotes(m);
   $("member-pay").hidden = m.paid || !m.memberId;
+  $("member-assign").hidden = !!m.memberId || m.row === undefined;   // a row with no member ID yet: give it one first
+  $("member-assign-error").hidden = true;
+  $("member-assign-id").disabled = false;
   $("member-edit-button").hidden = !m.memberId;
   $("member-resend-pass").hidden = !(m.memberId && m.email && m.paid);
   $("member-resend-pass").disabled = false;
   $("member-resend-pass").textContent = T.resendPass;
   $("member-pay-error").hidden = true;
   $("member-mark-paid").disabled = false;
-  $("member-mark-paid").textContent = T.memberMarkPaid;
+  $("member-mark-paid").textContent = T.memberMarkPaid(state.membershipFee);
   window.scrollTo(0, 0);
 }
 
@@ -304,6 +325,7 @@ function openAddMember() {
   $("ma-when").max = todayMountain();
   $("ma-who").value = state.name || "";
   $("ma-paid").checked = true;
+  $("ma-paid-label").textContent = T.maPaidNow(state.membershipFee);
   $("ma-error").hidden = true;
   $("ma-submit").disabled = false;
   $("ma-submit").textContent = T.maSubmit;
@@ -353,7 +375,7 @@ async function markMemberPaid() {
   if (!reply.ok) {
     if (reply.error === "NOT_LOGGED_IN") { signOutLocally(); return showLogin(errorText(reply)); }
     button.disabled = false;
-    button.textContent = T.memberMarkPaid;
+    button.textContent = T.memberMarkPaid(state.membershipFee);
     $("member-pay-error").textContent = errorText(reply);
     $("member-pay-error").hidden = false;
     return;
@@ -377,6 +399,12 @@ async function resendMemberPass() {
     if (reply.error === "NOT_LOGGED_IN") { signOutLocally(); return showLogin(errorText(reply)); }
     return showToast(errorText(reply));
   }
+  Object.assign(m, { cardSent: true, mailStatus: "Sent" });
+  const listed = allState.members.find((x) => x.memberId === m.memberId);
+  if (listed) Object.assign(listed, { cardSent: true, mailStatus: "Sent" });
+  allState.stale = true;
+  // Only the badges change: redrawing the whole page would wipe a note someone is halfway through typing
+  if (state.member === m) $("member-badges").innerHTML = paidPill(m) + `<span class="pill good">${T.cardSent}</span>`;
   showToast(T.passEmailed(m.email), "success");
 }
 

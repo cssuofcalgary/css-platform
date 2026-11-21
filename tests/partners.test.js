@@ -33,6 +33,7 @@ ok(r.v && !/^[=+\-@]/.test(r.v.partner.name + r.v.partner.offer + r.v.partner.ad
 const k = run(`linkKey_("pass", "CSS0011234")`);
 r = J(`memberPartners_({ memberId: "CSS0011234", k: "${k}" })`);
 ok(r.v && r.v.ok && r.v.partners.length === 8 && r.v.partners.every((p) => p.name !== "New Cafe"), "a member with a valid pass link sees the ACTIVE partners only (" + (r.v && r.v.partners.length) + ")");
+ok(r.v && r.v.dealsActive === true, "deals are on while any partner is switched on");
 ok(J(`memberPartners_({ memberId: "CSS0011234", k: "wrong" })`).err === "NOT_FOUND", "wrong key: not found");
 ok(J(`memberPartners_({ memberId: "CSS0011234" })`).err === "NOT_FOUND", "no key: not found");
 const k2 = run(`linkKey_("pass", "CSS0022222")`);

@@ -159,7 +159,7 @@ function sendAlert_(problems) {
   if (props.getProperty("ALERT_SENT_DAY") === today) return;
   const to = getConfig_().contactEmail;   // the CSS Gmail (Settings → contact email)
   if (!to || !canSendMail_(to)) return;
-  MailApp.sendEmail({
+  sendMail_({
     to: to,
     subject: "CSS Platform: something needs a look",
     body: "The nightly check found:\n\n- " + problems.join("\n- ") +

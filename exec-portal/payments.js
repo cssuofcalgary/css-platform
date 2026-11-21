@@ -168,7 +168,7 @@ async function onOrdersClick(event) {
 
   if (button.dataset.act === "repair") {
     button.disabled = true;
-    reply = await api("markOrderPaid", { orderId: order.id, siteUrl });   // an already-paid order: finishes tickets and emails that were left undone
+    reply = await apiOnce("markOrderPaid", { orderId: order.id, siteUrl });   // an already-paid order: finishes tickets and emails that were left undone
     if (reply.ok) result.textContent = T.repaired(reply.repaired || 0, reply.emailsSent);
   }
 
@@ -207,12 +207,12 @@ async function sendUnsent() {
   const waiting = payState.data.unsentEmails;
   const left = payState.data.emailsLeftToday;
   const suggested = left >= 0 ? Math.min(waiting, left) : waiting;
-  const typed = prompt(T.sendHowMany(waiting, left), String(suggested));
+  const typed = await askText(T.sendHowMany(waiting, left), null, String(suggested));
   if (typed === null) return;
   const count = Math.floor(Number(typed));
-  if (!(count >= 1)) return alert(T.sendHowManyBad);
+  if (!(count >= 1)) return showToast(T.sendHowManyBad);
   $("pay-unsent").textContent = T.saving;
-  const reply = await api("sendPendingEmails", { count });
+  const reply = await api("sendPendingEmails", { count, eventId: payState.eventId });
   if (!reply.ok) return handleEventError(reply, $("pay-unsent"));
   await loadOrders();
   showToast(T.sentSome(reply.emailsSent, reply.emailsWaiting), "success");

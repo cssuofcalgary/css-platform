@@ -72,6 +72,7 @@ function rowsToMembers_(values) {
       email: cellText_(read(row, "email")),
       paid: isYes_(read(row, "paid")),
       cardSent: cellText_(read(row, "mailStatus")).toLowerCase() === "sent",
+      mailStatus: cellText_(read(row, "mailStatus")),   // "Pending" = joined through the site and the card email never went out
       signedUp: cellText_(read(row, "signedUp")),
       row: r + 1,                                 // where it sits on the sheet (so a payment can be marked on the right line)
       status: cellText_(read(row, "paid")),       // the Paid Status as typed, e.g. "Awaiting Cash"

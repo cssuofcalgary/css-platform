@@ -1,5 +1,5 @@
 // CSS loader: loading, slow, success and error states. Drawn art lives in assets/panda/*.webp (transparent).
-//   mountPanda(element, "loading")  shows the munching panda with the three leaves; after 6 s it becomes "taking a little longer", after 15 s "still working".
+//   mountPanda(element, "loading")  shows the munching panda with the three leaves; after 6 s it becomes "taking longer than usual", after 15 s "still working".
 //   pandaMarkup("error", { sub: "...", retry: true })   markup only, for error and success screens.
 //   pandaImg("success")                                  just the picture, for a hero above a title.
 // Elements with data-panda in the page are filled in automatically (data-title and data-compact are optional).
@@ -10,12 +10,12 @@ const PANDA_SLOW_MS = 6000;
 const PANDA_SLEEPY_MS = 15000;
 
 const PANDA_STATES = {
-  loading: { frames: ["munch", "wiggle"], title: "Loading…", sub: "Just a moment, we're working on it!", dots: true },
-  slow:    { frames: ["climb"], title: "Taking a little longer…", sub: "Still working behind the scenes!", dots: true },
-  sleepy:  { frames: ["sleep"], title: "Still working…", sub: "Thanks for your patience!", dots: true },
-  almost:  { frames: ["almost"], title: "Almost there…", sub: "Just a few more seconds!", dots: true },
-  success: { frames: ["success"], title: "All set!", sub: "You're good to go.", dots: false },
-  error:   { frames: ["error"], title: "Oops!", sub: "Something went wrong.", dots: false }
+  loading: { frames: ["munch", "wiggle"], title: "Loading…", dots: true },
+  slow:    { frames: ["climb"], title: "Taking longer than usual…", dots: true },
+  sleepy:  { frames: ["sleep"], title: "Still working…", dots: true },
+  almost:  { frames: ["almost"], title: "Almost there…", dots: true },
+  success: { frames: ["success"], title: "Done.", dots: false },
+  error:   { frames: ["error"], title: "Something went wrong.", dots: false }
 };
 
 function pandaEsc(text) {

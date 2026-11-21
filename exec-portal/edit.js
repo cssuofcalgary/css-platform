@@ -32,6 +32,9 @@ function openEditDialog(ctx, onSaved) {
     $("ed-type").innerHTML = (current ? "" : `<option value="">${escapeHtml(ticket.ticketType)} (as booked)</option>`) +
       types.map((t) => `<option value="${escapeHtml(t.id)}" ${current && t.id === current.id ? "selected" : ""}>${escapeHtml(t.name)} · ${money(t.price)}</option>`).join("");
     $("ed-answers").innerHTML = (event.questions || []).map((q, i) => {
+      // a question that is only for other ticket types is left out (unless this person already has an answer to it)
+      const forThis = !(q.forTickets || []).length || (current && q.forTickets.includes(current.id));
+      if (!forThis && !(ticket.answers || {})[q.label]) return "";
       const value = (ticket.answers || {})[q.label] || "";
       const input = q.type === "choice"
         ? `<select data-q="${i}"><option value=""></option>${(q.options || []).map((o) =>
@@ -109,7 +112,7 @@ async function onEditSubmit(event) {
 
 async function onEditDelete() {
   const { ticket, order } = editState.ctx;
-  if (!confirm(T.editDeleteConfirm(order.code || "", ticket.name || ""))) return;
+  if (!(await askConfirm(T.editDeleteConfirm(order.code || "", ticket.name || "")))) return;
   setEditBusy(true);
   const reply = await api("deleteOrder", { orderId: order.id });
   if (!reply.ok) {

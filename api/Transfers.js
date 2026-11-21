@@ -29,8 +29,14 @@ function applyTransfer_(session, req) {
   const late = req.late === "restore" || req.late === "refund" ? req.late : "";
   const full = req.full === "confirm" || req.full === "refund" ? req.full : "";
   const force = full === "confirm";
+  const rid = cleanRequestId_(req.requestId);
+  const op = "applyTransfer:" + (rid || newId_("OP"));   // marks the orders this press changes (see applyWrites_)
 
   const outcome = withLock_(function () {
+    // The same press again (the answer got lost, or it stopped halfway): never add the money a second time.
+    const saved = savedRequest_("applyTransfer", rid);
+    if (saved && saved.status === "done") return { repeat: saved.reply };
+    if (saved && saved.status === "started") return carryOutTransfer_(session, saved.plan);
     delete DB_.rows["Orders"]; delete DB_.rows["Tickets"]; delete DB_.rows["Refunds"]; delete DB_.rows["Events"];
     let orders = ids.map(function (id) { return readRows_("Orders").filter(function (o) { return o.id === id; })[0]; });
     if (orders.some(function (o) { return !o; })) throw new ApiError_("NOT_FOUND", "One of those orders no longer exists.");
@@ -50,25 +56,30 @@ function applyTransfer_(session, req) {
 
     // ---- The whole payment goes back: an order that was cancelled, or an event that is full
     const allClosed = closed.length === orders.length;
+    // Every write is planned first and written down (startRequest_), then carried out (carryOutTransfer_), so a press that
+    // stops halfway can be finished by pressing again without counting anything twice.
     if ((late === "refund" && allClosed) || full === "refund") {
       const first = orders[0];
+      const writes = [];
       orders.forEach(function (o, i) {
         const change = { notes: [o.notes, "payment of " + money1 + nameNote + " received, to be returned (recorded by " + session.name + ")"].filter(Boolean).join(" | ") };
         if (i === 0) change.received = String(dollars_(cents_(receivedOf_(o)) + amountC));
         if (o.status === "awaiting") {   // the event is full: this registration can't be confirmed
           change.status = "cancelled";
-          readRows_("Tickets").forEach(function (t) { if (t.orderId === o.id && t.status === "awaiting") updateRow_("Tickets", t.id, { status: "cancelled" }, t._row); });
+          readRows_("Tickets").forEach(function (t) { if (t.orderId === o.id && t.status === "awaiting") writes.push({ table: "Tickets", id: t.id, set: { status: "cancelled" }, was: { status: "awaiting" } }); });
         }
-        updateRow_("Orders", o.id, change, o._row);
+        writes.push({ table: "Orders", id: o.id, set: change, was: { received: o.received == null ? "" : o.received, status: o.status } });
       });
       const rec = {
         id: newId_("RF"), orderId: first.id, orderCode: first.code, eventId: first.eventId, payerName: first.payerName, payerEmail: first.payerEmail,
         kind: allClosed ? "late payment" : "event full", ticketIds: [], owed: dollars_(amountC), returns: [], status: "owed",
         reason: allClosed ? "Payment arrived after the registration was cancelled" : "Payment arrived but the event is full", createdAt: now, createdBy: session.name, closedAt: ""
       };
-      insertRow_("Refunds", rec);
-      log_(session.name, "payment.refund", first.code, { amount: dollars_(amountC), why: rec.kind });
-      return { mode: "refund", orders: orders, paid: [], refund: { id: rec.id, owed: rec.owed }, confirmed: 0 };
+      writes.push({ table: "Refunds", add: rec });
+      const plan = { op: op, writes: writes, paidIds: [], force: false, log: ["payment.refund", first.code, { amount: dollars_(amountC), why: rec.kind }],
+        outcome: { mode: "refund", refund: { id: rec.id, owed: rec.owed } } };
+      startRequest_("applyTransfer", rid, session.name, plan);
+      return carryOutTransfer_(session, plan);
     }
 
     // ---- Cancelled orders come back first (the room rules apply), then everything is treated as an unpaid order
@@ -116,6 +127,7 @@ function applyTransfer_(session, req) {
     const others = function (o) { return orders.filter(function (x) { return x !== o; }).map(function (x) { return x.code; }); };
     const paidOrders = [];
     const results = [];
+    const writes = [];
     orders.forEach(function (o, i) {
       const covered = alloc[i] >= due[i];
       const markPaid = covered || (diff < 0 && short === "accept");
@@ -127,15 +139,9 @@ function applyTransfer_(session, req) {
           (extra && over === "keep" ? ", extra " + usd_(dollars_(extra)) + " kept" : "") + " (recorded by " + session.name + ")"].filter(Boolean).join(" | ")
       };
       if (sender && o.etransferName !== sender) change.etransferName = sender;
-      updateRow_("Orders", o.id, change, o._row);
+      writes.push({ table: "Orders", id: o.id, set: change, was: { received: o.received == null ? "" : o.received, status: o.status } });
       results.push({ orderId: o.id, code: o.code, paid: markPaid, stillDue: markPaid ? 0 : dollars_(due[i] - alloc[i]) });
       if (markPaid) paidOrders.push(o);
-    });
-
-    let confirmed = 0;
-    paidOrders.forEach(function (o) {
-      const r = markPaidLocked_(session, o.id, force);
-      confirmed += r.confirmed || 0;
     });
 
     let refund = null;
@@ -146,26 +152,55 @@ function applyTransfer_(session, req) {
         kind: "overpayment", ticketIds: [], owed: dollars_(diff), returns: [], status: "owed", reason: "Paid " + money1 + ", the order was " + usd_(dollars_(sumDue)),
         createdAt: now, createdBy: session.name, closedAt: ""
       };
-      insertRow_("Refunds", rec);
+      writes.push({ table: "Refunds", add: rec });
       refund = { id: rec.id, owed: rec.owed };
     }
-    log_(session.name, "order.payment", orders.map(function (o) { return o.code; }).join(","), {
-      amount: dollars_(amountC), due: dollars_(sumDue), sender: sender, short: diff < 0 ? short : "", over: diff > 0 ? over : "", paid: paidOrders.length
-    });
-    return { mode: "pay", orders: orders, paid: paidOrders, results: results, refund: refund, confirmed: confirmed, shortBy: diff < 0 ? dollars_(-diff) : 0, extra: diff > 0 ? dollars_(diff) : 0 };
+    const plan = {
+      op: op, writes: writes, paidIds: paidOrders.map(function (o) { return o.id; }), force: force,
+      log: ["order.payment", orders.map(function (o) { return o.code; }).join(","), {
+        amount: dollars_(amountC), due: dollars_(sumDue), sender: sender, short: diff < 0 ? short : "", over: diff > 0 ? over : "", paid: paidOrders.length
+      }],
+      outcome: { mode: "pay", results: results, refund: refund, shortBy: diff < 0 ? dollars_(-diff) : 0, extra: diff > 0 ? dollars_(diff) : 0 }
+    };
+    startRequest_("applyTransfer", rid, session.name, plan);
+    return carryOutTransfer_(session, plan);
   });
+  if (outcome.repeat) return outcome.repeat;
+  if (outcome.review) {   // kept, so pressing the same button again gives the same "check it" answer instead of guessing
+    finishRequest_("applyTransfer", rid, session.name, outcome.review);
+    return outcome.review;
+  }
 
   // Emails go out after the lock is released, like every other payment.
   let sent = 0, waiting = 0, notEmailed = 0;
-  outcome.paid.forEach(function (o) {
-    const r = sendPendingTicketEmails_(o.id);
+  outcome.paidIds.forEach(function (id) {
+    const r = emailsAfterSave_(id);
     sent += r.sent; waiting += r.waiting; notEmailed += r.notEmailed || 0;
   });
-  return {
+  const reply = {
     ok: true, mode: outcome.mode, confirmed: outcome.confirmed, results: outcome.results || [], refund: outcome.refund,
     shortBy: outcome.shortBy || 0, extra: outcome.extra || 0,
     emailsSent: sent, emailsWaiting: waiting, notEmailed: notEmailed, emailsLeftToday: emailsLeftToday_()
   };
+  finishRequest_("applyTransfer", rid, session.name, reply);
+  return reply;
+}
+
+/**
+ * Carries out a planned payment (call it while holding the lock). Safe to run again for the same plan: money already added is
+ * not added again, a refund already written is not written again, and an order already paid stays paid.
+ * If an order changed since the plan was made (and not by this press), nothing more is written and `review` holds the "check it" reply.
+ */
+function carryOutTransfer_(session, plan) {
+  const result = applyWrites_(plan.writes, plan.op);
+  if (result.conflicts.length) {   // someone changed an order since: record nothing more, no refund, no "paid"; Finance checks
+    log_(session.name, "payment.needsReview", plan.log[1], { conflicts: result.conflicts, planned: plan.log[2] });
+    return { review: needsReviewReply_(result.conflicts, result.done) };
+  }
+  let confirmed = 0;
+  plan.paidIds.forEach(function (id) { confirmed += markPaidLocked_(session, id, plan.force).confirmed || 0; });
+  log_(session.name, plan.log[0], plan.log[1], plan.log[2]);
+  return Object.assign({}, plan.outcome, { paidIds: plan.paidIds, confirmed: confirmed });
 }
 
 // ---- Finding the order for a payment ----------------------------------------------------------

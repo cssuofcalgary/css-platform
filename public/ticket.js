@@ -85,7 +85,7 @@ function showReply(reply, secret, cached) {
   if (reply.error === "NOT_FOUND") {
     retryRunning = false;
     clearCache(secret);
-    $("page").innerHTML = pandaMarkup("error", { sub: T.ticketNotFound });
+    $("page").innerHTML = pandaMarkup("error", { sub: T.ticketNotFound }) + `<a class="btn find-tickets" href="tickets.html">${T.findTitle}</a>`;
     return;
   }
   if (cached) render(cached.data, { state: "offline", savedAt: cached.savedAt, qr: cached.qr });
@@ -118,8 +118,8 @@ function render(data, meta = { state: "live" }) {
   const status = ticket.checkedIn ? "checkedin" : ticket.status;
   // A rubber-stamp look, like the member portal's "VERIFIED" stamp.
   const look = {
-    paid: { stamp: T.stampConfirmed, cls: "", note: T.ticketConfirmed },
-    checkedin: { stamp: T.stampCheckedIn, cls: "", note: T.ticketCheckedIn },
+    paid: { stamp: T.stampConfirmed, cls: "", note: "" },
+    checkedin: { stamp: T.stampCheckedIn, cls: "", note: "" },
     awaiting: { stamp: T.stampPending, cls: "pending", note: orderReceived > 0 && orderReceived < orderTotal ? T.ticketPartPaid(money(orderReceived), money(Math.round((orderTotal - orderReceived) * 100) / 100), etransferEmail, ticket.orderCode) : T.ticketAwaiting(money(orderTotal), etransferEmail, ticket.orderCode) },
     refunded: { stamp: T.stampVoid, cls: "void", note: T.ticketRefunded },
     cancelled: { stamp: T.stampVoid, cls: "void", note: T.ticketCancelled }
@@ -137,13 +137,12 @@ function render(data, meta = { state: "live" }) {
       <div class="ticket-pills"><span class="pill">${escapeHtml(ticket.ticketType)}</span><span class="pill">${escapeHtml(ticket.id)}</span></div>
       <hr class="perforation">
       ${look.stamp ? `<div class="stamp ${look.cls}">${look.stamp}</div>` : ""}
-      <p class="ticket-state">${escapeHtml(look.note)}</p>
-      ${showQr ? `<p class="muted small">${T.showAtDoor}</p>` : ""}
+      ${look.note ? `<p class="ticket-state">${escapeHtml(look.note)}</p>` : ""}
+      ${showQr && !ticket.checkedIn ? `<p class="muted small">${T.showAtDoor}</p>` : ""}
       ${canGiveFeedback ? `
       <hr class="perforation">
       <section class="feedback" aria-label="${escapeHtml(T.feedbackTitle)}">
         <h2 class="small-heading">${T.feedbackTitle}</h2>
-        <p class="muted small">${T.feedbackHint}</p>
         <div class="stars" role="radiogroup" aria-label="${escapeHtml(T.feedbackTitle)}">${[1, 2, 3, 4, 5].map((n) =>
           `<button type="button" class="star${feedback && feedback.rating >= n ? " on" : ""}" data-star="${n}" role="radio" aria-checked="${feedback && feedback.rating === n}" aria-label="${escapeHtml(T.starsLabel(n))}">★</button>`).join("")}</div>
         <textarea id="fb-comment" maxlength="500" rows="3" placeholder="${escapeHtml(T.feedbackPlaceholder)}">${escapeHtml(feedback ? feedback.comment : "")}</textarea>
@@ -156,7 +155,7 @@ function render(data, meta = { state: "live" }) {
     </article>`;
 
   const askCancel = async (undo) => {
-    if (!undo && !confirm(T.cancelConfirm)) return;
+    if (!undo && !(await askConfirm(T.cancelConfirm))) return;
     const reply = await api("requestCancel", { secret: new URLSearchParams(location.search).get("t") || "", undo });
     if (!reply.ok) return alert(reply.message || T.cancelFailed);
     render({ ...data, cancelRequested: reply.cancelRequested });
@@ -219,6 +218,22 @@ function timeRange(e) {
 function money(price) {
   return Number(price) === 0 ? T.free : "$" + Number(price).toFixed(Number(price) % 1 ? 2 : 0);
 }
+/** A confirm box drawn in the page: the browser's own confirm() can stop appearing, which makes the button look dead. */
+function askConfirm(message) {
+  return new Promise((resolve) => {
+    const dialog = document.createElement("dialog");
+    dialog.style.maxWidth = "min(90vw, 420px)";
+    dialog.innerHTML = `<p></p><button type="button" class="primary" data-yes>${T.cancelYes}</button> <button type="button" class="link" data-no>${T.cancelKeep}</button>`;
+    dialog.querySelector("p").textContent = message;
+    const done = (answer) => { dialog.close(); dialog.remove(); resolve(answer); };
+    dialog.querySelector("[data-yes]").addEventListener("click", () => done(true));
+    dialog.querySelector("[data-no]").addEventListener("click", () => done(false));
+    dialog.addEventListener("cancel", (ev) => { ev.preventDefault(); done(false); });
+    document.body.appendChild(dialog);
+    dialog.showModal();
+  });
+}
+
 function escapeHtml(value) {
   return String(value ?? "").replace(/[&<>"']/g, (c) =>
     ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));

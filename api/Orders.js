@@ -92,12 +92,12 @@ function register_(req) {
         if (t.status === "paid") paid++;
         else if (t.status === "awaiting") awaiting++;
       });
-      if (paid >= ev.capacity) throw new ApiError_("SOLD_OUT", "Sorry, this event is full.");
+      if (paid >= ev.capacity) throw new ApiError_("SOLD_OUT", "This event is full.");
       if (paid + awaiting + everyone.length > Math.floor(ev.capacity * 1.25)) {
         throw new ApiError_("SOLD_OUT", "Registration queue is full. Please check back later.");
       }
       if (plan.isFree && paid + everyone.length > ev.capacity) {
-        throw new ApiError_("SOLD_OUT", ev.capacity - paid > 0 ? "Only " + (ev.capacity - paid) + " spot(s) left." : "Sorry, this event is full.");
+        throw new ApiError_("SOLD_OUT", ev.capacity - paid > 0 ? "Only " + (ev.capacity - paid) + " spot(s) left." : "This event is full.");
       }
     }
     if (ev.capacity && ev.capacityRule === "all") {
@@ -105,7 +105,7 @@ function register_(req) {
       if (taken + everyone.length > ev.capacity) {
         throw new ApiError_("SOLD_OUT", ev.capacity - taken > 0
           ? "Only " + (ev.capacity - taken) + " spot(s) left."
-          : "Sorry, this event is full.");
+          : "This event is full.");
       }
     }
     const now = new Date().toISOString();
@@ -151,7 +151,7 @@ function register_(req) {
   const evForMail = done.ev || event;
   if (done.order.status === "paid") {
     // Free event (RSVP): everyone gets their QR ticket straight away, instead of a "payment needed" style email.
-    const sent = sendPendingTicketEmails_(done.order.id);
+    const sent = emailsAfterSave_(done.order.id);   // saved already: a busy email step must not make the page sign up again
     done.reply.emailSent = sent.sent > 0;
   } else if (done.reply.needsReview) {
     done.reply.emailSent = false;   // $0 and waiting for an exec to check membership: no ticket and no payment email yet
@@ -279,7 +279,7 @@ function abandonOrder_(order, err) {
  * Finance: someone e-transferred (or paid cash) without registering online. Adds them as a
  * paid registration in one step. Emails their ticket. `force` = go over capacity anyway.
  */
-function addOrder_(session, eventId, input, force, siteUrl) {
+function addOrder_(session, eventId, input, force, siteUrl, requestId) {
   rememberSiteUrl_(siteUrl);
   input = input || {};
   const event = findEvent_(function (e) { return e.id === eventId; });
@@ -289,8 +289,34 @@ function addOrder_(session, eventId, input, force, siteUrl) {
   person.flag = membershipFlag_(person, loadMembers_());
   const etransferName = String(input.etransferName || "").trim().slice(0, 80);
   const note = String(input.notes || "").trim().slice(0, 200);
+  const rid = cleanRequestId_(requestId);
+  const opKey = rid ? "add-" + rid : "";   // written on the order, so a repeat of this press finds it
+  const ticketRow = function (order, now) {
+    return {
+      id: newTicketId_(), secret: Utilities.getUuid().replace(/-/g, ""), orderId: order.id, eventId: event.id,
+      name: person.name, email: person.email, ucid: person.ucid, memberId: person.memberId,
+      ticketType: person.ticketTypeName, price: person.price, answers: person.answers, flag: person.flag,
+      status: "paid", checkedInAt: "", checkedInBy: "", createdAt: now
+    };
+  };
 
-  const order = withIntakeAndScriptLock_(function () {
+  const done = withIntakeAndScriptLock_(function () {
+    const saved = savedRequest_("addOrder", rid);
+    if (saved && saved.status === "done") return { repeat: saved.reply };   // the same press again: same answer, nothing new
+    if (opKey) {
+      delete DB_.rows["Orders"]; delete DB_.rows["Tickets"];
+      const prior = readRows_("Orders").filter(function (o) { return o.requestId === opKey && !isFailedOrder_(o); })[0];
+      if (prior) {   // this press was saved before (the answer got lost, or it stopped before the ticket): finish it, never a second one
+        let ticket = readRows_("Tickets").filter(function (t) { return t.orderId === prior.id; })[0];
+        if (!ticket) {
+          assertNoDuplicateRegistration_([person], event.id, readRows_("Tickets").filter(function (t) { return t.orderId !== prior.id; }));
+          ticket = ticketRow(prior, new Date().toISOString());
+          insertRow_("Tickets", ticket);
+          log_(session.name, "order.resumed", prior.code, { tickets: 1 });
+        }
+        return { order: prior, flag: ticket.flag || "" };
+      }
+    }
     delete DB_.rows["Orders"]; delete DB_.rows["Tickets"];
     assertNoDuplicateRegistration_([person], event.id, readRows_("Tickets"));
     if (event.capacity && !force) {
@@ -304,21 +330,26 @@ function addOrder_(session, eventId, input, force, siteUrl) {
       id: newId_("OR"), code: uniqueCode_(event, readRows_("Orders")), eventId: event.id,
       payerName: person.name, payerEmail: person.email, etransferName: etransferName, total: person.price,
       status: "paid", createdAt: now, paidAt: now, paidBy: session.name,
-      notes: ["Added by " + session.name, note].filter(Boolean).join(" | ")
+      notes: ["Added by " + session.name, note].filter(Boolean).join(" | "),
+      requestId: opKey
     };
     insertRow_("Orders", created);
-    insertRow_("Tickets", {
-      id: newTicketId_(), secret: Utilities.getUuid().replace(/-/g, ""), orderId: created.id, eventId: event.id,
-      name: person.name, email: person.email, ucid: person.ucid, memberId: person.memberId,
-      ticketType: person.ticketTypeName, price: person.price, answers: person.answers, flag: person.flag,
-      status: "paid", checkedInAt: "", checkedInBy: "", createdAt: now
-    });
+    try {
+      insertRow_("Tickets", ticketRow(created, now));
+    } catch (err) {
+      // The order is written but its ticket is not: close the order (like a failed online sign-up), then say to try again.
+      abandonOrder_(created, err);
+      throw (err instanceof ApiError_ ? err : new ApiError_("TEMPORARY", "The registration couldn't be saved. Please try again."));
+    }
     log_(session.name, "order.manual", created.code, { name: person.name, type: person.ticketTypeName, total: person.price, overCapacity: !!force });
-    return created;
+    return { order: created, flag: person.flag };
   });
+  if (done.repeat) return done.repeat;
 
-  const sent = sendPendingTicketEmails_(order.id);
-  return { ok: true, code: order.code, total: order.total, emailsSent: sent.sent, emailsWaiting: sent.waiting, notEmailed: sent.notEmailed || 0, flag: person.flag };
+  const sent = emailsAfterSave_(done.order.id);   // saved already: a busy email step only leaves the ticket waiting
+  const reply = { ok: true, code: done.order.code, total: Number(done.order.total) || 0, emailsSent: sent.sent, emailsWaiting: sent.waiting, notEmailed: sent.notEmailed || 0, flag: done.flag };
+  finishRequest_("addOrder", rid, session.name, reply);
+  return reply;
 }
 
 // ---- Checks -----------------------------------------------------------------
@@ -340,24 +371,35 @@ function cleanPerson_(p, event, index, lenient) {
   if (ucid && !/^\d{8}$/.test(ucid)) throw new ApiError_("BAD_REQUEST", who + " UCID must be exactly 8 digits.");
   if (!lenient && !ucid && !memberId) throw new ApiError_("BAD_REQUEST", who + " UCID or CSS member ID is required.");
 
-  const answers = {};
-  const usedKeys = {};
-  event.questions.forEach(function (q) {
-    // answers are stored under the wording; if an older event has two questions worded alike, the second gets "(2)" so neither is lost
-    let key = q.label, n = 2;
-    while (usedKeys[key]) key = q.label + " (" + (n++) + ")";
-    usedKeys[key] = true;
-    const value = String((p.answers || {})[q.id] || "").trim().slice(0, 300);
-    if (q.required && !value && !lenient) throw new ApiError_("BAD_REQUEST", "\"" + q.label + "\" is missing for " + name + ".");
-    if (value && q.type === "choice" && q.options.indexOf(value) === -1) throw new ApiError_("BAD_REQUEST", "Pick one of the options for \"" + q.label + "\".");
-    if (value) answers[key] = value;
-  });
+  const answers = cleanAnswers_(event, type.id, p.answers, name, lenient);
 
   return {
     name: name, email: email, ucid: ucid, memberId: memberId,
     ticketTypeId: type.id, ticketTypeName: type.name, price: Number(type.price) || 0,
     needsMembership: !!type.needsMembership, answers: answers, flag: ""
   };
+}
+
+/**
+ * One person's answers to the event's questions (sent keyed by question id, saved keyed by the wording).
+ * Only questions for this person's ticket type count: those are required when marked so (unless `lenient`), and
+ * anything sent for a question that isn't for their ticket is dropped, not saved. Used by sign-ups, Finance add and walk-ins.
+ */
+function cleanAnswers_(event, ticketTypeId, raw, name, lenient) {
+  const answers = {};
+  const usedKeys = {};
+  (event.questions || []).forEach(function (q) {
+    // answers are stored under the wording; if an older event has two questions worded alike, the second gets "(2)" so neither is lost
+    let key = q.label, n = 2;
+    while (usedKeys[key]) key = q.label + " (" + (n++) + ")";
+    usedKeys[key] = true;
+    if (!questionApplies_(q, ticketTypeId)) return;
+    const value = String((raw || {})[q.id] || "").trim().slice(0, 300);
+    if (q.required && !value && !lenient) throw new ApiError_("BAD_REQUEST", "\"" + q.label + "\" is missing for " + name + ".");
+    if (value && q.type === "choice" && q.options.indexOf(value) === -1) throw new ApiError_("BAD_REQUEST", "Pick one of the options for \"" + q.label + "\".");
+    if (value) answers[key] = value;
+  });
+  return answers;
 }
 
 /**

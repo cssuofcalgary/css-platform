@@ -8,6 +8,7 @@ These run the API code (`api/*.js`) in Node with a fake Google (in-memory tables
 | `waitlist.test.js` | joining, offering a spot, removing |
 | `partners.test.js` | partner deals and the redemption log |
 | `emailclaim.test.js` | two execs pressing Send at once can't double-email |
+| `emailhistory.test.js` | subject/recipient/time and sent/failed history, rolling 24-hour boundaries, no bodies or private links, unchanged send results when logging fails, attachments, and exec/admin/door permissions |
 | `deskalert.test.js` | scanner results, the "send to desk" alerts, the scan log, member pass links |
 | `payfix.test.js` | repairing a half-finished Mark paid, restoring a cancelled or refunded order |
 | `registration.test.js` | registering (event site and member portal): ticket pages in the reply, member verification, name and ID checks, retries, a failed ticket write, resuming, the event read again inside the lock, locks, capacity |
@@ -15,6 +16,7 @@ These run the API code (`api/*.js`) in Node with a fake Google (in-memory tables
 | `doorundo.test.js` | a door volunteer can undo only their own check-in from the last 10 minutes, Health warns about a blank door password |
 | `emailsettings.test.js` | per-event email settings and their defaults, what counts as "waiting", the email indicator, reminders on/off, the "N confirmed, X emailed, Y waiting" numbers |
 | `money.test.js` | invalidating one person or a whole order, refunds owed and returned, putting tickets back, and every awkward e-transfer (short, too much, several orders, cancelled order, full event, finding the order) |
+| `archivehold.test.js` | the nightly archive leaves events with unpaid orders or refunds owed live; the health check names them |
 | `mytickets.test.js` | My tickets: tickets belong to the attendee, ambiguous ones are not added, cancelled ones are shown as cancelled |
 | `feedback.test.js` | a step-by-step walkthrough of star ratings: who can rate, changing a rating, bad input, member linking, what execs see in the results, report and member history |
 | `duplicates.test.js` | repeat signups, shared email addresses, groups, retries, Finance additions, walk-ins and waitlist duplicate checks |
@@ -23,6 +25,14 @@ These run the API code (`api/*.js`) in Node with a fake Google (in-memory tables
 | `signup-validation.test.js` | server UCID/member-code requirements, email typo detection and refusing invalid registrations before writes |
 | `signup-ui.test.js` | browser validation, the member-code exception, actionable email errors and retaining request IDs across retries |
 | `ticket-actions-ui.test.js` | individual disabling from both lists, confirmation, sibling tickets, refund choices, original QR rejection and restoration |
+| `retry.test.js` | pressing a button twice or a retry: Add registration, Mark paid, waitlist offers, e-transfers, refunds owed and money returned give one record and the same answer (answer lost, busy email step, stopped halfway) |
+| `membership.test.js` | the membership year (September to August), the membership fee in Settings and where it shows |
+| `memberchanges.test.js` | shared member notes, author/time, sign-in and door permissions, successful/failed card sends, a row moving during a send, cached card status, and the different contents of Awaiting payment and Not paid |
+| `questions.test.js` | questions limited to certain ticket types: who sees them, required only when they apply, answers dropped otherwise, walk-in ticket choice and answers, free walk-ins |
+| `publicform.test.js` | the event site sign-up form offline: which questions show, what blocks Register, the "Choose tickets" total, the kept form, the ticket page's Find my tickets button |
+| `attention.test.js` | the Needs attention list, membership/payment issues and manual actions without automatic changes |
+| `eventedit.test.js` | event drafts and previews, editable fields and ticket order |
+| `members.test.js` | member lists, filters, counts, member ID creation and signup QR links |
 
 ```
 node tests/core.test.js
@@ -36,6 +46,7 @@ node tests/doorundo.test.js
 node tests/hardening.test.js
 node tests/emailsettings.test.js
 node tests/money.test.js
+node tests/archivehold.test.js
 node tests/mytickets.test.js
 node tests/feedback.test.js
 node tests/duplicates.test.js
@@ -44,7 +55,20 @@ node tests/membershipedit.test.js
 node tests/signup-validation.test.js
 node tests/signup-ui.test.js
 node tests/ticket-actions-ui.test.js
+node tests/membership.test.js
+node tests/retry.test.js
+node tests/questions.test.js
+node tests/publicform.test.js
+node tests/attention.test.js
+node tests/eventedit.test.js
+node tests/members.test.js
+node tests/memberchanges.test.js
+node tests/emailhistory.test.js
 ```
 
-Each prints PASS/FAIL lines and exits with an error if anything fails. Run all nineteen before a deploy.
+Each prints PASS/FAIL lines and exits with an error if anything fails. Run all 29 suites before a deploy:
+
+```bash
+for f in tests/*.test.js; do node "$f"; done
+```
 The fake Google replaces the spreadsheet, cache expiry and locks, so a pass here does not prove real Google concurrency or production settings: check Settings → System health after a deploy.

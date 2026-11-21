@@ -4,6 +4,7 @@
 const $ = (id) => document.getElementById(id);
 
 async function api(action, details = {}) {
+  if (new URLSearchParams(location.hash.slice(1)).has("preview")) return { ok: false, error: "PREVIEW" };
   try {
     const res = await fetch(API_URL, {
       signal: AbortSignal.timeout(30000),   // never stay on "Loading…" forever
@@ -63,6 +64,10 @@ async function showEvent(slug) {
   const reply = await api("publicEvent", { slug });
   if (!reply.ok) return showPandaError(reply.error === "NOT_FOUND" ? T.notFound : T.error, reply.error === "NOT_FOUND" ? null : () => showEvent(slug), true);
   const e = reply.event;
+  renderEvent(e);
+}
+
+function renderEvent(e) {
   document.title = `${e.name} · CSS`;
 
   $("page").innerHTML = `
@@ -70,11 +75,13 @@ async function showEvent(slug) {
     <article class="event">
       ${e.imageUrl ? `<img class="hero" src="${escapeAttr(e.imageUrl)}" alt="" onerror="this.remove()">` : ""}
       <h1 class="event-name">${escapeHtml(e.name)}</h1>
+      ${e.previewLabel ? `<p class="notice">${escapeHtml(e.previewLabel)}</p>` : ""}
 
       <dl class="facts">
-        <div><dt>${T.when}</dt><dd>${escapeHtml(formatDate(e.date))}${timeRange(e) ? `<br>${escapeHtml(timeRange(e))}` : ""}</dd></div>
+        <div><dt>${T.when}</dt><dd>${escapeHtml(formatDate(e.date))}${timeRange(e) ? `<br>${escapeHtml(timeRange(e))}` : ""}${e.registrationCloses ? `<br>${escapeHtml(T.closesAt(formatDateTime(e.registrationCloses)))}` : ""}</dd></div>
         ${e.location ? `<div><dt>${T.where}</dt><dd>${escapeHtml(e.location)}</dd></div>` : ""}
       </dl>
+      ${e.description ? `<section class="description">${paragraphs(e.description)}</section>` : ""}
       <hr class="perforation">
 
       <section class="tickets">
@@ -86,7 +93,6 @@ async function showEvent(slug) {
         ${registerBlock(e)}
       </section>
 
-      ${e.description ? `<hr class="perforation"><section class="description">${paragraphs(e.description)}</section>` : ""}
     </article>`;
   currentEvent = e;
   const open = $("open-register");
@@ -96,12 +102,13 @@ async function showEvent(slug) {
 }
 
 function registerBlock(e) {
-  if (e.soldOut) return `<p class="notice">${T.soldOut}</p>${e.waitlistOpen ? `<p class="muted small">${T.waitlistPitch}</p><button class="register" id="open-waitlist">${T.waitlistJoin}</button>` : ""}`;
+  if (e.previewLabel) return `<button class="register" disabled>${T.register}</button>`;
+  if (e.soldOut) return `<p class="notice">${T.soldOut}</p>${e.waitlistOpen ? `<button class="register" id="open-waitlist">${T.waitlistJoin}</button>` : ""}`;
   if (!e.registrationOpen) return `<p class="notice">${T.closed}</p>`;
   return `
     ${e.spotsLeft !== null && e.spotsLeft <= 20 ? `<p class="spots">${T.spotsLeft(e.spotsLeft)}</p>` : ""}
-    <button class="register" id="open-register">${T.register}</button>
-    <p class="muted small">${e.ticketTypes.some((t) => Number(t.price) > 0) ? T.payNote + " " : ""}${e.registrationCloses ? T.closesAt(formatDateTime(e.registrationCloses)) : ""}</p>`;
+    ${e.ticketTypes.some((t) => Number(t.price) > 0) ? `<p class="muted small">${T.payNote}</p>` : ""}
+    <button class="register" id="open-register">${T.register}</button>`;
 }
 
 function formatDateTime(local) {
@@ -117,13 +124,38 @@ function showMessage(text, withBack) {
 
 let currentEvent = null;
 let guestCount = 0;
-let pendingRegistration = null;
+// What someone typed on the sign-up form, kept while they look back at the event page (this visit only; nothing is sent).
+let registerDraft = null;   // { slug, shape, guestCount, nodes }
 
-function showRegisterForm(e) {
+/** Ticket types and questions as one string: a draft is only put back if the event's form still looks the same. */
+function formShape(e) {
+  return JSON.stringify([e.ticketTypes, e.questions]);
+}
+
+function backToEvent(e) {
+  registerDraft = { slug: e.slug, shape: formShape(e), guestCount, nodes: [...$("page").childNodes] };
+  showEvent(e.slug);
+}
+
+function showRegisterForm(e, fresh) {
+  if (!fresh && registerDraft && registerDraft.slug === e.slug && registerDraft.shape === formShape(e)) {
+    $("page").replaceChildren(...registerDraft.nodes);   // the same boxes, with everything still typed in them
+    guestCount = registerDraft.guestCount;
+    registerDraft = null;
+    updateMemberFields();
+    updateQuestions();
+    updateTotal();
+    window.scrollTo(0, 0);
+    return;
+  }
+  registerDraft = null;
   guestCount = 0;
   const hasPrice = e.ticketTypes.some((t) => Number(t.price) > 0);
   $("page").innerHTML = `
-    <button class="back link-button" id="back-to-event">${T.cancel}</button>
+    <div class="row-between form-top">
+      <button type="button" class="back link-button" id="back-to-event">${T.cancel}</button>
+      <button type="button" class="link-button" id="clear-form">${T.clearForm}</button>
+    </div>
     <h1 class="page-title">${escapeHtml(e.name)}</h1>
     <form id="register-form" class="register-form" novalidate>
       <section class="person card-block" data-person="0">
@@ -142,7 +174,6 @@ function showRegisterForm(e) {
       <section class="card-block" id="etransfer-block">
         <label for="etransfer-name">${T.etransferName}</label>
         <input id="etransfer-name" autocomplete="off" maxlength="80">
-        <p class="hint">${T.etransferNameHint}</p>
       </section>` : ""}
 
       <input type="text" name="website" id="website" class="hp" tabindex="-1" autocomplete="off" aria-hidden="true">
@@ -152,15 +183,33 @@ function showRegisterForm(e) {
       <button type="submit" class="register" id="submit">${T.submit}</button>
     </form>`;
 
-  $("back-to-event").addEventListener("click", () => showEvent(e.slug));
+  $("back-to-event").addEventListener("click", () => backToEvent(e));
+  $("clear-form").addEventListener("click", async () => { if (await askConfirm(T.clearConfirm)) showRegisterForm(e, true); });
   $("add-guest").addEventListener("click", addGuest);
   $("register-form").addEventListener("change", onFormChange);
   $("register-form").addEventListener("input", updateMemberFields);
   $("register-form").addEventListener("click", onFormClick);
   $("register-form").addEventListener("submit", onSubmit);
   updateMemberFields();
+  updateQuestions();
   updateTotal();
   window.scrollTo(0, 0);
+}
+
+/** A small yes/no box drawn in the page (the browser's own confirm() can stop appearing). */
+function askConfirm(message) {
+  return new Promise((resolve) => {
+    const dialog = document.createElement("dialog");
+    dialog.className = "ask";
+    dialog.innerHTML = `<p></p><div class="ask-buttons"><button type="button" class="register" data-yes>${T.clearYes}</button><button type="button" class="link-button" data-no>${T.clearKeep}</button></div>`;
+    dialog.querySelector("p").textContent = message;
+    const done = (answer) => { dialog.close(); dialog.remove(); resolve(answer); };
+    dialog.querySelector("[data-yes]").addEventListener("click", () => done(true));
+    dialog.querySelector("[data-no]").addEventListener("click", () => done(false));
+    dialog.addEventListener("cancel", (ev) => { ev.preventDefault(); done(false); });
+    document.body.appendChild(dialog);
+    dialog.showModal();
+  });
 }
 
 // ---- Waitlist (event is full) --------------------------------------------------
@@ -174,7 +223,7 @@ function showWaitlistForm(e) {
     <form id="register-form" class="register-form" novalidate>
       <section class="person card-block" data-person="0">
         <h2>${T.yourDetails}</h2>
-        ${personFields(e, 0, true)}
+        ${personFields(e, 0)}
       </section>
       <span id="total" hidden></span>
       <input type="text" name="website" id="website" class="hp" tabindex="-1" autocomplete="off" aria-hidden="true">
@@ -186,6 +235,7 @@ function showWaitlistForm(e) {
   $("register-form").addEventListener("input", updateMemberFields);
   $("register-form").addEventListener("submit", onWaitlistSubmit);
   updateMemberFields();
+  updateQuestions();
   window.scrollTo(0, 0);
 }
 
@@ -219,7 +269,7 @@ async function onWaitlistSubmit(ev) {
   window.scrollTo(0, 0);
 }
 
-function personFields(e, i, waitlist) {
+function personFields(e, i) {
   const id = (name) => `p${i}-${name}`;
   const single = e.ticketTypes.length === 1;
   return `
@@ -228,7 +278,6 @@ function personFields(e, i, waitlist) {
 
     <label for="${id("email")}">${T.email} <span class="req">*</span></label>
     <input id="${id("email")}" data-f="email" type="email" inputmode="email" autocomplete="${i ? "off" : "email"}" maxlength="120" required>
-    <p class="hint">${waitlist ? T.waitlistEmailHint : i ? T.guestEmailHint : T.emailHint}</p>
 
     <label for="${id("ucid")}">${T.ucid} <span class="req" data-identity-required>*</span></label>
     <input id="${id("ucid")}" data-f="ucid" inputmode="numeric" maxlength="8" pattern="[0-9]{8}" required>
@@ -246,14 +295,34 @@ function personFields(e, i, waitlist) {
     <div class="member-fields">
       <label for="${id("member")}">${T.memberId}</label>
       <input id="${id("member")}" data-f="memberId" autocomplete="off" maxlength="20" placeholder="CSS…">
-      <p class="hint" data-member-note hidden>${T.memberCheckNote}</p>
     </div>
 
     ${e.questions.map((q) => `
+      <div class="question" data-question="${escapeAttr(q.id)}">
       <label for="${id(q.id)}">${escapeHtml(q.label)} ${q.required ? `<span class="req">*</span>` : ""}</label>
       ${q.type === "choice"
         ? `<select id="${id(q.id)}" data-q="${escapeAttr(q.id)}"><option value="">${T.choose}</option>${q.options.map((o) => `<option>${escapeHtml(o)}</option>`).join("")}</select>`
-        : `<input id="${id(q.id)}" data-q="${escapeAttr(q.id)}" maxlength="300">`}`).join("")}`;
+        : `<input id="${id(q.id)}" data-q="${escapeAttr(q.id)}" maxlength="300">`}
+      </div>`).join("")}`;
+}
+
+/** A question can be limited to some ticket types (forTickets). None listed = it is for every ticket. */
+function questionApplies(q, ticketTypeId) {
+  const only = Array.isArray(q.forTickets) ? q.forTickets.filter(Boolean) : [];
+  return !only.length || (!!ticketTypeId && only.includes(ticketTypeId));
+}
+
+/** Each person sees only the questions for the ticket they picked. A question that disappears loses its answer. */
+function updateQuestions() {
+  document.querySelectorAll("#register-form .person").forEach((s) => {
+    const type = chosenType(s);
+    s.querySelectorAll("[data-question]").forEach((box) => {
+      const q = currentEvent.questions.find((x) => x.id === box.dataset.question);
+      const show = !q || questionApplies(q, type ? type.id : "");
+      box.hidden = !show;
+      if (!show) box.querySelectorAll("[data-q]").forEach((el) => { el.value = ""; });
+    });
+  });
 }
 
 function addGuest() {
@@ -268,6 +337,7 @@ function addGuest() {
   $("guests").appendChild(section);
   renumberGuests();
   updateMemberFields();
+  updateQuestions();
   updateTotal();
   section.querySelector("input").focus();
 }
@@ -286,6 +356,7 @@ function onFormClick(ev) {
 
 function onFormChange() {
   updateMemberFields();
+  updateQuestions();
   updateTotal();
 }
 
@@ -297,7 +368,8 @@ function chosenType(section) {
 function updateMemberFields() {
   document.querySelectorAll("#register-form .person").forEach((s) => {
     const type = chosenType(s);
-    s.querySelector("[data-member-note]").hidden = !(type && type.needsMembership);
+    const note = s.querySelector("[data-member-note]");
+    if (note) note.hidden = !(type && type.needsMembership);
     const needsUcid = !s.querySelector('[data-f="memberId"]').value.trim();
     s.querySelector('[data-f="ucid"]').required = needsUcid;
     s.querySelector("[data-identity-required]").hidden = !needsUcid;
@@ -306,15 +378,19 @@ function updateMemberFields() {
 
 function updateTotal() {
   let total = 0;
+  let allChosen = true;
   document.querySelectorAll("#register-form .person").forEach((s) => {
     const type = chosenType(s);
     if (type) total += Number(type.price) || 0;
+    else allChosen = false;
   });
-  $("total").textContent = money(total);
+  // Until everyone has a ticket the total isn't known yet: say so instead of "Free"
+  $("total").textContent = allChosen ? money(total) : T.chooseTickets;
+  $("total").classList.toggle("total-pending", !allChosen);
   // Nothing owed: no e-transfer details to ask for, and the button says it is just a registration
   if ($("etransfer-block")) $("etransfer-block").hidden = total === 0;
   const button = $("submit");
-  if ($("etransfer-block") && button && !button.disabled) button.textContent = total > 0 ? T.submitPaid : T.submitFree;   // only on the registration form of an event that charges
+  if ($("etransfer-block") && button && !button.disabled) button.textContent = total > 0 ? T.submitPaid : allChosen ? T.submitFree : T.submit;   // only on the registration form of an event that charges
 }
 
 function readPeople() {
@@ -324,7 +400,10 @@ function readPeople() {
       if (el.type === "radio") { if (el.checked) person.ticketTypeId = el.value; }
       else person[el.dataset.f] = el.value.trim();
     });
-    s.querySelectorAll("[data-q]").forEach((el) => { person.answers[el.dataset.q] = el.value.trim(); });
+    s.querySelectorAll("[data-q]").forEach((el) => {   // answers only to the questions for this person's ticket
+      const q = currentEvent.questions.find((x) => x.id === el.dataset.q);
+      if (!q || questionApplies(q, person.ticketTypeId)) person.answers[el.dataset.q] = el.value.trim();
+    });
     return person;
   });
 }
@@ -343,7 +422,7 @@ function firstProblem(people) {
     if (!p.ucid && !p.memberId) return T.identityRequired + who;
     if (p.ucid && !/^[0-9]{8}$/.test(p.ucid)) return T.ucidInvalid + who;
     if (!p.ticketTypeId) return T.pleaseFill(T.ticket + who);
-    const missing = currentEvent.questions.find((q) => q.required && !p.answers[q.id]);
+    const missing = currentEvent.questions.find((q) => q.required && questionApplies(q, p.ticketTypeId) && !(p.answers || {})[q.id]);
     if (missing) return T.pleaseFill(missing.label + who);
   }
   return "";
@@ -357,6 +436,7 @@ const EMAIL_DOMAIN_TYPOS = {
   "outlok.com": "outlook.com", "outlook.con": "outlook.com",
   "yaho.com": "yahoo.com", "yahoo.con": "yahoo.com", "ucalgary.con": "ucalgary.ca"
 };
+let pendingRegistration = null;   // { key: the details sent, id: their requestId } until the server confirms the sign-up
 
 async function onSubmit(ev) {
   ev.preventDefault();
@@ -371,16 +451,18 @@ async function onSubmit(ev) {
   button.disabled = true;
   button.textContent = T.submitting;
   // Busy or slow? Try again by itself. The same requestId on every try means the server can never create two registrations.
+  // Pressing Register again with the same details (after a dropped connection) keeps that id too; a finished sign-up gets a new one.
   const details = {
-    slug: currentEvent.slug, people,
+    slug: currentEvent.slug,
+    people,
     etransferName: $("etransfer-name") ? $("etransfer-name").value.trim() : "",
     website: $("website").value
   };
-  const signature = JSON.stringify(details);
-  if (!pendingRegistration || pendingRegistration.signature !== signature) {
-    pendingRegistration = { signature, requestId: (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : String(Date.now()) + "-" + Math.random().toString(16).slice(2) };
+  const key = JSON.stringify(details);
+  if (!pendingRegistration || pendingRegistration.key !== key) {
+    pendingRegistration = { key, id: (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : String(Date.now()) + "-" + Math.random().toString(16).slice(2) };
   }
-  const requestId = pendingRegistration.requestId;
+  const requestId = pendingRegistration.id;
   let reply;
   for (let attempt = 1; attempt <= 4; attempt++) {
     reply = await api("register", { ...details, requestId });
@@ -410,7 +492,7 @@ function showPaymentScreen(reply) {
     <article class="done">
       ${pandaImg(!review && free ? "success" : "almost")}
       <h1 class="page-title">${review ? T.reviewTitle : free ? T.registeredFree : T.almostDone}</h1>
-      ${review ? `<p class="lead">${T.reviewNote}</p>` : free ? `<p class="lead">${T.freeTicketsNote}</p>${emails.ticket ? "" : `<p class="keep-note"><strong>${T.freeNoEmailNote}</strong></p>`}` : `
+      ${review ? `<p class="lead">${T.reviewNote}</p>` : free ? (emails.ticket ? "" : `<p class="keep-note"><strong>${T.freeNoEmailNote}</strong></p>`) : `
         <p class="lead">${T.sendEtransfer}</p>
         <div class="pay-box">
           <div class="pay-row"><span>${T.amount}</span><div><strong class="big">${money(reply.order.total)}</strong> <small class="muted">${T.exactly}</small></div></div>
@@ -422,8 +504,7 @@ function showPaymentScreen(reply) {
         <p class="muted small">${T.noMessageNote}</p>
         <p>${emails.ticket ? T.confirmNote : T.confirmNoteLink}</p>
         ${emails.confirmation ? "" : `<p class="keep-note"><strong>${T.keepPageNote}</strong></p>`}
-        <p class="status-line"><strong>${T.statusHeading}:</strong> ${T.statusWaiting}</p>
-        <p class="muted small">${T.statusPageNote}</p>`}
+        <p class="status-line"><strong>${T.statusHeading}:</strong> ${T.statusWaiting}</p>`}
 
       <h2 class="small-heading">${free && !review ? T.myTicketsTitle : T.ticketsHeading}</h2>
       <ul class="ticket-list">${reply.tickets.map((t) => `
@@ -431,7 +512,6 @@ function showPaymentScreen(reply) {
       </ul>
       ${review ? "" : flagged.map((t) => `<p class="flag-note">${escapeHtml(T.flagNote(t.name))}</p>`).join("")}
       ${reply.emailSent ? `<p class="muted small">${T.emailedCopy}</p>` : ""}
-      <p class="muted small">${T.screenshotTip}</p>
     </article>`;
 
   document.querySelectorAll(".copy").forEach((b) => b.addEventListener("click", async () => {
@@ -482,6 +562,26 @@ function start() {
   $("contact-link").href = "mailto:" + CONTACT_EMAIL;
   $("instagram-link").href = INSTAGRAM_URL;
 
+  const previewKey = new URLSearchParams(location.hash.slice(1)).get("preview");
+  if (previewKey) {
+    const editor = window.opener;
+    if (!editor) return showPandaError(T.error, null, true);
+    // The editor can be on a different host. Only the opener and this one-use key may supply the preview.
+    const receive = (message) => {
+      if (message.source !== editor || message.data?.previewKey !== previewKey || !message.data.event) return;
+      window.removeEventListener("message", receive);
+      clearTimeout(timeout);
+      window.opener = null;
+      renderEvent(message.data.event);
+    };
+    window.addEventListener("message", receive);
+    editor.postMessage({ previewReady: previewKey }, "*");
+    const timeout = setTimeout(() => {
+      window.removeEventListener("message", receive);
+      showPandaError(T.error, null, true);
+    }, 60000);
+    return;
+  }
   const slug = new URLSearchParams(location.search).get("e");
   slug ? showEvent(slug) : showEventList();
 }

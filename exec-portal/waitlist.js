@@ -22,7 +22,7 @@ async function loadWaitlist() {
 }
 
 function drawWaitlist(wl) {
-  const waiting = wl.entries.filter((e) => e.status === "waiting").length;
+  const waiting = wl.entries.filter((e) => e.status === "waiting" && !e.hasTicket).length;
   $("pay-status").textContent = wl.entries.length ? T.wlSummary(waiting, wl.free) : "";
   $("orders").innerHTML = wl.entries.length ? wl.entries.map((w) => waitlistCard(w, wl.holdHours)).join("") : `<li class="muted">${T.wlEmpty}</li>`;
 }
@@ -42,9 +42,10 @@ function waitlistCard(w, holdHours) {
         ${w.status === "offered" ? `<span>${escapeHtml(T.wlOfferedInfo(w.offeredBy, shortTime(w.offeredAt), w.orderCode))}</span>` : ""}
         ${stale ? `<span class="flag">${escapeHtml(T.wlStale(holdHours))}</span>` : ""}
       </div>
-      <div class="o-total"><span class="pill ${w.status === "waiting" ? "warn" : "good"}">${w.status === "waiting" ? T.wlWaitingPill : T.wlOfferedPill}</span></div>
+      <div class="o-total">${w.hasTicket ? `<span class="pill neutral">${T.wlHasTicketPill}</span>`
+        : `<span class="pill ${w.status === "waiting" ? "warn" : "good"}">${w.status === "waiting" ? T.wlWaitingPill : T.wlOfferedPill}</span>`}</div>
       <div class="order-actions o-actions">
-        ${w.status === "waiting" ? `<button class="primary" data-wl-act="offer">${T.wlOffer}</button>` : ""}
+        ${w.status === "waiting" && !w.hasTicket ? `<button class="primary" data-wl-act="offer">${T.wlOffer}</button>` : ""}
         ${w.status === "waiting" ? `<button class="link danger" data-wl-act="remove">${T.wlRemove}</button>` : ""}
         <span class="order-result"></span>
       </div>
@@ -60,16 +61,16 @@ async function onWaitlistClick(event) {
   let reply;
 
   if (button.dataset.wlAct === "offer") {
-    if (!confirm(T.wlConfirmOffer(name, type))) return;
+    if (!(await askConfirm(T.wlConfirmOffer(name, type)))) return;
     button.disabled = true;
-    reply = await api("offerWaitlistSpot", { entryId: id, siteUrl });
-    if (!reply.ok && reply.error === "OVER_CAPACITY" && confirm(reply.message)) {
-      reply = await api("offerWaitlistSpot", { entryId: id, siteUrl, force: true });
+    reply = await apiOnce("offerWaitlistSpot", { entryId: id, siteUrl });
+    if (!reply.ok && reply.error === "OVER_CAPACITY" && await askConfirm(reply.message)) {
+      reply = await apiOnce("offerWaitlistSpot", { entryId: id, siteUrl, force: true });
     }
     if (reply.ok) showToast(T.wlOfferDone(reply.code, reply.emailed), reply.emailed ? "success" : undefined);
   }
   if (button.dataset.wlAct === "remove") {
-    if (!confirm(T.wlConfirmRemove(name))) return;
+    if (!(await askConfirm(T.wlConfirmRemove(name)))) return;
     button.disabled = true;
     reply = await api("removeWaitlistEntry", { entryId: id });
     if (reply.ok) showToast(T.wlRemoved);

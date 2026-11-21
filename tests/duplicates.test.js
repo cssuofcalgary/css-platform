@@ -107,5 +107,36 @@ ok(reply.value && reply.value.already && run("TBL.Waitlist.length") === beforeWa
 reply = attempt("joinWaitlist_(" + JSON.stringify({ slug: "first-night", person: person({ email: "another-email@example.com" }) }) + ")");
 ok(reply.error === "ALREADY_REGISTERED" && run("TBL.Waitlist.length") === beforeWaitRetry, "an existing ticket holder cannot join the waitlist using another email");
 
+// A saved order with no ticket must not bypass the identity check when a later registration already has the spot.
+run(`
+TBL.Events[0].capacity = ""; TBL.Requests = []; TBL.Waitlist = [];
+TBL.Orders = [{id:"HALFADD",eventId:"EV1",code:"EV1-HALFADD",payerName:"Recovery Person",payerEmail:"recovery@example.com",total:9,status:"paid",requestId:"add-recovery-add-5555",notes:""}];
+TBL.Tickets = [{id:"COMPETINGADD",orderId:"OTHERADD",eventId:"EV1",name:"Recovery Person",email:"changed@example.com",ucid:"31333333",memberId:"",status:"paid",price:9}];
+`);
+const recoveryPerson = person({ name: "Recovery Person", email: "recovery@example.com", ucid: "31333333" });
+const recoveryAdd = "addOrder_({name:'Finance'}, 'EV1', " + JSON.stringify({ person: recoveryPerson }) + ", true, '', 'recovery-add-5555')";
+reply = attempt(recoveryAdd);
+ok(reply.error === "ALREADY_REGISTERED" && counts() === "1:1" && run("TBL.Orders[0].status") === "paid", "resuming a half-saved Finance addition cannot duplicate a later active ticket or lose the saved payment");
+run("TBL.Tickets[0].status='cancelled'");
+reply = attempt(recoveryAdd);
+ok(reply.value && reply.value.ok && counts() === "1:2" && run("TBL.Tickets[1].orderId") === "HALFADD", "once the competing ticket is cancelled, Finance safely finishes the original order");
+reply = attempt(recoveryAdd);
+ok(reply.value && reply.value.ok && counts() === "1:2", "repeating the recovered Finance request still creates no extra ticket");
+
+run(`
+TBL.Requests = [];
+TBL.Orders = [{id:"HALFWL",eventId:"EV1",code:"EV1-HALFWL",payerName:"Recovery Person",payerEmail:"recovery@example.com",total:9,status:"awaiting",requestId:"wl-WLRECOVERY",notes:"",createdAt:"2026-11-20T00:00:00Z"}];
+TBL.Tickets = [{id:"COMPETINGWL",orderId:"OTHERWL",eventId:"EV1",name:"Recovery Person",email:"changed@example.com",ucid:"31333333",memberId:"",status:"paid",price:9}];
+TBL.Waitlist = [{id:"WLRECOVERY",eventId:"EV1",name:"Recovery Person",email:"recovery@example.com",ucid:"31333333",memberId:"",ticketTypeId:"TG",ticketType:"General",answers:{},status:"waiting"}];
+`);
+const recoveryOffer = "offerWaitlistSpot_({name:'Finance'}, 'WLRECOVERY', true, '', 'recovery-offer-6666')";
+reply = attempt(recoveryOffer);
+ok(reply.error === "ALREADY_REGISTERED" && counts() === "1:1" && run("TBL.Waitlist[0].status") === "waiting", "resuming a half-saved waitlist offer cannot duplicate a later active ticket or mark the entry offered");
+run("TBL.Tickets[0].status='cancelled'");
+reply = attempt(recoveryOffer);
+ok(reply.value && reply.value.ok && counts() === "1:2" && run("TBL.Tickets[1].orderId") === "HALFWL" && run("TBL.Waitlist[0].status") === "offered", "once the competing ticket is cancelled, the waitlist offer safely finishes its original order");
+reply = attempt(recoveryOffer);
+ok(reply.value && reply.value.ok && counts() === "1:2", "repeating the recovered waitlist request still creates no extra ticket");
+
 console.log(fails ? fails + " FAILED" : "ALL PASSED");
 process.exit(fails ? 1 : 0);

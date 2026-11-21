@@ -9,23 +9,18 @@
 
 const FEEDBACK_COMMENT_MAX = 500;
 
-/** The member a ticket belongs to: by member ID first, then UCID, then email. Blank fields never match. */
+/**
+ * The member a ticket belongs to, by the same rule as My tickets and the door (ticketOwnership_ in MyTickets.js): a member
+ * whose email, ID or UCID is on it and whose name fits comes first, then one whose email is on it. Blank fields never match.
+ */
 function memberOfTicket_(ticket, members) {
-  const id = String(ticket.memberId || "").trim().toUpperCase();
-  const ucid = String(ticket.ucid || "").replace(/\D/g, "");
-  const email = String(ticket.email || "").trim().toLowerCase();
-  let found = null;
-  (members || []).forEach(function (m) {
-    if (found) return;
-    if (id && m.memberId === id) found = m;
-  });
-  if (found) return found;
-  (members || []).forEach(function (m) {
-    if (found) return;
-    if (ucid && String(m.ucid || "").replace(/\D/g, "") === ucid) found = m;
-    else if (email && String(m.email || "").toLowerCase() === email) found = m;
-  });
-  return found;
+  let byEmail = null;
+  for (let i = 0; i < (members || []).length; i++) {
+    const owner = ticketOwnership_(ticket, members[i]);
+    if (owner === "self") return members[i];
+    if (owner === "email" && !byEmail) byEmail = members[i];
+  }
+  return byEmail;
 }
 
 function membersQuietly_() {

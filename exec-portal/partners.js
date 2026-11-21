@@ -1,4 +1,4 @@
-// CSS Exec Portal — partner deals (member perks), on the Members tab. Any exec can add, edit and switch partners on or off;
+// CSS Exec Portal — partner deals (member perks), on the Partners tab. Any exec can add, edit and switch partners on or off;
 // only the admin sees Delete. Members see the active ones on their pass page.
 
 const partnerState = { list: [], editing: null, counts: {}, page: 0, redemptionRequest: 0, memberPage: 0, memberRequest: 0 };
@@ -158,7 +158,7 @@ $("partner-form").addEventListener("submit", async (event) => {
 
 $("pt-delete").addEventListener("click", async () => {
   const p = partnerState.editing;
-  if (!p || !confirm(T.partnerConfirmDelete(p.name))) return;
+  if (!p || !(await askConfirm(T.partnerConfirmDelete(p.name)))) return;
   const reply = await api("deletePartner", { partnerId: p.id });
   if (!reply.ok) { $("pt-error").textContent = errorText(reply); $("pt-error").hidden = false; return; }
   $("partner-dialog").close();

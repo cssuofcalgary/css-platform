@@ -155,7 +155,7 @@ async function submitPayment(e) {
   };
   $("pay-save").disabled = true;
   $("pay-save").textContent = T.paySaving;
-  const reply = await api("applyTransfer", payload);
+  const reply = await apiOnce("applyTransfer", payload);
   $("pay-save").textContent = T.paySubmit;
   if (!reply.ok && reply.error === "OVER_CAPACITY") {
     payDlg.needFull = "yes";
@@ -265,7 +265,7 @@ async function submitInvalidate(e) {
   invDlg.saving = true;
   const payload = { orderId: invDlg.order.id, ticketIds: picked.map((t) => t.id), reason: $("inv-reason").value };
   if (!$("inv-refund-box").hidden) payload.refundAmount = $("inv-refund").value;
-  const reply = await api("invalidateTickets", payload);
+  const reply = await apiOnce("invalidateTickets", payload);
   invDlg.saving = false;
   if (!reply.ok) {
     $("inv-save").disabled = false;
@@ -318,7 +318,7 @@ function openRefundDialog(order) {
 async function submitRefund(e) {
   e.preventDefault();
   $("rf-save").disabled = true;
-  const reply = await api("recordRefund", {
+  const reply = await apiOnce("recordRefund", {
     refundId: rfDlg.record ? rfDlg.record.id : undefined, orderId: rfDlg.order.id,
     amount: $("rf-amount").value, method: $("rf-method").value, date: $("rf-date").value, by: $("rf-by").value, note: $("rf-note").value
   });
@@ -333,14 +333,14 @@ async function submitRefund(e) {
 }
 
 async function markAlreadyReturned(order) {
-  const reply = await api("recordRefund", { orderId: order.id, unknown: true });
+  const reply = await apiOnce("recordRefund", { orderId: order.id, unknown: true });
   if (!reply.ok) return showToast(errorText(reply));
   showToast(T.rfRecorded(0));
   loadOrders();
 }
 
 async function refundNotOwed() {
-  const reason = prompt(T.rfNotOwedPrompt);
+  const reason = await askText(T.rfNotOwedPrompt);
   if (reason === null) return;
   const reply = await api("cancelRefund", { refundId: rfDlg.record.id, reason });
   if (!reply.ok) return setRfError(errorText(reply));

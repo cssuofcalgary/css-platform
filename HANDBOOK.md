@@ -5,22 +5,26 @@ For execs. No tech knowledge needed.
 ## Signing in
 1. Open the **Exec Portal**: https://exec.ucalgarycss.ca/ (bookmark it). It opens on the **Overview**: what needs attention, upcoming events and recent activity. The menu is on the left.
 2. Type the **exec password** (ask the President) and **your name**. Your name goes next to every change you make.
-3. You stay signed in for about 6 hours. **Sign out** on shared computers.
+3. You stay signed in while you keep using the portal, and are signed out after about 6 hours without it. **Sign out** on shared computers.
 
 Wrong password 30 times → sign-in pauses for 10 minutes.
 The **sun/moon button** (bottom of the menu) switches light and dark. Tap the **CSS logo** to refresh the page.
 
 ## Members tab: sign-ups, payments and search
-Membership is **$12 for the school year**. People join on their own at **member.ucalgarycss.ca/create** (this replaces the Google Form), or an exec adds them here. Both end up as one row on the Membership sheet.
+Membership costs the fee set in **Settings → Membership** for the school year (September to August). People join on their own at **member.ucalgarycss.ca/create** (this replaces the Google Form), or an exec adds them here. Both end up as one row on the Membership sheet.
 
-**Pending** (opens first when someone is waiting): everyone who signed up and hasn't been confirmed yet. A red number on **Members** in the left menu, and a line on the Overview, show how many.
+**Awaiting payment** (opens first when someone is waiting): unpaid members with a member ID and an “Awaiting…” status. A red number on **Members** in the left menu, and a line on the Overview, show how many.
 - Each card shows how they said they'd pay. **Cash:** when, where, and who took it. **E-transfer:** when they signed up, their email and UCID.
-- Check the payment (the CSS Gmail for an e-transfer, or the exec who took the cash), then tap **Mark paid ($12)**. They get their member pass by email and the card slides away. **Details** opens their full page.
-- Only sign-ups from the website and **Add member** show here. Older members who are not marked paid are under **Search**.
+- Check the payment (the CSS Gmail for an e-transfer, or the exec who took the cash), then tap **Mark paid**. They get their member pass by email and the card slides away. **Details** opens their full page.
+- **All members → Not paid** also includes unpaid rows with a blank status or no member ID. Those rows stay out of Awaiting payment until they have an ID and an “Awaiting…” status.
 
-**Add member** (top right): for someone joining at the table. Enter name, UCID (8 digits), email, and cash or e-transfer. Leave **Payment received ($12)** ticked if you have the money: they're marked paid and emailed their pass in one step. Untick it to add them as unpaid and confirm later from Pending. Someone already on the sheet is refused, and it tells you who they are.
+**Add member** (top right): for someone joining at the table. Enter name, UCID (8 digits), email, and cash or e-transfer. Leave **Payment received** ticked if you have the money: they're marked paid and emailed their pass in one step. Untick it to add them as unpaid and confirm later from Awaiting payment. Someone already on the sheet is refused, and it tells you who they are.
 
-**Search:** type part of a **name**, a **UCID**, a **member ID** (CSS…) or an **email**, then tap a person to see their details. Anyone not marked paid also has a **Mark paid ($12)** button on their page.
+**Search:** type part of a **name**, a **UCID**, a **member ID** (CSS…) or an **email**, then tap a person to see their details. Anyone not marked paid also has a **Mark paid** button on their page.
+
+**Notes:** on a member's page, enter up to 500 characters and press **Add note**. Other execs can read it with your sign-in name and the date and time. Notes belong to that member ID and membership year. A row without an ID needs **Create member ID** first. Notes are saved in the platform's own data sheet, without adding columns to the membership list.
+
+**Resend membership pass:** a successful send saves **Sent** on the membership sheet and updates the member page and All members list. A failed send keeps the previous card status.
 
 If the pass email can't be sent (the daily email limit), the person is still marked paid and the message tells you the email did not go. They can get their pass later from **member.ucalgarycss.ca → Find my pass**. See **RUNBOOK.md**.
 
@@ -98,14 +102,14 @@ If you see "ticket emails waiting", the daily email limit was reached. The bar s
 - Turn it on per event: **Events → Edit → Waitlist**. It is off by default.
 - When the event is full, the public page shows **Join the waitlist** instead of "sold out". People give the same details as when registering. They get one short email. They have **no ticket and take no spot**.
 - **Payments → Waitlist** lists them, oldest first. When a spot opens (a cancel or refund), press **Offer a spot** next to the next name. That makes a normal registration and emails them the payment details (or the ticket, if it is free). If no spot looks free the portal asks before offering anyway.
-- Nothing moves by itself. An offer is held for 48 hours as a guide: if they have not paid by then, cancel their order (Refund / cancel) and offer the next person. **Remove** takes someone off the list.
+- Nothing moves by itself. An offer is held for 48 hours as a guide: if they have not paid by then, cancel their order (Refund / cancel) and offer the next person. Someone who has since registered the normal way shows **Already registered** and can't be offered a spot: press **Remove**. **Remove** takes someone off the list.
 
 ## Cancel requests
 On the ticket page of an **unpaid** ticket there is a **Cancel my registration** button. It does **not** cancel anything: it records that the person asked. Payments shows **Asked to cancel (n)** (and an alert on Overview). Press **Refund / cancel** to cancel the order, or **Dismiss request** to keep it. Nobody is emailed.
 
-## Partner deals and the redemption log (Members tab)
-At the bottom of **Members**: the partners and their offers. Any exec can **Add a partner**, **Edit**, or switch one **On/Off** (Off hides it from members without deleting it). Only the admin can **Delete**. Members see the On partners on their pass page (when they opened it from their emailed link or signed in with UCID + last name).
-**Redemption log:** each time a member shows a deal it is recorded (who, which partner, when). The latest 25 show here with a count per partner; **Download all (CSV)** gives everything. Members who opened their pass some other way are not in this log (they are in the old one).
+## Partners tab: partner deals and the redemption log
+Open **Partners** in the left menu for the partners and their offers. Any exec can **Add a partner**, **Edit**, or switch one **On/Off** (Off hides it from members without deleting it). Only the admin can **Delete**. Members see the On partners on their pass page (when they opened it from their emailed link or signed in with UCID + last name).
+**Redemption log:** each time a member shows a deal it is recorded (who, which partner, when). Browse 10 at a time with a count per partner; **Download all (CSV)** gives everything. A member's own redemption log is also on their member page.
 
 ## Feedback, the event report and member history
 - After someone is checked in, their ticket page shows five stars and an optional comment. Open an event's **Attendees** page to see the average, the spread and the comments.
@@ -133,7 +137,7 @@ Payments tab → **Email everyone**. Choose who (everyone, only people who paid,
 Events list → **Delete** (admin only, on every event). You type the event's exact name, and if real payments were collected it asks a second time. It removes the event and all its tickets and orders and **can't be undone** (older backups in Drive "CSS Platform Backups" still have a copy). Use it for tests and mistakes. For a real event you want to keep the record of, use **Archive** instead.
 
 ### Old events are archived by themselves
-Thirty days after an event, the system moves its tickets and orders out of the everyday sheet into a yearly archive spreadsheet (Drive → **CSS Platform Archive** → "CSS Platform Archive 2026-27", one per school year, September to August). This keeps the system fast. You don't need to do anything. On the Events list the event shows **Archived**; its numbers stay on the list, and **Attendees** still opens its full list (read only) and **Download list (CSV)** still works. Admins can archive early with **Archive**, or bring an event back with **Restore** (everything moves back and it shows as Closed). Old tickets stop working at the door and on the ticket page once archived, which is fine because the event is over. Settings → Health check has an **Archive** line: how many tickets are in the everyday sheet and how many events are archived. It says Problem if an old event wasn't moved (check the timers in Apps Script).
+Thirty days after an event, the system moves its tickets and orders out of the everyday sheet into a yearly archive spreadsheet (Drive → **CSS Platform Archive** → "CSS Platform Archive 2026-27", one per school year, September to August). This keeps the system fast. You don't need to do anything, unless the event still has money to sort out: an event with an unpaid order or a refund owed stays put until Finance cancels or finishes those on the Payments tab (Health check names these events), or an admin presses **Archive**. On the Events list the event shows **Archived**; its numbers stay on the list, and **Attendees** still opens its full list (read only) and **Download list (CSV)** still works. Admins can archive early with **Archive**, or bring an event back with **Restore** (everything moves back and it shows as Closed). Old tickets stop working at the door and on the ticket page once archived, which is fine because the event is over. Settings → Health check has an **Archive** line: how many tickets are in the everyday sheet and how many events are archived. It says Problem if an old event wasn't moved (check the timers in Apps Script).
 
 ### Changing the words in emails
 Settings (admin) → **Email wording**. Pick an email, change the subject, heading, or the text at the top and bottom, then press **Preview** to see it, **Send test email** to get it in your own inbox, and **Save**. Leave a box empty to use the standard wording; type just a dash (-) to show nothing there. You can put `{name}` `{event}` `{code}` `{amount}` `{when}` `{where}` in the text (the box tells you which ones work) and they fill in for each person. The same change applies to every event. The same card sets the name and role in the signature and the button colour. The look of the email (banner, pandas, layout) isn't editable.
@@ -176,7 +180,7 @@ A plain list of what happened, newest first: "Kevin marked TNM-4408 paid · 6:02
 
 Settings has six sections down the left. Pick one to open it:
 - **General:** the e-transfer email, the contact email and the Instagram link shown on the public pages.
-- **Membership:** each year, paste the new sheet's link and press **Test and save**. It reads the sheet first and tells you how many members it found, so a wrong link can't break anything.
+- **Membership:** the membership fee, and the Membership sheet. Each year, paste the new sheet's link and press **Test and save**. It reads the sheet first and tells you how many members it found, so a wrong link can't break anything.
 - **Security:** the exec password, the admin password and the optional door password, each on its own row. Press **Change**, type the new one twice, save. Everyone else is signed out and needs the new password. Never write a password in a document or chat.
 - **Emails:** change the wording of each email (see "Changing the words in emails" below).
 - **Sessions:** **Online now** lists everyone signed in (name, role, scanner or not, last seen; yours says "This device"). **Sign out** next to a name signs just that person out, handy for a lost phone. **Sign everyone else out** does it for all.
@@ -196,6 +200,8 @@ Every email uses part of Gmail's daily limit (about 100), so each event chooses 
 Whatever you choose, the page people see after signing up always shows their ticket link and, on a paid event, how much to send, where, and their payment code, and tells them to keep the page when no confirmation email is coming. **My tickets** on the events page can email them their links again.
 Turning an email off is a choice, not a failure: nothing is queued for later. Tickets that weren't emailed because it is off say so in their record, and **Resend tickets** on an order still sends them when you want to.
 The pill at the top right shows how many emails Google still allows and how many ticket emails are waiting (click it for details). Google counts the limit over a rolling day, so the portal never promises a reset time. When it runs out, sign-ups and payments still work; the tickets just wait and every ticket still opens from its own link. When Google allows more, press **Send waiting emails** in that pill (or **Send now** on Payments). After Mark paid it says, for example, "10 tickets confirmed. 6 emailed; 4 waiting to send."
+
+**Last 24 hours**, in that same window, lists recorded platform email attempts with subject, recipient, time, and **Sent** or **Failed**, newest first. **Refresh** updates the list. Sent means Google accepted the send, not that the recipient opened it. This history starts when the email-log update is published; earlier subject lines were not recorded. It does not read Gmail or list emails sent outside the platform. The existing platform Log sheet holds the records; email bodies and attachments are not saved there.
 
 ## My tickets in the member portal
 A member who opened their pass from their emailed link has a key on that device, so **My tickets** opens straight away with no search. On a new device or after the browser cleared its data, they enter their UCID and last name once, or ask for the link by email.

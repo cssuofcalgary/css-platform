@@ -62,5 +62,20 @@ run(`TBL.Tickets.forEach(function (t) { t.emailedAt = ""; }); __mailLog.length =
 run("sendPendingTicketEmails_(null)");
 ok(run("TBL.Tickets[0].emailedAt") === "test address, not sent" && run("__mailLog.indexOf(\"TK0\")") === -1, "test addresses are stamped, not emailed");
 
+// ---- Sending from one event's page only touches that event; the top-bar button only touches upcoming events
+run(`
+TBL.Events.push(Object.assign({}, TBL.Events[0], { id:"EV2", name:"Next One" }), Object.assign({}, TBL.Events[0], { id:"PAST", name:"Long Over", date:"2020-01-01" }));
+TBL.Tickets.forEach(function (t, i) { t.email = "n" + i + "@x.ca"; t.emailedAt = ""; t.eventId = i < 2 ? "PAST" : i < 4 ? "EV2" : "EV1"; });
+__mailLog.length = 0;
+`);
+let s = run('sendPendingTicketEmails_(null, 0, false, { EV2: true })');
+ok(s.sent === 2 && run('__mailLog.join()') === "TK2,TK3", "one event's send emails only that event's tickets, not older ones: " + run('__mailLog.join()'));
+ok(s.waiting === 0, "and only that event's tickets count as still waiting");
+ok(run('Object.keys(upcomingEventIds_()).sort().join()') === "EV1,EV2", "past events are not upcoming");
+run('__mailLog.length = 0');
+s = run('sendPendingTicketEmails_(null, 1, false, upcomingEventIds_())');
+ok(s.sent === 1 && run('__mailLog.join()') === "TK4", "the top-bar send skips past events");
+ok(run('emailStatus_().waiting') === 0, "the indicator's number matches: nothing upcoming is waiting");
+
 console.log(fails ? "\n" + fails + " FAILED" : "\nALL PASSED");
 process.exit(fails ? 1 : 0);

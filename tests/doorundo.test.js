@@ -65,5 +65,19 @@ run('PropertiesService.getScriptProperties().setProperty("SCANNER_PASSWORD", "se
 c = doorCheck();
 ok(c.ok === true && c.detail === "Set", "and is happy once one is set");
 
+// Someone still using the portal stays signed in past 6 hours
+const stored = (token) => run(`JSON.parse(CacheService.getScriptCache().get("session_" + ${JSON.stringify(token)}))`);
+const token = run('var __t = startSession_("Help Desk", "exec"); __t');
+const untouched = run('CacheService.getScriptCache().get("session_" + __t)');
+run('requireSession_(__t)');
+ok(run('CacheService.getScriptCache().get("session_" + __t)') === untouched, "a session renewed moments ago is not written again");
+run(`(function () { var c = CacheService.getScriptCache(), s = JSON.parse(c.get("session_" + __t)); s.since = new Date(Date.now() - 11 * 60000).toISOString(); c.put("session_" + __t, JSON.stringify(s)); })()`);
+run(`var __puts = [], __c = CacheService.getScriptCache(), __real = CacheService.getScriptCache; CacheService.getScriptCache = function () { return { get: __c.get, remove: __c.remove, put: function (k, v, s) { if (k.indexOf("session_") === 0) __puts.push(s); return __c.put(k, v, s); } }; };`);
+run('requireSession_(__t)');
+run('CacheService.getScriptCache = __real');
+ok(run('__puts.length') === 1 && run('__puts[0]') === 21600, "a session in use gets its 6 hours back");
+ok(stored(token).renewedAt > 0, "and notes when, so the next 10 minutes don't write again");
+ok(stored(token).sid && stored(token).name === "Help Desk", "the session keeps its name and id");
+
 console.log(fails ? fails + " FAILED" : "ALL PASSED");
 process.exit(fails ? 1 : 0);

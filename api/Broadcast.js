@@ -51,7 +51,7 @@ function emailAttendees_(session, eventId, audience, subject, message, dryRun) {
     let last = null;
     try { last = JSON.parse(props.getProperty("BROADCAST_LAST") || "null"); } catch (e) { /* none */ }
     if (last && last.fingerprint === fingerprint && Date.now() - last.time < 600000) {
-      throw new ApiError_("BAD_REQUEST", "That exact email was just sent. Wait a few minutes if you really want to send it again.");
+      throw new ApiError_("BAD_REQUEST", "That exact email was just sent. Wait a few minutes if you want to send it again.");
     }
     props.setProperty("BROADCAST_LAST", JSON.stringify({ fingerprint: fingerprint, time: Date.now() }));
   });

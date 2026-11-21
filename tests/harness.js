@@ -18,7 +18,7 @@ const ctx = {
   },
   LockService: { getScriptLock: () => ({ tryLock: () => true, releaseLock() {} }), getUserLock: () => ({ tryLock: () => true, releaseLock() {} }) },
   CacheService: { getScriptCache: () => ({ get: (k) => cache[k] ?? null, put: (k, v) => { cache[k] = v; }, remove: (k) => { delete cache[k]; }, removeAll: () => {}, getAll: (ks) => Object.fromEntries(ks.map((k) => [k, cache[k]])), putAll: (o) => Object.assign(cache, o) }) },
-  PropertiesService: { getScriptProperties: () => ({ getProperty: (k) => store[k] ?? null, setProperty: (k, v) => { store[k] = v; } }) },
+  PropertiesService: { getScriptProperties: () => ({ getProperty: (k) => store[k] ?? null, setProperty: (k, v) => { store[k] = v; }, setProperties: (o) => { Object.assign(store, o); }, deleteProperty: (k) => { delete store[k]; } }) },
   MailApp: { sendEmail: (m) => sent.push(m), getRemainingDailyQuota: () => 90 },
   SpreadsheetApp: {}, DriveApp: {}, ContentService: { createTextOutput: () => ({ setMimeType() { return this; } }), MimeType: {} }
 };

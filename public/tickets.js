@@ -107,25 +107,35 @@ function escapeText(value) {
 /** `who` = { email | ucid, k }. Shows the list and remembers the link; returns false when the link no longer works. */
 async function showMyTickets(who) {
   const reply = await api("myTickets", who);
-  if (!reply.ok) {
-    if (reply.error === "NETWORK" || reply.error === "SERVER_ERROR") { show(T.error, true); return false; }
+  if (!reply || !reply.ok) {
+    if (!isLinkProblem(reply)) { show(T.myTicketsBusy, true); return false; }   // try again later: never "bad link", never "no tickets"
     forgetLink();
     show(T.myTicketsExpired, true);
     return false;
   }
   try { localStorage.setItem(SAVED_LINK, JSON.stringify(who)); } catch (e) { /* fine */ }
   $("my-hello").textContent = T.myTicketsHello(reply.name);
+  $("my-hello").hidden = !reply.name;
   $("my-cards").innerHTML = reply.tickets.length ? reply.tickets.map((t) => {
-    const state = t.status === "paid" ? (t.checkedIn ? T.myTicketsCheckedIn : T.myTicketsPaid) : T.myTicketsWaiting(t.orderCode);
+    // Cancelled (or refunded) tickets say so, with no payment code: same as the member portal
+    const cancelled = t.status === "cancelled" || t.status === "refunded";
+    const state = t.status === "paid" ? (t.checkedIn ? T.myTicketsCheckedIn : T.myTicketsPaid)
+      : cancelled ? T.myTicketsCancelled : T.myTicketsWaiting(t.orderCode);
+    const cls = t.status === "paid" ? "" : cancelled ? "void" : "wait";
     return `<li><span class="my-ticket"><strong>${escapeText(t.event.name)}</strong>
       <span class="when">${escapeText(formatWhen(t.event))}</span><br>
       ${escapeText(t.name)} · ${escapeText(t.ticketType)}<br>
       <a class="ticket-open" href="ticket.html?t=${encodeURIComponent(t.secret)}">${T.openTicket}</a></span>
-      <span class="my-ticket"><span class="state ${t.status === "paid" ? "" : "wait"}">${escapeText(state)}</span></span></li>`;
+      <span class="my-ticket"><span class="state ${cls}">${escapeText(state)}</span></span></li>`;
   }).join("") : `<li class="muted">${T.myTicketsEmpty}</li>`;
   $("my-list").hidden = false;
   $("find-block").hidden = true;
   return true;
+}
+
+/** The server said the link itself is wrong. Anything else (busy, slow, offline) keeps the saved link. Same rule as the member portal. */
+function isLinkProblem(reply) {
+  return !!reply && reply.ok === false && (reply.error === "NOT_ALLOWED" || reply.error === "NOT_FOUND");
 }
 
 $("my-forget").addEventListener("click", () => {

@@ -49,6 +49,7 @@ function browser() {
     handleEventError(reply) { context.errors.push(reply); }, errorText: (reply) => reply.message || reply.error,
     api: async (action, details) => { context.requests.push({ action, details }); return context.nextReply; }
   });
+  context.apiOnce = (action, details) => context.api(action, details);
   const run = (code) => vm.runInContext(code, context);
   for (const file of ["strings.js", "payments.js", "money.js", "attendees.js"]) {
     run(fs.readFileSync(path.join(__dirname, "../exec-portal", file), "utf8"));

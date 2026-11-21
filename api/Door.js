@@ -118,10 +118,17 @@ function scanCode_(session, eventId, code, atDesk) {
       return deskResult_("red", "Member ID not found. Send to help desk.");
     }
     SCAN_NOTE_ = "Member " + member.name + " (" + member.memberId + ", " + (member.paid ? "paid" : "NOT paid") + ")";
-    const ticket = memberTicketForEvent_(member, eventId);
+    const found = memberTicketForEvent_(member, eventId);
+    const ticket = found.ticket;
+    const passPerson = { id: member.id || member.memberId, name: member.name, ticketType: "Member pass", answers: {}, flag: "" };
+    if (!ticket && found.others.length) {
+      // Their email/ID/UCID is on a ticket, but under someone else's name: never guess whose ticket to use up.
+      const names = found.others.map(function (t) { return t.name || "no name"; }).join(", ");
+      SCAN_NOTE_ += "; not clear: their email, ID or UCID is on " + found.others.length + " ticket(s) under another name (" + names + ")";
+      return deskResult_("orange", member.name + "'s member pass matches a ticket under another name (" + names + "). Check their ID and scan the ticket QR at the help desk.", passPerson);
+    }
     if (!ticket) SCAN_NOTE_ += "; no ticket for this event matched by member ID, email or UCID";
-    if (!ticket) return deskResult_("orange", member.name + " is a CSS Member, but has no ticket for this event. Send to help desk / walk-in.",
-      { id: member.id, name: member.name, ticketType: "Member pass", answers: {}, flag: "" });
+    if (!ticket) return deskResult_("orange", member.name + " is a CSS Member, but has no ticket for this event. Send to help desk / walk-in.", passPerson);
     SCAN_NOTE_ += "; matched ticket " + ticket.id + " (" + ticket.status + ")";
     key = { kind: "id", value: ticket.id };
     matchedViaMember = member.name;
@@ -208,7 +215,7 @@ function walkIn_(session, eventId, input) {
   input = input || {};
   const name = String(input.name || "").trim().replace(/\s+/g, " ").slice(0, 80);
   if (!name) throw new ApiError_("BAD_REQUEST", "Walk-in needs a name.");
-  const method = input.method === "etransfer" ? "e-transfer" : "cash";
+  const paidBy = input.method === "etransfer" ? "e-transfer" : "cash";
 
   return withIntakeAndScriptLock_(function () {
     const event = findEvent_(function (e) { return e.id === eventId; });
@@ -216,6 +223,9 @@ function walkIn_(session, eventId, input) {
     assertNotArchived_(event);
     const type = event.ticketTypes.filter(function (t) { return t.id === input.ticketTypeId; })[0];
     if (!type) throw new ApiError_("BAD_REQUEST", "Pick a ticket type.");
+    const price = Number(type.price) || 0;
+    const method = price > 0 ? paidBy : "free";   // nothing to pay: no payment method
+    const answers = cleanAnswers_(event, type.id, input.answers, name, false);   // the same questions as a sign-up, for this ticket type
 
     const now = new Date().toISOString();
     const person = {
@@ -232,18 +242,18 @@ function walkIn_(session, eventId, input) {
       id: newId_("OR"), code: uniqueCode_(event, readRows_("Orders")), eventId: event.id,
       payerName: name, payerEmail: person.email, etransferName: "", total: Number(type.price) || 0,
       status: "paid", createdAt: now, paidAt: now, paidBy: session.name,
-      notes: "Walk-in, paid by " + method
+      notes: price > 0 ? "Walk-in, paid by " + method : "Walk-in, free ticket"
     };
     insertRow_("Orders", order);
     const ticket = {
       id: newTicketId_(), secret: Utilities.getUuid().replace(/-/g, ""), orderId: order.id, eventId: event.id,
       name: name, email: person.email, ucid: person.ucid, memberId: person.memberId,
-      ticketType: type.name, price: Number(type.price) || 0, answers: {}, flag: flag, status: "paid",
+      ticketType: type.name, price: price, answers: answers, flag: flag, status: "paid",
       checkedInAt: now, checkedInBy: session.name, createdAt: now, emailedAt: "walk-in, no email"
     };
     insertRow_("Tickets", ticket);
     log_(session.name, "walkin", order.code, { name: name, type: type.name, total: order.total, method: method });
-    return { ok: true, result: scanResult_("green", "Walk-in added and checked in (" + moneyText_(order.total) + " " + method + ")." + (flag ? " Note: " + flag : ""), personView_(ticket)).result };
+    return { ok: true, result: scanResult_("green", "Walk-in added and checked in (" + (price > 0 ? moneyText_(order.total) + " " + method : moneyText_(0)) + ")." + (flag ? " Note: " + flag : ""), personView_(ticket)).result };
   });
 }
 
@@ -296,7 +306,7 @@ function doorList_(eventId, session, opts) {
 
   const reply = {
     ok: true,
-    event: { id: event.id, name: event.name, entryOpen: event.entryOpen, ticketTypes: event.ticketTypes },
+    event: { id: event.id, name: event.name, entryOpen: event.entryOpen, ticketTypes: event.ticketTypes, questions: doorOnly ? [] : event.questions },
     tickets: tickets,
     counts: {
       paid: active.filter(function (t) { return t.status === "paid"; }).length,
@@ -399,21 +409,22 @@ function ticketKey_(code) {
 }
 
 /**
- * The ticket a member holds for this event (matched by member ID, email or UCID; blanks never match), from the cached copy:
- * the real check happens again on a fresh read inside the lock. A paid ticket not yet checked in wins over the rest.
+ * The ticket a member's pass lets in for this event, decided by ticketOwnership_ (the same rule as My tickets), from the
+ * cached copy: the real check happens again on a fresh read inside the lock.
+ * `ticket`: one of the member's own tickets (their email, ID or UCID AND their name); a paid one not yet checked in wins.
+ * `others`: tickets carrying their email, ID or UCID under someone else's name. With no own ticket these go to the help desk.
  */
 function memberTicketForEvent_(member, eventId) {
-  const email = String(member.email || "").toLowerCase();
-  const ucid = String(member.ucid || "").replace(/\D/g, "");
-  const found = readRows_("Tickets").filter(function (t) {
-    if (t.eventId !== eventId || t.status === "cancelled" || t.status === "refunded") return false;
-    return (member.memberId && t.memberId === member.memberId) ||
-      (email && String(t.email || "").toLowerCase() === email) ||
-      (ucid && String(t.ucid || "").replace(/\D/g, "") === ucid);
+  const own = [], others = [];
+  readRows_("Tickets").forEach(function (t) {
+    if (t.eventId !== eventId || t.status === "cancelled" || t.status === "refunded") return;
+    const owner = ticketOwnership_(t, member);
+    if (owner === "self") own.push(t);
+    else if (owner) others.push(t);
   });
   const rank = function (t) { return (t.status === "paid" ? 0 : 2) + (t.checkedInAt ? 1 : 0); };
-  found.sort(function (a, b) { return rank(a) - rank(b); });
-  return found[0] || null;
+  own.sort(function (a, b) { return rank(a) - rank(b); });
+  return { ticket: own[0] || null, others: others };
 }
 
 function personView_(ticket) {

@@ -49,10 +49,11 @@ async function openOverview() {
   // Extra numbers need a look at payments (up to 3 events) and the door (events with entry open).
   const payEvents = upcoming.slice(0, 3);
   const doorEvents = live.filter((e) => e.entryOpen).slice(0, 2);
-  const [pays, doors] = await Promise.all([
+  const [pays, doors, , attention] = await Promise.all([
     Promise.all(payEvents.map((e) => api("listOrders", { eventId: e.id, filter: "awaiting", limit: 1 }))),
     Promise.all(doorEvents.map((e) => api("doorList", { eventId: e.id }))),
-    loadPending(false)   // memberships waiting on a payment (also sets the sidebar count); its result is read from memState
+    loadPending(false),   // memberships waiting on a payment (also sets the sidebar count); its result is read from memState
+    api("attentionList")   // every live event: payments to check, refunds owed, emails not sent, offers and cards not delivered
   ]);
   if (mine !== ovState.counter) return;
   ovState.loadedAt = Date.now();
@@ -60,7 +61,7 @@ async function openOverview() {
   const payData = payEvents.map((e, i) => ({ event: e, data: pays[i].ok ? pays[i] : null }));
   const doorData = doorEvents.map((e, i) => ({ event: e, data: doors[i].ok ? doors[i] : null }));
   renderOverviewTiles(upcoming, payData, doorData);
-  renderOverviewAttention(payData, doorData, upcoming.length);
+  renderOverviewAttention(payData, doorData, upcoming.length, attention.ok ? attention.items : null);
   renderNavBadges(payData, doorData);
   if (state.role === "admin") loadOverviewActivity(mine);
 }
@@ -101,18 +102,63 @@ function attentionItem(kind, icon, title, note, go) {
     <svg class="go"><use href="#i-arrow"/></svg></button>`;
 }
 
-function renderOverviewAttention(payData, doorData, totalUpcoming) {
-  const items = [];
-  const failed = payData.some((p) => !p.data) || doorData.some((d) => !d.data);   // a request that failed is not the same as "nothing to do"
+/** A Needs attention line with its own buttons (the next step), instead of the whole line being a link. */
+function actionItem(kind, icon, title, note, buttons) {
+  return `<div class="attn ${kind} has-actions">
+    <span class="ic"><svg><use href="#i-${icon}"/></svg></span>
+    <span class="txt"><b>${escapeHtml(title)}</b>${note ? `<small>${escapeHtml(note)}</small>` : ""}<small class="attn-result" hidden></small></span>
+    <span class="attn-actions">${buttons.map((b) => `<button type="button" class="secondary small-button" ${Object.entries(b.data).map(([k, v]) => `data-${k}="${escapeHtml(String(v))}"`).join(" ")}>${escapeHtml(b.label)}</button>`).join("")}</span>
+  </div>`;
+}
+
+/** The items from attentionList (every live event), each with the button that deals with it. */
+function attentionActionItems(list) {
+  const prefix = (x) => x.eventName ? `${x.eventName}: ` : "";
+  const open = (x) => ({ label: T.attnOpen, data: { "attn-go": "payments", event: x.eventId || "" } });
+  return list.map((x) => {
+    if (x.kind === "review") {
+      const codes = x.codes.join(", ");
+      return actionItem("bad", "alert", prefix(x) + T.attnReview(codes, x.what), T.attnReviewNote(codes), [open(x), { label: T.attnDone, data: { "attn-do": "dismissReview", id: x.id } }]);
+    }
+    if (x.kind === "refunds") return actionItem("bad", "alert", prefix(x) + T.refundsNotice(x.count, dollars(x.amount)), "", [open(x)]);
+    if (x.kind === "emails") return actionItem("info", "alert", prefix(x) + T.ovUnsent(x.count), "", [{ label: T.attnSendNow, data: { "attn-do": "sendPendingEmails", event: x.eventId } }]);
+    if (x.kind === "offer") return actionItem("warn", "alert", prefix(x) + T.attnOffer(x.name, x.code), "", [{ label: T.attnResendOffer, data: { "attn-do": "resendWaitlistOffer", id: x.id } }]);
+    if (x.kind === "card") return actionItem("warn", "alert", T.attnCard(x.name), "", [{ label: T.attnResendCard, data: { "attn-do": "resendMemberCard", id: x.id } }]);
+    if (x.kind === "membersUnreadable") return actionItem("info", "alert", T.attnMembersUnreadable, "", []);
+    return "";
+  });
+}
+
+async function onAttentionAction(button) {
+  const line = button.closest(".attn");
+  const out = line.querySelector(".attn-result");
+  const act = button.dataset.attnDo;
+  button.disabled = true;
+  let reply, text = "";
+  if (act === "dismissReview") reply = await api("dismissReview", { requestId: button.dataset.id });
+  if (act === "sendPendingEmails") { reply = await api("sendPendingEmails", { eventId: button.dataset.event }); if (reply.ok) text = T.attnSent(reply.emailsSent, reply.emailsWaiting); }
+  if (act === "resendWaitlistOffer") { reply = await api("resendWaitlistOffer", { entryId: button.dataset.id }); if (reply.ok) text = reply.emailed ? T.attnOfferSent : T.attnStillFailed; }
+  if (act === "resendMemberCard") { reply = await api("resendMemberCard", { memberId: button.dataset.id }); if (reply.ok) text = T.attnCardSent; }
+  if (!reply.ok) text = reply.error === "EMAIL_FAILED" ? T.attnStillFailed : errorText(reply);
+  out.textContent = text;
+  out.hidden = !text;
+  const finished = reply.ok && (act === "dismissReview" || text === T.attnOfferSent || text === T.attnCardSent || (act === "sendPendingEmails" && !reply.emailsWaiting));
+  if (finished) line.classList.add("done");
+  else button.disabled = false;
+}
+
+function renderOverviewAttention(payData, doorData, totalUpcoming, attention) {
+  const items = attention ? attentionActionItems(attention) : [];
+  // a request that failed is not the same as "nothing to do"
+  const failed = !attention || payData.some((p) => !p.data) || doorData.some((d) => !d.data);
   payData.forEach(({ event, data }) => {
     if (!data) return;
     if (data.counts.overdue > 0) items.push(attentionItem("bad", "alert", `${event.name}: ${T.ovOverdue(data.counts.overdue)}`, T.ovOverdueNote, { tab: "payments", eventId: event.id }));
     else if (data.counts.awaiting > 0) items.push(attentionItem("warn", "clock", `${event.name}: ${T.ovAwaiting(data.counts.awaiting)}`, T.ovAwaitingNote(dollars(data.money.awaiting)), { tab: "payments", eventId: event.id }));
     if (data.counts.cancelRequests > 0) items.push(attentionItem("warn", "alert", `${event.name}: ${T.ovCancelReq(data.counts.cancelRequests)}`, T.ovCancelReqNote, { tab: "payments", eventId: event.id }));
     if (data.waitlist && data.waitlist.waiting > 0 && data.waitlist.free > 0) items.push(attentionItem("warn", "clock", `${event.name}: ${T.ovWaitlist(data.waitlist.waiting, data.waitlist.free)}`, T.ovWaitlistNote, { tab: "payments", eventId: event.id }));
-    if (data.refundsOwed && data.refundsOwed.count > 0) items.push(attentionItem("bad", "alert", `${event.name}: ${T.refundsNotice(data.refundsOwed.count, dollars(data.refundsOwed.amount))}`, T.ovRefundsNote, { tab: "payments", eventId: event.id }));
+    // Refunds owed and unsent ticket emails come from attentionList (every event, with a button), not from here.
     if (data.counts.needsSorting > data.refundsOwed.count) items.push(attentionItem("warn", "clock", `${event.name}: ${T.ovPartPaid(data.counts.needsSorting - data.refundsOwed.count)}`, T.ovPartPaidNote, { tab: "payments", eventId: event.id }));
-    if (data.unsentEmails > 0) items.push(attentionItem("info", "alert", `${event.name}: ${T.ovUnsent(data.unsentEmails)}`, T.ovUnsentNote, { tab: "payments", eventId: event.id }));
   });
   if (memState.total > 0) items.push(attentionItem("warn", "clock", T.ovMembersWaiting(memState.total), T.ovMembersWaitingNote, { tab: "members" }));
   doorData.forEach(({ event, data }) => {
@@ -155,6 +201,10 @@ function goToTab(tab, eventId) {
 }
 
 document.addEventListener("click", (e) => {
+  const doIt = e.target.closest("[data-attn-do]");
+  if (doIt) return onAttentionAction(doIt);
+  const goIt = e.target.closest("[data-attn-go]");
+  if (goIt) return goToTab(goIt.dataset.attnGo, goIt.dataset.event);
   const attn = e.target.closest("[data-attn]");
   if (attn) return goToTab(attn.dataset.attn, attn.dataset.event);
   const jump = e.target.closest("[data-goto]");
