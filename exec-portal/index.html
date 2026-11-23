@@ -9,7 +9,7 @@
   <link rel="icon" href="assets/css-logo.png" type="image/png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Fraunces:opsz,wght@9..144,500;9..144,600&family=JetBrains+Mono:wght@400;500&display=swap">
-  <link rel="stylesheet" href="styles.css?v=1.7.7">
+  <link rel="stylesheet" href="styles.css?v=1.8.1">
   <link rel="stylesheet" href="theme.css?v=0.13.5">
   <link rel="stylesheet" href="peekaboo.css?v=1.0.1">
   <link rel="stylesheet" href="forest.css?v=1.0.7">
@@ -30,6 +30,14 @@
     <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
     <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 019.5 4 8 8 0 1020 14.5z"/></symbol>
     <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></symbol>
+    <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.8"/><path d="M4.5 20.5c.8-4 3.7-6.3 7.5-6.3s6.7 2.3 7.5 6.3"/></symbol>
+    <symbol id="i-tasks"viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="3.5"/><path d="M8.5 12.3l2.5 2.5 4.6-5"/></symbol>
+    <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M19.5 12a7.5 7.5 0 1 1-2.2-5.3M19.5 4.5v4.5H15"/></symbol>
+    <symbol id="i-bell" viewBox="0 0 24 24"><path d="M6 16.5V11a6 6 0 0 1 12 0v5.5l1.5 2H4.5zM10 20.5a2 2 0 0 0 4 0"/></symbol>
+    <symbol id="i-x" viewBox="0 0 24 24"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></symbol>
+    <symbol id="i-left" viewBox="0 0 24 24"><path d="M14.5 6l-6 6 6 6"/></symbol>
+    <symbol id="i-right" viewBox="0 0 24 24"><path d="M9.5 6l6 6-6 6"/></symbol>
+    <symbol id="i-chat" viewBox="0 0 24 24"><path d="M5 5h14a1.5 1.5 0 0 1 1.5 1.5v9A1.5 1.5 0 0 1 19 17h-8l-4.5 3.5V17H5a1.5 1.5 0 0 1-1.5-1.5v-9A1.5 1.5 0 0 1 5 5z"/></symbol>
   </defs></svg>
   <div id="demo-banner" class="demo-banner" hidden></div>
   <div id="panda-busy" class="pl-busy" hidden></div>
@@ -38,13 +46,14 @@
 
   <!-- Sign-in -->
   <main id="login-view" class="login" hidden>
-    <form id="login-form" class="card login-card" autocomplete="off">
+    <form id="login-form" class="card login-card">
       <span class="panda-logo-frame"><img class="login-logo" src="assets/css-panda-logo.png" alt="Chinese Students' Society"></span>
       <h1 data-t="appTitle"></h1>
       <p class="muted" data-t="appSubtitle"></p>
 
       <label for="name-input" data-t="nameLabel"></label>
-      <input id="name-input" type="text" autocomplete="username" required>
+      <input id="name-input" type="text" maxlength="60" autocomplete="username" list="name-list" autocapitalize="words" required>
+      <datalist id="name-list"></datalist>
 
       <label for="password" data-t="passwordLabel"></label>
       <input id="password" type="password" autocomplete="current-password" required>
@@ -65,6 +74,7 @@
       </div>
       <nav class="tabs" aria-label="Main">
         <button class="tab active" data-tab="overview"><svg><use href="#i-home"/></svg><span data-t="tabOverview"></span></button>
+        <button class="tab" data-tab="tasks"><svg><use href="#i-tasks"/></svg><span data-t="tabTasks"></span></button>
         <button class="tab" data-tab="members"><svg><use href="#i-users"/></svg><span data-t="tabMembers"></span><span id="mem-nav-count" class="nav-pill" hidden></span></button>
         <button class="tab" data-tab="partners"><svg><use href="#i-tag"/></svg><span data-t="tabPartners"></span></button>
         <button class="tab" data-tab="events"><svg><use href="#i-cal"/></svg><span data-t="tabEvents"></span></button>
@@ -116,6 +126,40 @@
         <section><div class="section-h"><h2 data-t="ovUpcoming"></h2><button class="link" type="button" data-goto="events" data-t="ovAllEvents"></button></div><div id="ov-events" class="card flush"></div></section>
         <section id="ov-activity-wrap"><div class="section-h"><h2 data-t="ovRecent"></h2><button class="link" type="button" data-goto="activity" data-t="ovViewAll"></button></div><div id="ov-activity" class="card flush"></div></section>
       </div>
+     </div>
+
+     <div id="tab-tasks" hidden>
+      <div class="head task-head">
+        <div class="grow"><h1 data-t="tabTasks"></h1></div>
+        <div class="task-actions">
+          <button id="task-refresh" class="icon-btn" type="button"><svg><use href="#i-refresh"/></svg></button>
+          <span id="task-remind-wrap"><button id="task-remind-button" class="secondary small-button" type="button" data-t="taskRemind"></button></span>
+          <button id="task-new-button" class="primary small-button" type="button" data-t="taskNew"></button>
+        </div>
+      </div>
+      <div class="task-toolbar">
+        <div class="chips task-view" id="task-view" role="group">
+          <button type="button" class="chip" data-task-view="list"></button>
+          <button type="button" class="chip" data-task-view="cal"></button>
+        </div>
+        <div class="chips task-filters" id="task-filters"></div>
+      </div>
+      <p id="task-discord-warn" class="task-warn" role="status" hidden></p>
+      <p id="task-status" class="muted small" aria-live="polite"></p>
+      <div id="task-empty" class="task-empty" hidden><span data-t="taskEmpty"></span> <button id="task-empty-new" class="link" type="button" data-t="taskNew"></button></div>
+      <div id="task-groups"></div>
+      <div id="task-cal" class="task-cal" hidden>
+        <div class="cal-head">
+          <button type="button" id="cal-prev" class="icon-btn"><svg><use href="#i-left"/></svg></button>
+          <h2 id="cal-month" class="cal-month"></h2>
+          <button type="button" id="cal-next" class="icon-btn"><svg><use href="#i-right"/></svg></button>
+          <button type="button" id="cal-today" class="secondary small-button" data-t="calToday"></button>
+        </div>
+        <div id="cal-grid" class="cal-grid"></div>
+        <div id="cal-daylist"></div>
+        <div id="cal-nodate"></div>
+      </div>
+      <div id="task-status-menu" class="task-menu" role="menu" hidden></div>
      </div>
 
      <div id="tab-members" hidden>
@@ -531,6 +575,7 @@
         <button type="button" data-sub="membership" data-t="setNavMembership"></button>
         <button type="button" data-sub="security" data-t="setNavSecurity"></button>
         <button type="button" data-sub="emails" data-t="setNavEmails"></button>
+        <button type="button" data-sub="people" data-t="setNavPeople"></button>
         <button type="button" data-sub="sessions" data-t="setNavSessions"></button>
         <button type="button" data-sub="health" data-t="setNavHealth"></button>
       </nav>
@@ -664,6 +709,23 @@
           <button id="em-brand-reset" class="secondary" data-t="emBrandReset"></button>
         </div>
         </details>
+      </div>
+
+      <div class="card editor" id="set-people-card" data-pane="people">
+        <div class="row-between">
+          <div><h3 class="sub-title" data-t="peopleTitle"></h3></div>
+          <button id="people-add" class="secondary small-button" type="button" data-t="teamAdd"></button>
+        </div>
+        <p id="people-bot" class="muted small" hidden></p>
+        <div class="people-row people-head" aria-hidden="true"><span data-t="teamName"></span><span data-t="teamDept"></span><span data-t="teamDiscord"></span><span data-t="teamActive"></span><span></span></div>
+        <div id="people-list" class="people-list"></div>
+        <p id="people-result" class="muted small" role="status"></p>
+        <div class="cred people-device">
+          <div class="cred-row">
+            <div><b data-t="peopleDevice"></b></div>
+            <button type="button" id="people-device-clear" class="secondary small-button" data-t="peopleDeviceClear"></button>
+          </div>
+        </div>
       </div>
 
       <div class="card editor" id="set-sessions-card" data-pane="sessions">
@@ -1037,12 +1099,77 @@
       </div>
     </form>
   </dialog>
+  <!-- Tasks: new / edit -->
+  <dialog id="task-dialog" class="edit-dialog">
+    <form id="task-form" class="editor" novalidate>
+      <h2 id="task-dialog-title"></h2>
+      <label for="tk-title" data-t="taskWhat"></label>
+      <input id="tk-title" maxlength="140" autocomplete="off" enterkeyhint="done">
+      <label for="tk-owner" data-t="taskWho"></label>
+      <div class="combo">
+        <input id="tk-owner" maxlength="60" autocomplete="off" autocapitalize="words" spellcheck="false" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="tk-owner-list">
+        <ul id="tk-owner-list" class="combo-list" role="listbox" hidden></ul>
+      </div>
+      <label for="tk-due" data-t="taskDue"></label>
+      <div class="task-due">
+        <input id="tk-due" type="date">
+        <div class="chips task-quick" id="tk-quick">
+          <button type="button" class="chip" data-quick="today" data-t="taskToday"></button>
+          <button type="button" class="chip" data-quick="tomorrow"></button>
+          <button type="button" class="chip" data-quick="fri"></button>
+          <button type="button" class="chip" data-quick="nextWeek"></button>
+          <button type="button" class="chip" data-quick="none"></button>
+        </div>
+      </div>
+      <label for="tk-dept" data-t="taskDept"></label>
+      <select id="tk-dept"></select>
+      <label id="tk-rem-label" data-t="taskReminders"></label>
+      <div id="tk-reminders" class="rem-list" role="group" aria-labelledby="tk-rem-label"></div>
+      <div><button type="button" id="tk-rem-add" class="link rem-add" data-t="taskRemAdd"></button></div>
+      <details id="tk-more" class="task-more">
+        <summary data-t="taskMore"></summary>
+        <label for="tk-notes" data-t="taskNotes"></label>
+        <textarea id="tk-notes" rows="3" maxlength="1000"></textarea>
+        <label for="tk-link" data-t="taskLink"></label>
+        <input id="tk-link" type="url" maxlength="500" autocomplete="off" inputmode="url">
+      </details>
+      <p id="tk-error" class="error" role="alert" hidden></p>
+      <div class="button-row">
+        <button type="button" id="tk-cancel" class="secondary" data-t="cancel"></button>
+        <button type="submit" id="tk-save" class="primary"></button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Tasks: one task, its status and updates -->
+  <dialog id="task-detail-dialog" class="edit-dialog wide">
+    <div class="editor">
+      <h2 id="td-title" class="task-detail-title"></h2>
+      <div id="td-meta" class="task-meta"></div>
+      <p id="td-notes" class="task-notes" hidden></p>
+      <div class="chips task-seg" id="td-status" role="group"></div>
+      <form id="td-update-form" class="task-update-form">
+        <label for="td-update-text" class="visually-hidden" data-t="taskAddUpdate"></label>
+        <textarea id="td-update-text" rows="2" maxlength="1000"></textarea>
+        <button type="submit" id="td-post" class="primary small-button" data-t="taskPost"></button>
+      </form>
+      <p id="td-error" class="error" role="alert" hidden></p>
+      <h3 class="section-title" data-t="taskUpdates"></h3>
+      <ul id="td-updates" class="plain-list task-updates"></ul>
+      <div class="button-row task-detail-buttons">
+        <button type="button" id="td-remove" class="link danger" data-t="taskRemove"></button>
+        <button type="button" id="td-edit" class="secondary" data-t="taskEdit"></button>
+        <button type="button" id="td-close" class="primary" data-t="close"></button>
+      </div>
+    </div>
+  </dialog>
+
   <script src="config.js?v=0.3.7"></script>
-  <script src="strings.js?v=1.12.0"></script>
-  <script src="mock.js?v=0.3.7"></script>
+  <script src="strings.js?v=1.12.1"></script>
+  <script src="mock.js?v=0.5.1"></script>
   <script src="panda.js?v=1.5.1"></script>
   <script src="peekaboo.js?v=1.0.0"></script>
-  <script src="app.js?v=1.8.0"></script>
+  <script src="app.js?v=1.8.1"></script>
   <script src="events.js?v=1.8.0"></script>
   <script src="emailstatus.js?v=1.0.2"></script>
   <script src="waitlist.js?v=1.6.0"></script>
@@ -1051,7 +1178,7 @@
   <script src="finance.js?v=1.4.2"></script>
   <script src="money.js?v=1.1.0"></script>
   <script src="activity.js?v=0.5.0"></script>
-  <script src="settings.js?v=0.9.4"></script>
+  <script src="settings.js?v=0.10.1"></script>
   <script src="emails.js?v=0.4.0"></script>
   <script src="mailall.js?v=0.3.8"></script>
   <script src="partners.js?v=1.6.2"></script>
@@ -1062,6 +1189,7 @@
   <script src="door.js?v=0.13.0"></script>
   <script src="members.js?v=1.3.0"></script>
   <script src="membernotes.js?v=1.0.1"></script>
+  <script src="tasks.js?v=1.1.1"></script>
   <script src="overview.js?v=1.2.2"></script>
   <script src="shell.js?v=0.9.3"></script>
 </body>

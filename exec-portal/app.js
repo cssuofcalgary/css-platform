@@ -126,11 +126,44 @@ function errorText(reply) {
 
 // ---- Sign-in ----------------------------------------------------------------
 
+// Names used to sign in on this device (newest first), so the name box is filled in and suggests the others.
+// Only kept in this browser; nothing is asked of the server before signing in.
+const SAVED_NAMES_KEY = "css_names";
+
+function savedNames() {
+  try {
+    const list = JSON.parse(localStorage.getItem(SAVED_NAMES_KEY) || "[]");
+    return Array.isArray(list) ? list.filter((n) => typeof n === "string" && n.trim()) : [];
+  } catch (e) { return []; }
+}
+
+function rememberName(name) {
+  const clean = String(name || "").trim().replace(/\s+/g, " ");
+  if (!clean) return;
+  const list = [clean, ...savedNames().filter((n) => n.trim().toLowerCase() !== clean.toLowerCase())].slice(0, 10);
+  try { localStorage.setItem(SAVED_NAMES_KEY, JSON.stringify(list)); } catch (e) { /* not remembered: fine */ }
+}
+
+function clearSavedNames() {
+  try { localStorage.removeItem(SAVED_NAMES_KEY); } catch (e) { /* nothing saved */ }
+  $("name-input").value = "";
+  fillSavedNames();
+}
+
+/** Fills the name box with the last name used here (unless something is typed) and offers the others as suggestions. */
+function fillSavedNames() {
+  const names = savedNames();
+  $("name-list").innerHTML = names.map((n) => `<option value="${escapeHtml(n)}"></option>`).join("");
+  if (names.length && !$("name-input").value.trim()) $("name-input").value = names[0];
+}
+
 function showLogin(message) {
   $("app-view").hidden = true;
   $("login-view").hidden = false;
   setLoginError(message || "");
-  $("name-input").focus();
+  fillSavedNames();
+  // Name already there: straight to the password.
+  ($("name-input").value.trim() ? $("password") : $("name-input")).focus();
 }
 
 function setLoginError(text) {
@@ -167,6 +200,7 @@ async function signInWith(action, button, label) {
   sessionStorage.setItem("css_name", state.name);
   sessionStorage.setItem("css_role", state.role);
   $("password").value = "";
+  if (action === "login") rememberName(state.name);   // door sign-ins aren't remembered (often a shared phone)
   showApp();
 }
 

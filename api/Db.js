@@ -28,11 +28,16 @@ const TABLES = {
   Refunds: ["id", "orderId", "orderCode", "eventId", "payerName", "payerEmail", "kind", "ticketIds", "owed", "returns", "status", "reason", "createdAt", "createdBy", "closedAt"],
   // One row per press of a button that records money or registrations, so pressing it again (or a retry) can't record it twice.
   Requests: ["id", "action", "who", "status", "plan", "reply", "createdAt", "doneAt"],
+  // Exec tasks (Tasks.js). remind, remindSent and discordRefs are lists; removed tasks are kept, marked removedAt.
+  Tasks: ["id", "title", "department", "owner", "status", "due", "notes", "link", "createdBy", "createdAt", "updatedBy", "updatedAt",
+          "doneAt", "discordMessageId", "removedAt", "removedBy", "remind", "remindSent", "discordRefs", "ownerDiscordId"],
+  TaskUpdates: ["id", "taskId", "text", "by", "source", "status", "createdAt", "discordMessageId"],
+  Team: ["id", "name", "department", "discordId", "active", "sort"],
   Log: ["time", "who", "action", "target", "details"]
 };
 
 /** Columns holding lists/objects; stored as JSON text. */
-const JSON_COLUMNS = { ticketTypes: true, questions: true, answers: true, summary: true, returns: true, ticketIds: true, plan: true, reply: true };
+const JSON_COLUMNS = { ticketTypes: true, questions: true, answers: true, summary: true, returns: true, ticketIds: true, plan: true, reply: true, remind: true, remindSent: true, discordRefs: true };
 
 /**
  * Remembered for the rest of this one request only (each request starts fresh),
@@ -139,7 +144,7 @@ function toCell_(column, value) {
 }
 
 /** Columns Sheets likes to turn into real dates/times; read them back as plain text. */
-const DATE_COLUMNS = { date: "yyyy-MM-dd", startTime: "HH:mm", endTime: "HH:mm", registrationCloses: "yyyy-MM-dd'T'HH:mm" };
+const DATE_COLUMNS = { date: "yyyy-MM-dd", startTime: "HH:mm", endTime: "HH:mm", registrationCloses: "yyyy-MM-dd'T'HH:mm", due: "yyyy-MM-dd", remind: "yyyy-MM-dd" };
 
 function fromCell_(column, value) {
   let text;
@@ -153,7 +158,7 @@ function fromCell_(column, value) {
   if (JSON_COLUMNS[column]) {
     const empty = (column === "answers" || column === "summary") ? {} : [];
     if (!text) return empty;
-    try { return JSON.parse(text); } catch (e) { return empty; }
+    try { return JSON.parse(text); } catch (e) { return column === "remind" ? text : empty; }   // remind: older rows hold a word ("daybefore") or a day
   }
   return text;
 }

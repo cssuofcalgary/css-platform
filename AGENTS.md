@@ -14,6 +14,7 @@ Future executives with **no technical background** run events through the dashbo
 - **No unsolicited UI subtext:** Never add explanatory paragraphs, subtitles, or helper text beneath section headings, labels, checkboxes, or other controls unless Gordon explicitly requests it; this applies across the entire system and to every subagent.
 - Don't add settings unless they solve a real problem. Routine operations must never need a code change.
 - **Manual over automation:** actions happen when someone presses a button, not on timers. Don't add automatic jobs or emails.
+  - One exception (Gordon's decision, 2026-11-23): the Discord task bot (`taskBotTick`) runs on a 1-minute timer so it can answer `@taskbot` messages and send the reminders people chose. Don't add other timers.
 - Registrations and payments must never be lost because an email failed.
 
 ## Layout
@@ -86,4 +87,4 @@ git add <files> && git commit -m "…" && git push origin main
 - Offline ticket copy, help-desk alerts, scan log, undo for volunteers (own check-in, 10 minutes) are in.
 
 ## Still open
-Department permissions (needs Gordon's decision), a reusable question builder and standalone surveys, load measurement for bigger events, a plain-language handover guide, real-device checks of the newest flows.
+Department permissions (needs Gordon's decision), individual exec sign-ins (bookmarked 2026-11-23: each exec signs in as themselves from Settings → People, e.g. "Kevin B · Events", and the portal opens on their department first — the Tasks filter, and later other tabs; People already stores each person's department), a reusable question builder and standalone surveys, load measurement for bigger events, a plain-language handover guide, real-device checks of the newest flows.

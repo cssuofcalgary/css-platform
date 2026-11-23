@@ -132,6 +132,7 @@ function showSettingsPane(name) {
   try { sessionStorage.setItem("css_set_pane", name); } catch (e) { /* fine */ }
   if (name === "health") loadHealthHistory();
   if (name === "sessions") loadSessions();
+  if (name === "people") loadPeople();
 }
 $("set-nav").addEventListener("click", (ev) => {
   const b = ev.target.closest("[data-sub]");
@@ -203,3 +204,136 @@ $("set-sessions-list").addEventListener("click", async (ev) => {
   loadSessions();
 });
 $("set-sessions-refresh").addEventListener("click", loadSessions);
+
+// ---- People: the one list of names used for signing in and for "Who" on tasks. Each change saves straight away. ----
+
+const PEOPLE_DEPTS = () => (typeof TASK_DEPTS !== "undefined" ? TASK_DEPTS : ["Events", "Marketing", "Internal", "External", "Finance", "General"]);
+const peopleActive = (v) => !(v === false || v === 0 || /^(false|no|0)$/i.test(String(v)));
+
+function personRowHtml(p) {
+  const dept = String(p.department || "");
+  const depts = PEOPLE_DEPTS();
+  return `<div class="people-row" data-id="${escapeHtml(p.id || "")}">
+    <input class="people-name" maxlength="60"autocomplete="off" autocapitalize="words" aria-label="${escapeHtml(T.teamName)}" value="${escapeHtml(p.name || "")}">
+    <select class="people-dept" aria-label="${escapeHtml(T.teamDept)}"><option value="">${escapeHtml(T.peopleNoDept)}</option>${depts.map((d) => `<option${d === dept ? " selected" : ""}>${escapeHtml(d)}</option>`).join("")}</select>
+    <input class="people-discord" inputmode="numeric" maxlength="20" autocomplete="off" aria-label="${escapeHtml(T.teamDiscord)}" placeholder="${escapeHtml(T.teamDiscord)}" value="${escapeHtml(p.discordId || "")}">
+    <input type="checkbox" class="toggle people-active" aria-label="${escapeHtml(T.teamActive)}"${peopleActive(p.active) ? " checked" : ""}>
+    <button type="button" class="icon-btn people-remove" title="${escapeHtml(T.peopleRemove)}" aria-label="${escapeHtml(T.peopleRemove)}"><svg><use href="#i-x"/></svg></button>
+  </div>`;
+}
+
+function peopleSay(text, kind) {
+  $("people-result").className = (kind === "error" ? "error" : kind === "good" ? "good-text" : "muted") + " small";
+  $("people-result").textContent = text || "";
+}
+
+function peopleFail(reply) {
+  if (reply.error === "NOT_LOGGED_IN") return handleEventError(reply, $("people-result"));
+  peopleSay(errorText(reply), "error");
+}
+
+function renderPeople(team) {
+  $("people-list").innerHTML = team.length ? team.map(personRowHtml).join("") : `<p class="muted small people-none">${escapeHtml(T.peopleNone)}</p>`;
+}
+
+/** Keeps the Tasks page's list of people in step with what was just saved here. */
+function sharePeople(team) {
+  if (Array.isArray(team) && typeof taskState !== "undefined") taskState.team = team;
+}
+
+async function loadPeople() {
+  syncDeviceNames();
+  peopleSay(T.peopleLoading);
+  const reply = await api("listTasks");
+  if (!reply.ok) return handleEventError(reply, $("people-result"));
+  peopleSay("");
+  sharePeople(reply.team || []);
+  renderPeople(reply.team || []);
+  const bot = await api("taskBotStatus");
+  $("people-bot").hidden = !bot.ok;
+  if (bot.ok) $("people-bot").textContent = T.teamBot(bot);
+}
+
+/**
+ * Saves one row. Only one save per row runs at a time: a change made while it is saving waits, then one more save sends
+ * the row as it is by then (with the id the first save got back, so a new person is never added twice).
+ */
+const peopleSaving = new WeakMap();   // row → { done: Promise, again: bool }
+function savePersonRow(row) {
+  const busy = peopleSaving.get(row);
+  if (busy) { busy.again = true; return busy.done; }
+  const job = { again: false };
+  job.done = (async () => {
+    try {
+      do { job.again = false; await savePersonRowNow(row); } while (job.again);
+    } finally {
+      peopleSaving.delete(row);
+    }
+  })();
+  peopleSaving.set(row, job);
+  return job.done;
+}
+
+async function savePersonRowNow(row) {
+  if (!row.isConnected) return;
+  const name = row.querySelector(".people-name").value.trim().replace(/\s+/g, " ");
+  const discordInput = row.querySelector(".people-discord");
+  const discordId = discordInput.value.replace(/\s+/g, "");
+  if (!name) {
+    if (row.dataset.id) { row.querySelector(".people-name").focus(); peopleSay(T.peopleNameNeeded, "error"); }
+    return;   // a new row with no name yet is simply not saved
+  }
+  if (discordId && !/^\d{17,20}$/.test(discordId)) { discordInput.focus(); return peopleSay(T.teamBadDiscord(name), "error"); }
+  const person = { id: row.dataset.id || "", name, department: row.querySelector(".people-dept").value, discordId, active: row.querySelector(".people-active").checked };
+  row.classList.add("saving");
+  const reply = await api("savePerson", { person });
+  row.classList.remove("saving");
+  if (!reply.ok) return peopleFail(reply);
+  if (reply.person && reply.person.id) row.dataset.id = reply.person.id;
+  row.querySelector(".people-name").value = (reply.person && reply.person.name) || name;
+  discordInput.value = discordId;
+  sharePeople(reply.team);
+  peopleSay(T.peopleSaved((reply.person && reply.person.name) || name), "good");
+}
+
+$("people-list").addEventListener("change", (e) => {
+  const row = e.target.closest(".people-row");
+  if (row) savePersonRow(row);
+});
+// Enter in a box saves that row (the change event follows from leaving the box).
+$("people-list").addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && e.target.matches("input:not([type=checkbox])")) { e.preventDefault(); e.target.blur(); }
+});
+$("people-list").addEventListener("click", async (e) => {
+  const b = e.target.closest(".people-remove");
+  if (!b) return;
+  const row = b.closest(".people-row");
+  const name = row.querySelector(".people-name").value.trim();
+  if (peopleSaving.get(row)) await peopleSaving.get(row).done;   // a new person still being saved gets their id first
+  if (!row.dataset.id) { row.remove(); return peopleSay(""); }   // never saved: just take the row away
+  if (!(await askConfirm(T.peopleRemoveConfirm(name), T.peopleRemove))) return;
+  b.disabled = true;
+  const reply = await api("removePerson", { id: row.dataset.id });
+  b.disabled = false;
+  if (!reply.ok) return peopleFail(reply);
+  row.remove();
+  sharePeople(reply.team);
+  if (Array.isArray(reply.team) && !reply.team.length) renderPeople([]);
+  peopleSay(T.peopleRemoved(name), "good");
+});
+$("people-add").addEventListener("click", () => {
+  const none = $("people-list").querySelector(".people-none");
+  if (none) none.remove();
+  $("people-list").insertAdjacentHTML("afterbegin", personRowHtml({ active: true }));
+  $("people-list").firstElementChild.querySelector(".people-name").focus();
+});
+
+// Names saved on this device (for the sign-in box)
+function syncDeviceNames() {
+  $("people-device-clear").disabled = !savedNames().length;
+}
+$("people-device-clear").addEventListener("click", () => {
+  clearSavedNames();
+  syncDeviceNames();
+  peopleSay(T.peopleDeviceCleared, "good");
+});

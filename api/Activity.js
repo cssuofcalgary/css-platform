@@ -61,6 +61,11 @@ function activityLog_(filters) {
   return { ok: true, entries: out, people: Object.keys(people).sort(), truncated: out.length >= max };
 }
 
+/** "To do", "Doing", "Blocked" or "Done" for a task status. */
+function taskStatusWord_(status) {
+  return { todo: "To do", doing: "Doing", blocked: "Blocked", done: "Done" }[status] || String(status || "");
+}
+
 function activitySummary_(r, events) {
   let d = {};
   try { d = JSON.parse(r.details || "{}") || {}; } catch (e) { d = {}; }
@@ -130,6 +135,18 @@ function activitySummary_(r, events) {
     case "waitlist.resend": return "resent the waitlist offer for " + r.target + (d.emailed ? "" : " (email failed)");
     case "waitlist.offer": return "offered a waitlist spot to " + (d.name || "someone") + " (" + r.target + ")";
     case "waitlist.remove": return "removed " + (d.name || "someone") + " from the waitlist";
+    case "task.created": return "added the task \"" + (d.title || "") + "\"" + (d.owner ? " for " + d.owner : "") + (d.source === "discord" ? " on Discord" : "");
+    case "task.updated":
+      if (d.updateId) return "added an update to the task \"" + (d.title || "") + "\"" + (d.status ? " and set it to " + taskStatusWord_(d.status) : "");
+      if (d.remind) return "set a reminder on the task \"" + (d.title || "") + "\"" + (d.source === "discord" ? " on Discord" : "");
+      return "edited the task \"" + (d.title || "") + "\"";
+    case "task.status": return "set the task \"" + (d.title || "") + "\" to " + taskStatusWord_(d.status) + (d.source === "discord" ? " on Discord" : "");
+    case "task.removed": return "removed the task \"" + (d.title || "") + "\"";
+    case "task.remind": return d.posted ? "posted a task check-in on Discord (" + (d.count || 0) + " task" + (d.count === 1 ? "" : "s") + ")" : "tried to post a task check-in on Discord, but it couldn't be posted";
+    case "team.saved": return "saved the task team list (" + (d.people || 0) + " " + (d.people === 1 ? "person" : "people") + (d.removed ? ", " + d.removed + " removed" : "") + ")";
+    case "person.added": return "added " + (d.name || "someone") + " to the People list" + (d.source === "sign-in" ? " (first sign-in)" : d.source === "task" ? " (given a task)" : "");
+    case "person.saved": return (d.added ? "added " : "edited ") + (d.name || "someone") + (d.added ? " to" : " on") + " the People list";
+    case "person.removed": return "removed " + (d.name || "someone") + " from the People list";
     default: return r.action + (r.target ? " " + r.target : "");
   }
 }

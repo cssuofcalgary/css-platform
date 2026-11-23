@@ -343,6 +343,37 @@ function route_(req) {
     case "resendWaitlistOffer":
       return resendWaitlistOffer_(requireSession_(req.token), req.entryId);
 
+    case "listTasks":
+      return listTasks_(requireSession_(req.token));
+
+    case "saveTask":
+      return saveTask_(requireSession_(req.token), req.task);
+
+    case "setTaskStatus":
+      return setTaskStatus_(requireSession_(req.token), req.id, req.status);
+
+    case "addTaskUpdate":
+      return addTaskUpdate_(requireSession_(req.token), req.id, req.text, req.status);
+
+    case "removeTask":
+      return removeTask_(requireSession_(req.token), req.id);
+
+    case "remindTasksOnDiscord":
+      return remindTasksOnDiscord_(requireSession_(req.token));
+
+    case "saveTeam":
+      return saveTeam_(requireAdmin_(req.token), req.team);
+
+    case "savePerson":
+      return savePerson_(requireAdmin_(req.token), req.person);
+
+    case "removePerson":
+      return removePerson_(requireAdmin_(req.token), req.id);
+
+    case "taskBotStatus":
+      requireAdmin_(req.token);
+      return taskBotStatus_();
+
     case "attentionList":
       requireSession_(req.token);
       return attentionList_();
@@ -408,10 +439,11 @@ function login_(password, name) {
     throw new ApiError_("WRONG_PASSWORD", "Wrong password.");
   }
 
-  const who = String(name || "").trim().slice(0, 60);
+  const who = memberText_(name, 60);   // tidied exactly like the People list's names, so "My tasks" matches
   if (!who) throw new ApiError_("NAME_NEEDED", "Pick your name.");
   cache.remove(userKey);
 
+  teamAddOnSignIn_(who);   // first sign-in with this name: it joins the People list (never throws; one read of the list)
   warmCaches_(false);   // sign-in may take a moment longer; every screen after it is quick
   return { ok: true, token: startSession_(who, role), name: who, role: role, membershipFee: config.membershipFee };
 }
