@@ -1,4 +1,4 @@
-// Disable one ticket from either list using the real dialog code. No live records or email.
+// Disable/enable keeps registrations separate from cancellation and refunds. No live records or email.
 const fs = require("fs");
 const path = require("path");
 const vm = require("vm");
@@ -32,7 +32,7 @@ function browser() {
   context = vm.createContext({
     console, URL, Set,
     $: element,
-    inputs: [], requests: [], toasts: [], errors: [], orderLoads: 0, attendeeLoads: 0,
+    inputs: [], requests: [], toasts: [], errors: [], confirmations: [], confirmAnswers: [], orderLoads: 0, attendeeLoads: 0,
     escapeHtml: (value) => String(value || "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])),
     money: (n) => "$" + Number(n).toFixed(2), dollars: (n) => "$" + Number(n).toFixed(2), shortTime: () => "now", ticketUrl: () => "https://example.com/ticket",
     eventsState: { loaded: true }, state: {}, showEventsList() {},
@@ -49,6 +49,7 @@ function browser() {
     handleEventError(reply) { context.errors.push(reply); }, errorText: (reply) => reply.message || reply.error,
     api: async (action, details) => { context.requests.push({ action, details }); return context.nextReply; }
   });
+  context.askConfirm = async (message, label) => { context.confirmations.push({ message, label }); return context.confirmAnswers.shift() || false; };
   context.apiOnce = (action, details) => context.api(action, details);
   const run = (code) => vm.runInContext(code, context);
   for (const file of ["strings.js", "payments.js", "money.js", "attendees.js"]) {
@@ -68,87 +69,109 @@ function browser() {
 
 async function main() {
   const b = browser();
-  b.run(`openSingleTicketDialog(testOrder, "TKT-FIRST");`);
-  ok(b.elements["invalidate-dialog"].open && b.context.requests.length === 0, "opening Disable ticket asks for confirmation without writing anything");
-  ok(b.elements["inv-title"].textContent.includes("TEST-1234") && /QR code will stop working/.test(b.elements["inv-intro"].textContent), "the dialog identifies the order and explains that its QR will stop working");
-  ok(b.elements["inv-tickets"].innerHTML.includes("First Attendee") && !b.elements["inv-tickets"].innerHTML.includes("Sibling Attendee"), "single-ticket confirmation shows only the chosen attendee");
-  ok(b.context.inputs.length === 1 && b.context.inputs[0].checked && b.context.inputs[0].dataset.inv === "TKT-FIRST", "the exact chosen ticket starts selected");
-  ok(b.elements["inv-all"].hidden && b.elements["inv-save"].textContent === "Disable ticket", "single-ticket mode hides Select all and gives a clear final action");
-  ok(b.elements["inv-refund"].value === "5", "the suggested refund covers only this ticket's price");
-  b.context.inputs.push({ dataset: { inv: "TKT-SIBLING" }, checked: true });
-  b.context.nextReply = { ok: true, invalidated: 1, qrRejected: true, refund: null };
-  b.elements["inv-refund"].value = "0";
-  await b.run("submitInvalidate(submitEvent)");
+  let resolveConfirm;
+  b.context.askConfirm = (message, label) => { b.context.confirmations.push({ message, label }); return new Promise((resolve) => { resolveConfirm = resolve; }); };
+  const pending = b.run('openSingleTicketDialog(testOrder, "TKT-FIRST")');
+  ok(b.context.confirmations.length === 1 && b.context.requests.length === 0, 'Disable waits for confirmation before any write');
+  const question = b.context.confirmations[0];
+  ok(question.label === 'Disable ticket' && question.message.includes('First Attendee') && question.message.includes('TEST-1234'), 'confirmation identifies the exact person and registration');
+  ok(question.message.includes('stays in the registration list') && question.message.includes('Payment and refunds stay unchanged'), 'Disable clearly keeps the record and its money');
+  ok(!b.elements['invalidate-dialog']?.open && !b.elements['inv-refund']?.value, 'Disable never opens the cancellation or refund form');
+  await b.run('openSingleTicketDialog(testOrder, "TKT-FIRST")');
+  ok(b.context.confirmations.length === 1, 'double-clicking does not start another confirmation');
+  b.context.nextReply = { ok: true, enabled: false, changed: 1 };
+  resolveConfirm(true);
+  await pending;
   const sent = b.context.requests[0];
-  ok(sent.action === "invalidateTickets" && sent.details.orderId === "OR-ONE" && sent.details.ticketIds.length === 1 && sent.details.ticketIds[0] === "TKT-FIRST", "the final confirmation sends the exact ticket ID and excludes its sibling");
-  ok(sent.details.refundAmount === "0", "a zero refund is preserved");
-  ok(!b.elements["invalidate-dialog"].open && b.context.orderLoads === 1 && b.context.attendeeLoads === 0, "a Payments action closes the dialog and refreshes Payments");
+  ok(sent.action === 'setTicketEnabled' && sent.details.enabled === false && sent.details.orderId === 'OR-ONE', 'Disable uses its own API action instead of cancelling');
+  ok(sent.details.ticketIds.length === 1 && sent.details.ticketIds[0] === 'TKT-FIRST', 'only the selected ticket is disabled');
+  ok(!('refundAmount' in sent.details) && !('amount' in sent.details), 'Disable never records a payment or refund amount');
+  ok(b.context.orderLoads === 1 && b.context.attendeeLoads === 0, 'Payments refreshes after Disable');
 
-  const api = require("./harness.js");
-  api.run(`
-    function withLock_(fn) { return fn(); }
-    TBL.Orders = [${JSON.stringify(order)}];
-    TBL.Tickets = ${JSON.stringify(order.tickets)}.map(function (t) { return Object.assign({}, t, { orderId: "OR-ONE", eventId: "EV-ONE" }); });
-    TBL.Events = [{ id:"EV-ONE", name:"Test Event", date:"2099-01-01", status:"published", entryOpen:"TRUE", ticketTypes:[], questions:[] }];
-    TBL.Tickets[0].secret = "a".repeat(32); TBL.Tickets[1].secret = "b".repeat(32);
-    function table_() {}
-    function findTicketFresh_(kind, value) { return TBL.Tickets.find(function(t) { return t[kind === "secret" ? "secret" : "id"] === value; }); }
-    TBL.Refunds = [];
-    invalidateTickets_({ name: "Test Exec" }, ${JSON.stringify(sent.details)});
-  `);
-  ok(api.run('TBL.Tickets[0].status === "refunded" && TBL.Tickets[1].status === "paid" && TBL.Orders[0].status === "paid" && TBL.Orders[0].total === 5'), "the actual API disables the chosen ticket while the sibling and remaining order stay paid");
-  ok(api.run('scanCode_({name:"Test Door"}, "EV-ONE", "a".repeat(32), false).result.color === "red" && !TBL.Tickets[0].checkedInAt'), "the disabled ticket's original QR is rejected without check-in");
-  ok(api.run('scanCode_({name:"Test Door"}, "EV-ONE", "b".repeat(32), false).result.color === "green"'), "the sibling's QR still admits its attendee");
-  api.run('restoreTickets_({name:"Test Exec"}, {orderId:"OR-ONE",ticketIds:["TKT-FIRST"]});');
-  ok(api.run('scanCode_({name:"Test Door"}, "EV-ONE", "a".repeat(32), false).result.color === "green"'), "putting the selected ticket back restores its original QR");
+  const cancelled = browser();
+  await cancelled.run('openSingleTicketDialog(testOrder, "TKT-FIRST")');
+  ok(cancelled.context.requests.length === 0, 'declining confirmation writes nothing');
 
-  b.run(`openInvalidateDialog(testOrder);`);
-  ok(!b.elements["inv-all"].hidden && b.context.inputs.length === 2 && b.context.inputs.every((i) => !i.checked), "the existing whole-order dialog still starts with no selections");
-  b.run(`testOrder.tickets[0].checkedInAt = "now";`);
-  const toastsBefore = b.context.toasts.length;
-  b.run(`openSingleTicketDialog(testOrder, "TKT-FIRST");`);
-  ok(b.context.toasts.length === toastsBefore + 1, "a ticket checked in since the list loaded is refused before opening");
-  b.run(`testOrder.tickets[0].checkedInAt = ""; testOrder.tickets[0].status = "cancelled";`);
-  b.run(`openSingleTicketDialog(testOrder, "TKT-FIRST");`);
-  ok(b.context.toasts.length === toastsBefore + 2, "an already disabled ticket cannot be disabled again");
-  b.run(`testOrder.tickets[0].status = "paid";`);
-  const paidMarkup = b.run("orderCard(testOrder)");
-  ok(paidMarkup.includes('data-act="disable" data-ticket="TKT-FIRST"') && paidMarkup.includes('data-act="disable" data-ticket="TKT-SIBLING"'), "each live Payment ticket has its own Disable ticket action");
-  b.run(`testOrder.tickets[0].checkedInAt = "now"; testOrder.tickets[1].status = "refunded";`);
-  ok(!b.run("orderCard(testOrder)").includes('data-act="disable"'), "Payments hides disable actions for checked-in or stopped tickets");
-  b.run(`testOrder.tickets[0].checkedInAt = ""; testOrder.tickets[1].status = "paid";`);
-  ok(b.run("attendeeCard(attState.data.attendees[0])").includes('data-att-disable="TKT-FIRST"'), "the Attendees list has an individual Disable ticket action");
-  b.run(`attState.data.event.archived = true;`);
-  ok(!b.run("attendeeCard(attState.data.attendees[0])").includes('data-att-disable'), "archived attendees have no disable action");
-  b.run(`attState.data.event.archived = false; attState.data.attendees[0].checkedInAt = "now";`);
-  ok(!b.run("attendeeCard(attState.data.attendees[0])").includes('data-att-disable'), "checked-in attendees have no disable action");
+  b.run('testOrder.tickets[0].status="disabled"; testOrder.tickets[0].disabledFrom="paid"; attState.data.attendees[0].status="disabled";');
+  const paymentMarkup = b.run('orderCard(testOrder)');
+  const attendeeMarkup = b.run('attendeeCard(attState.data.attendees[0])');
+  ok(paymentMarkup.includes('Disabled') && paymentMarkup.includes('data-act="enable" data-ticket="TKT-FIRST"'), 'a disabled Payment ticket stays visible with Enable ticket');
+  ok(attendeeMarkup.includes('Disabled') && attendeeMarkup.includes('data-att-enable="TKT-FIRST"'), 'a disabled attendee stays visible with Enable ticket');
+  ok(!attendeeMarkup.includes('data-att-disable'), 'a disabled ticket cannot be disabled again');
+  b.context.askConfirm = async () => true;
+  b.context.nextReply = { ok: true, enabled: true, changed: 1 };
+  await b.run('setSingleTicketEnabled(testOrder, "TKT-FIRST", true)');
+  ok(b.context.requests.at(-1).action === 'setTicketEnabled' && b.context.requests.at(-1).details.enabled === true, 'Enable uses the same separate status API');
+
+  const full = browser();
+  full.run('testOrder.tickets[0].status="disabled";');
+  full.context.confirmAnswers.push(true, true);
+  full.context.apiOnce = async (action, details) => { full.context.requests.push({action,details}); return full.context.requests.length === 1 ? {ok:false,error:'OVER_CAPACITY',message:'Event full'} : {ok:true,enabled:true}; };
+  await full.run('setSingleTicketEnabled(testOrder, "TKT-FIRST", true)');
+  ok(full.context.requests.length === 2 && !full.context.requests[0].details.force && full.context.requests[1].details.force, 'enabling beyond capacity requires a second explicit confirmation');
+  ok(full.context.confirmations.length === 2, 'the capacity warning is presented before forcing Enable');
+
+  b.run('openInvalidateDialog(testOrder)');
+  ok(b.elements['invalidate-dialog'].open && b.elements['inv-title'].textContent.startsWith('Cancel tickets'), 'Cancel remains a separate named dialog');
+  ok(b.context.inputs.length === 2 && b.context.inputs.every((i) => !i.checked), 'cancellation can include disabled tickets and starts unselected');
+  b.context.inputs[0].checked = true;
+  b.run('updateInvalidate()');
+  ok(b.elements['inv-refund'].value === '5', 'cancelling a disabled paid ticket still offers its refund amount');
+  b.elements['inv-refund'].value = '0';
+  b.context.nextReply = {ok:true,invalidated:1,qrRejected:true};
+  await b.run('submitInvalidate(submitEvent)');
+  ok(b.context.requests.at(-1).action === 'invalidateTickets' && b.context.requests.at(-1).details.refundAmount === '0', 'Cancel continues through the refund-aware cancellation API');
 
   const a = browser();
-  a.run(`var attButton = { dataset: { attDisable: "TKT-FIRST" }, disabled: false }; var attClick = { target: { closest: () => attButton } };`);
-  a.context.nextReply = { ok: false, error: "NETWORK", message: "Cannot load order" };
-  await a.run("onAttendeeClick(attClick)");
-  ok(a.context.requests.length === 1 && a.context.requests[0].action === "listOrders" && a.context.errors.length === 1 && !a.elements["invalidate-dialog"], "a failed attendee order read opens no dialog and makes no writes");
-  a.context.nextReply = { ok: true, orders: [{ ...order, id: "WRONG-ORDER" }] };
-  await a.run("onAttendeeClick(attClick)");
-  ok(a.context.requests.every((r) => r.action === "listOrders") && a.context.toasts.length === 1 && !a.elements["invalidate-dialog"], "a search result with a different order ID cannot disable anything");
-  a.context.nextReply = { ok: true, orders: [{ ...order, tickets: [sibling] }] };
-  await a.run("onAttendeeClick(attClick)");
-  ok(!a.elements["invalidate-dialog"], "a missing exact ticket is refused without a dialog or write");
-  a.context.nextReply = { ok: true, orders: [order] };
-  await a.run("onAttendeeClick(attClick)");
-  ok(a.context.requests.at(-1).details.eventId === "EV-ONE" && a.context.requests.at(-1).details.filter === "all" && a.context.requests.at(-1).details.q === "TEST-1234", "Attendees reads the complete order by its event and payment code");
-  ok(a.elements["invalidate-dialog"].open && a.context.requests.every((r) => r.action === "listOrders"), "the attendee action waits at the same confirmation dialog before any write");
-  a.context.nextReply = { ok: true, invalidated: 1, qrRejected: true, refund: { owed: 5 } };
-  await a.run("submitInvalidate(submitEvent)");
-  ok(a.context.attendeeLoads === 1 && a.context.orderLoads === 0, "a successful attendee action refreshes Attendees instead of Payments");
-  ok(a.context.requests.at(-1).details.ticketIds.length === 1 && a.context.requests.at(-1).details.ticketIds[0] === "TKT-FIRST", "the attendee confirmation also submits only the clicked ticket");
+  a.run('var attButton={dataset:{attDisable:"TKT-FIRST"},disabled:false}; var attClick={target:{closest:()=>attButton}};');
+  a.context.nextReply = {ok:false,error:'NETWORK',message:'Cannot load order'};
+  await a.run('onAttendeeClick(attClick)');
+  ok(a.context.requests.length === 1 && a.context.requests[0].action === 'listOrders' && a.context.errors.length === 1 && a.context.confirmations.length === 0, 'failed order read cannot reach Disable confirmation or write');
+  a.context.nextReply = {ok:true,orders:[{...order,id:'WRONG-ORDER'}]};
+  await a.run('onAttendeeClick(attClick)');
+  ok(a.context.requests.every((r) => r.action === 'listOrders') && a.context.toasts.length === 1, 'a different order ID can never be disabled');
+  let resolveAttendeeConfirm;
+  a.context.askConfirm = (message,label) => { a.context.confirmations.push({message,label}); return new Promise((resolve)=>{resolveAttendeeConfirm=resolve;}); };
+  a.context.nextReply = {ok:true,orders:[order]};
+  const attendeePending = a.run('onAttendeeClick(attClick)');
+  await new Promise(setImmediate);
+  ok(a.context.requests.at(-1).details.q === 'TEST-1234' && a.context.requests.every((r)=>r.action==='listOrders'), 'attendee Disable loads its exact order and waits for confirmation');
+  a.context.nextReply = {ok:true,enabled:false};
+  resolveAttendeeConfirm(true); await attendeePending;
+  ok(a.context.attendeeLoads === 1 && a.context.orderLoads === 0 && a.context.requests.at(-1).details.ticketIds[0] === 'TKT-FIRST', 'attendee Disable writes only that ticket and refreshes Attendees');
+  a.run('attState.data.event.archived=true');
+  ok(!a.run('attendeeCard(attState.data.attendees[0])').includes('data-att-disable'), 'archived attendees have no disable action');
 
-  const failure = browser();
-  failure.run(`openSingleTicketDialog(testOrder, "TKT-FIRST");`);
-  failure.context.nextReply = { ok: false, error: "BAD_REQUEST", message: "Already checked in" };
-  await failure.run("submitInvalidate(submitEvent)");
-  ok(failure.elements["invalidate-dialog"].open && !failure.elements["inv-save"].disabled && failure.elements["inv-error"].textContent === "Already checked in", "a server refusal keeps the dialog open, shows the reason, and permits correction");
-  console.log(fails ? fails + " FAILED" : "ALL PASSED");
+  const notes = browser();
+  notes.run('testOrder.tickets[0].note="<script>hi</script>\\nSecond line"; attState.data.attendees[0].note=testOrder.tickets[0].note;');
+  const noteMarkup = notes.run('orderCard(testOrder)');
+  ok(noteMarkup.includes('&lt;script&gt;hi&lt;/script&gt;<br>Second line') && !noteMarkup.includes('<script>'), 'attendee notes preserve line breaks and escape HTML in Payments');
+  ok(notes.run('attendeeCard(attState.data.attendees[0])').includes('&lt;script&gt;'), 'Attendees also escapes note HTML');
+  const csv = notes.run('attendeesCsv({event:{questions:[]},attendees:[Object.assign({},attState.data.attendees[0],{order:{code:"TEST",notes:"Staff note"}})]})');
+  ok(csv.includes('Notes,Attendee note') && csv.includes('Staff note') && csv.includes('Second line'), 'CSV keeps staff notes and attendee comments in separate columns');
+
+  const free = browser();
+  free.run('testOrder.status="awaiting"; testOrder.total=0; var actionResult={textContent:""}; var payButton={dataset:{act:"pay"},disabled:false,closest:()=>({dataset:{order:"OR-ONE"},querySelector:()=>actionResult})}; var payClick={target:{closest:(s)=>s.includes("button[data-act]")?payButton:null}};');
+  free.context.nextReply = {ok:true,confirmed:1,emailsSent:0,emailsWaiting:0};
+  await free.run('onOrdersClick(payClick)');
+  ok(free.context.requests.length === 1 && free.context.requests[0].action === 'markOrderPaid' && !('amount' in free.context.requests[0].details), 'Mark paid (Free) directly approves zero without asking for an amount');
+  ok(!free.elements['pay-dialog']?.open && free.context.confirmations.length === 0, 'free approval opens no payment dialog or ordinary confirmation');
+  const nonzero = browser();
+  nonzero.run('testOrder.status="awaiting"; var moneyDialogCalls=0; openPayDialog=()=>{moneyDialogCalls++}; var payButton={dataset:{act:"pay"},disabled:false,closest:()=>({dataset:{order:"OR-ONE"},querySelector:()=>({})})}; var payClick={target:{closest:(s)=>s.includes("button[data-act]")?payButton:null}};');
+  await nonzero.run('onOrdersClick(payClick)');
+  ok(nonzero.run('moneyDialogCalls') === 1 && nonzero.context.requests.length === 0, 'a nonzero order retains the payment amount dialog');
+  const freeFailure=browser();
+  freeFailure.run('var freeButton={disabled:false}; var freeResult={textContent:""};');
+  freeFailure.context.nextReply={ok:false,error:'TEMPORARY',message:'Try again'};
+  await freeFailure.run('markFreeOrderPaid({id:"FREE",total:0},freeButton,freeResult,"https://example.com/")');
+  ok(!freeFailure.run('freeButton.disabled') && freeFailure.context.errors.length === 1, 'a failed free approval preserves the record and allows retry');
+  const freeFull=browser();
+  freeFull.run('var freeButton={disabled:false}; var freeResult={textContent:""};');
+  freeFull.context.confirmAnswers.push(true);
+  freeFull.context.apiOnce=async(action,details)=>{freeFull.context.requests.push({action,details}); return freeFull.context.requests.length===1?{ok:false,error:'OVER_CAPACITY',message:'Full'}:{ok:true,confirmed:1,emailsSent:0,emailsWaiting:0};};
+  await freeFull.run('markFreeOrderPaid({id:"FREE",total:0},freeButton,freeResult,"https://example.com/")');
+  ok(freeFull.context.confirmations.length===1 && freeFull.context.requests[1].details.force===true && !freeFull.elements['pay-dialog']?.open, 'only a real capacity problem adds confirmation to free approval');
+  console.log(fails ? fails + ' FAILED' : 'ALL PASSED');
   process.exitCode = fails ? 1 : 0;
 }
 main().catch((err) => { console.error(err); process.exitCode = 1; });

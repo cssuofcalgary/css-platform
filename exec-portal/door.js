@@ -224,7 +224,8 @@ function doorFind(id) {
 
 function personRow(t, showPay) {
   const answers = Object.entries(t.answers || {}).map(([k, v]) => `${escapeHtml(k)}: ${escapeHtml(v)}`).join(" · ");
-  const action = t.checkedInAt ? `<span class="pill good">✓ ${escapeHtml(T.insideMark(shortTime(t.checkedInAt)))}</span>`
+  const action = t.status === "disabled" ? `<span class="pill neutral">${escapeHtml(T.statusDisabled)}</span>`
+    : t.checkedInAt ? `<span class="pill good">✓ ${escapeHtml(T.insideMark(shortTime(t.checkedInAt)))}</span>`
     : SCANNER_MODE && (t.status === "awaiting" || t.flag) ? `<span class="pill warn">${T.sendToDesk}</span>`   // the scanner never lets these in
     : t.status === "awaiting"
       ? (showPay ? `<button class="primary small-button" data-pay="${t.orderId}">${T.markPaidShort(money(t.orderTotal))}</button>` : "")

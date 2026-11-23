@@ -81,10 +81,10 @@ function renderAttendees() {
 }
 
 function attendeeCard(a) {
-  const statusText = { awaiting: T.statusAwaiting, paid: T.statusPaid, refunded: T.statusRefunded, cancelled: T.statusCancelled }[a.status] || a.status;
+  const statusText = { awaiting: T.statusAwaiting, paid: T.statusPaid, disabled: T.statusDisabled, refunded: T.statusRefunded, cancelled: T.statusCancelled }[a.status] || a.status;
   const statusClass = { awaiting: "warn", paid: "good" }[a.status] || "neutral";
   const answers = Object.entries(a.answers || {}).map(([k, v]) => `${escapeHtml(k)}: ${escapeHtml(v)}`).join(" · ");
-  const editable = (a.status === "paid" || a.status === "awaiting") && !(attState.data && attState.data.event.archived);
+  const editable = (a.status === "paid" || a.status === "awaiting" || a.status === "disabled") && !(attState.data && attState.data.event.archived);
   return `
     <li class="card att">
       <div class="att-main">
@@ -92,29 +92,31 @@ function attendeeCard(a) {
           <span class="pill ${statusClass}">${statusText}</span>${a.checkedInAt ? ` <span class="pill good">✓ ${escapeHtml(T.insideMark(shortTime(a.checkedInAt)))}</span>` : ""}</div>
         <div class="sub">${escapeHtml(a.email || "")}${a.ucid ? " · UCID " + escapeHtml(a.ucid) : ""}${a.memberId ? " · " + escapeHtml(a.memberId) : ""} · ${escapeHtml(a.order.code || "")}</div>
         ${answers ? `<div class="sub">${answers}</div>` : ""}
+        ${a.note ? `<div class="sub"><strong>${escapeHtml(T.attendeeNote)}:</strong> ${escapeHtml(a.note).replace(/\r?\n/g, "<br>")}</div>` : ""}
         ${a.flag ? `<span class="flag">⚠ ${escapeHtml(a.flag)}</span>` : ""}
       </div>
       ${editable ? `<div class="row-buttons"><button class="link" data-att-edit="${a.id}">${T.editPerson}</button>
-        ${!a.checkedInAt ? `<button class="link danger" data-att-disable="${a.id}">${T.btnDisableTicket}</button>` : ""}</div>` : ""}
+        ${a.status === "disabled" ? `<button class="link" data-att-enable="${a.id}">${T.btnEnableTicket}</button>` : !a.checkedInAt ? `<button class="link danger" data-att-disable="${a.id}">${T.btnDisableTicket}</button>` : ""}</div>` : ""}
     </li>`;
 }
 
 async function onAttendeeClick(event) {
-  const button = event.target.closest("button[data-att-edit], button[data-att-disable]");
+  const button = event.target.closest("button[data-att-edit], button[data-att-disable], button[data-att-enable]");
   if (!button || button.disabled) return;
-  const a = attState.data.attendees.find((x) => x.id === (button.dataset.attEdit || button.dataset.attDisable));
+  const a = attState.data.attendees.find((x) => x.id === (button.dataset.attEdit || button.dataset.attDisable || button.dataset.attEnable));
   if (!a) return;
-  if (button.dataset.attDisable) {
-    if (attState.data.event.archived || !canDisableTicket(a)) return;
+  if (button.dataset.attDisable || button.dataset.attEnable) {
+    const enabling = !!button.dataset.attEnable;
+    if (attState.data.event.archived || (enabling ? a.status !== "disabled" : !canDisableTicket(a))) return;
     const eventId = attState.event.id;
     button.disabled = true;
     const reply = await api("listOrders", { eventId, filter: "all", q: a.order.code, offset: 0, limit: 200 });
     button.disabled = false;
-    if (attState.event.id !== eventId) return;
+    if (!attState.event || attState.event.id !== eventId) return;
     if (!reply.ok) return handleEventError(reply, $("detail-status"));
     const order = reply.orders.find((o) => o.id === a.order.id);
     if (!order) return showToast(T.disableTicketUnavailable);
-    return openSingleTicketDialog(order, a.id, () => loadAttendees());
+    return setSingleTicketEnabled(order, a.id, enabling, () => loadAttendees());
   }
   openEditDialog({ ticket: a, order: a.order, event: attState.data.event }, (message) => {
     showToast(message);
@@ -148,11 +150,11 @@ function csvCell(value) {
 
 function attendeesCsv(data) {
   const questions = data.event.questions.map((q) => q.label);
-  const head = ["Name", "Email", "UCID", "Member ID", "Ticket", "Price", "Status", "Checked in", "Checked in by", "Order code", "Order total", "Payer", "E-transfer name", "Flag", "Notes", ...questions];
+  const head = ["Name", "Email", "UCID", "Member ID", "Ticket", "Price", "Status", "Checked in", "Checked in by", "Order code", "Order total", "Payer", "E-transfer name", "Flag", "Notes", ...questions, "Attendee note"];
   const rows = data.attendees.map((a) => [
     a.name, a.email, a.ucid, a.memberId, a.ticketType, a.price, a.status, a.checkedInAt, a.checkedInBy,
     a.order.code, a.order.total, a.order.payerName, a.order.etransferName, a.flag, a.order.notes,
-    ...questions.map((label) => (a.answers || {})[label] || "")
+    ...questions.map((label) => (a.answers || {})[label] || ""), a.note || ""
   ]);
   return "﻿" + [head, ...rows].map((r) => r.map(csvCell).join(",")).join("\r\n");
 }

@@ -88,17 +88,19 @@ function memberSignupThrottle_(clean) {
  * Inside the lock: adds the sign-up as a new row, or returns the member who is already on the sheet (same UCID or email).
  * Returns { existing: member } or { memberId }.
  */
-function addMemberRowLocked_(clean) {
+function addMemberRowLocked_(clean, answers, requireAnswers) {
   const book = openMemberSheet_();
   const existing = book.members.filter(function (m) { return sameMember_(m, clean); });
   const paid = existing.filter(function (m) { return m.paid; })[0];
   if (existing.length) return { existing: paid || existing[0] };
 
+  const signupAnswers = cleanMembershipAnswers_(answers, membershipQuestions_(), !requireAnswers);
   const memberId = nextMemberId_(book);
   appendMemberRow_(book, {
     signedUp: new Date(), name: clean.name, ucid: clean.ucid, email: clean.email, memberId: memberId,
     paid: MEMBER_STATUS_WAITING[clean.method], mailStatus: "Pending",
-    paymentMethod: MEMBER_METHODS[clean.method], paymentWhen: clean.when, paymentWhere: clean.where, paymentWho: clean.who
+    paymentMethod: MEMBER_METHODS[clean.method], paymentWhen: clean.when, paymentWhere: clean.where, paymentWho: clean.who,
+    signupAnswers: signupAnswers
   });
   return { memberId: memberId };
 }
@@ -109,7 +111,7 @@ function publicRegisterMember_(input) {
   const clean = cleanMemberInput_(input);
   memberSignupThrottle_(clean);
 
-  const done = withIntakeLock_(function () { return addMemberRowLocked_(clean); });
+  const done = withIntakeLock_(function () { return addMemberRowLocked_(clean, input && input.answers, true); });
   if (done.existing && done.existing.paid) throw new ApiError_("ALREADY_MEMBER", "You are already an active CSS member for " + membershipYear_() + ".");
 
   if (done.memberId) log_("public", "member.signup", done.memberId, { method: clean.method });
@@ -122,7 +124,7 @@ function publicRegisterMember_(input) {
 /** Public (no login): the fee, year and e-transfer address the Join CSS page shows before anyone signs up. Same Settings as the sign-up reply. */
 function membershipInfo_() {
   const config = getConfig_();
-  return { ok: true, fee: config.membershipFee, year: membershipYear_(), etransferEmail: config.etransferEmail, site: siteInfo_() };
+  return { ok: true, fee: config.membershipFee, year: membershipYear_(), etransferEmail: config.etransferEmail, questions: membershipQuestions_(), site: siteInfo_() };
 }
 
 /**
@@ -157,7 +159,7 @@ function addMember_(session, input, paidNow) {
   if (input.method === "cash" && !String(input.who || "").trim()) input.who = session.name;   // the exec adding it took the cash
   const clean = cleanMemberInput_(input);
 
-  const done = withIntakeLock_(function () { return addMemberRowLocked_(clean); });
+  const done = withIntakeLock_(function () { return addMemberRowLocked_(clean, input.answers, false); });
   if (done.existing) {
     throw new ApiError_(done.existing.paid ? "ALREADY_MEMBER" : "ALREADY_SIGNED_UP",
       done.existing.name + (done.existing.paid ? " is already a paid member (" + done.existing.memberId + ")." : " has already signed up and is waiting on payment. Search for them and tap Mark paid."));

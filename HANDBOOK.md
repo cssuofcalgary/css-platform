@@ -23,6 +23,7 @@ Membership costs the fee set in **Settings → Membership** for the school year 
 **Search:** type part of a **name**, a **UCID**, a **member ID** (CSS…) or an **email**, then tap a person to see their details. Anyone not marked paid also has a **Mark paid** button on their page.
 
 **Notes:** on a member's page, enter up to 500 characters and press **Add note**. Other execs can read it with your sign-in name and the date and time. Notes belong to that member ID and membership year. A row without an ID needs **Create member ID** first. Notes are saved in the platform's own data sheet, without adding columns to the membership list.
+**Join CSS form settings:** on the Members tab, unlock admin access and add or edit extra signup questions. Choose a written answer or a list of options, and whether an answer is required. Saved changes appear on Join CSS. Each member's original answers remain visible on their details page even if a question is later renamed or removed.
 
 **Resend membership pass:** a successful send saves **Sent** on the membership sheet and updates the member page and All members list. A failed send keeps the previous card status.
 
@@ -35,6 +36,7 @@ Every sign-up, add and Mark paid is written to the **Activity** tab (admin) with
 2. Fill in:
    - **Name, date, start/end time, location, description.** A blank line in the description starts a new paragraph.
    - **Event image:** tap and pick a photo. It uploads by itself; wait for "Image uploaded."
+   - **Important note:** optional organizer message shown as **💡 Important Note** above the event image and again during registration. Leave it blank to hide it.
    - **Capacity:** leave blank for no limit. "Paid tickets only" = only people who've paid take up a spot.
    - **Ticket types & prices:** starts with *Member* and *Non-member*. Set the prices. Tick **"Members only"** on a ticket to check the buyer's membership. Add more types with **+ Add ticket type** (e.g. Early bird). Price 0 = Free.
    - **Extra questions:** name, email and UCID are always asked. Add others like "Drink choice". "Choose one" = a list of options, separated by commas.
@@ -52,8 +54,9 @@ In the Events list, each event has:
 - **Public page ↗:** the link to share (Instagram, group chats). All upcoming events: https://events.ucalgarycss.ca/
 
 ## What people see when they register
+Each person can leave an optional **Note/comment**. These comments appear with that attendee in Attendees, Payments and the CSV download. Waitlist comments stay with the ticket when a spot is offered. They are separate from the organizer's Important Note and internal staff notes.
 1. They open the event's **public page** and tap **Register**.
-2. They fill in their name, email, UCID (optional), ticket type and your extra questions. They can **add friends** and pay for everyone at once.
+2. They fill in their name, email, UCID (required unless they give a member code), ticket type and your extra questions. They can **add friends** and pay for everyone at once.
 3. Picking a **Member** ticket asks for their member ID or UCID. We check it automatically. If it isn't found, they can still register, but they're **flagged** so the help desk checks at the door.
 4. They see (and get emailed) **exactly how much to send**, **where** (css.uofcalgary@gmail.com), and a **payment code** like MGN-4821 to put in the e-transfer message.
 5. Their spot is confirmed once Finance marks the payment received (Payments tab, below). Then **each person gets their own ticket by email**: a QR code plus a link to their ticket page.
@@ -77,7 +80,9 @@ The Events list shows how many people have **paid** and how many are **awaiting 
 2. **Invalidate tickets…** (a paid order): tick the people whose tickets should stop working. Their QR codes are rejected at the door the moment you confirm. The window pre-fills the refund amount (what those tickets cost); change it to keep a fee, or enter 0 for no refund. You can invalidate one person of a group and leave the others valid. A person already checked in can't be invalidated: undo their check-in first. Afterwards the order shows a red **Refund owed $X**.
 3. **Record refund:** send the money back yourself (e-transfer or cash), then press **Record refund** and enter the amount, how, the date, and who did it. If you only returned part, the rest stays owed. **Not owed after all…** cancels the refund with a reason.
 Made a mistake? **Put back** next to an invalidated ticket works until its refund was returned; **Restore** on a closed order puts the whole order back (paid again if the money was never returned).
-To stop just one person's ticket, press **Disable ticket** beside their name in **Events → Attendees** or **Payments**. Check the selected person and refund amount, then confirm. Only that ticket stops working; the others in their group stay valid. Enter 0 if no money is owed back.
+**Disable ticket** beside a person in **Events → Attendees** or **Payments** pauses that ticket. The registration stays visible with a **Disabled** badge, keeps its payment and stops counting toward capacity. Its QR is rejected. **Enable ticket** puts it back if there is room. Disabling does not cancel the registration or create a refund; use the separate **Cancel / refund** action for that.
+**Mark paid (Free)** confirms a $0 registration directly. It does not ask for a payment amount.
+If someone chose a member ticket but is not a member, unlock admin editing and use **Edit → Ticket type** to choose the non-member ticket. You can do this before or after approving the free ticket. An unpaid price increase returns that ticket to Awaiting payment and shows the balance in Payments; it never counts the increase as money received. Their membership record stays unchanged.
 Orders refunded before refunds were tracked show a grey "return not recorded" line, not an alert. **Money already returned** records it with the date unknown.
 The **Refunds owed** bar and the **Needs sorting** filter list everything still to return or still to collect.
 

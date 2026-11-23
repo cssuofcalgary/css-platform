@@ -13,9 +13,9 @@ const ACTIVITY_GROUPS = {
   payments: ["order.paid", "order.refunded", "order.cancelled", "order.create", "order.manual", "order.delete", "member.paid", "member.signup", "member.add", "tickets.resend", "reminders.send", "order.payment", "payment.refund", "refund.returned", "refund.cancelled", "tickets.restored", "order.restored"],
   door: ["checkin", "checkin.desk", "checkin.undo", "walkin", "entry.open", "entry.close", "entry.autoclose"],
   system: ["backup"],
-  edits: ["ticket.edit"],
+  edits: ["ticket.edit", "tickets.disabled", "tickets.enabled"],
   events: ["event.create", "event.update", "event.status", "image.upload", "event.email", "event.archive", "event.restore", "event.delete"],
-  settings: ["settings.save", "sessions.clear", "health.check", "session.kick"],
+  settings: ["settings.save", "membership.form", "sessions.clear", "health.check", "session.kick"],
   emails: ["email.sent", "email.failed"]
 };
 // Members: notes, IDs and cards count with payments (the money-and-people side of the club).
@@ -75,6 +75,9 @@ function activitySummary_(r, events) {
     case "refund.returned": return "recorded " + money(d.amount) + " returned for " + r.target + (d.method && d.method !== "unknown" ? " by " + d.method : "") + (d.remaining ? ", " + money(d.remaining) + " still owed" : "");
     case "refund.cancelled": return "cancelled a " + money(d.owed) + " refund for " + r.target + (d.reason ? ": " + d.reason : "");
     case "tickets.restored": return "put " + d.tickets + " ticket" + (d.tickets === 1 ? "" : "s") + " of " + r.target + " back";
+    case "tickets.disabled": return "disabled " + d.tickets + " ticket" + (d.tickets === 1 ? "" : "s") + " of " + r.target;
+    case "tickets.enabled": return "enabled " + d.tickets + " ticket" + (d.tickets === 1 ? "" : "s") + " of " + r.target;
+    case "membership.form": return "updated Join CSS form (" + d.questions + " question" + (d.questions === 1 ? "" : "s") + ")";
     case "order.restored": return "restored " + r.target + (d.paidAgain ? " (paid again)" : " (unpaid again)");
     case "order.create": return "registered online: " + r.target + " for " + (d.event || "an event") + " (" + d.tickets + " ticket" + (d.tickets === 1 ? "" : "s") + ", " + money(d.total) + ")";
     case "order.manual": return "added " + d.name + " as paid: " + r.target + " (" + d.type + ", " + money(d.total) + ")";

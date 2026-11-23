@@ -66,7 +66,7 @@ function applyTransfer_(session, req) {
         if (i === 0) change.received = String(dollars_(cents_(receivedOf_(o)) + amountC));
         if (o.status === "awaiting") {   // the event is full: this registration can't be confirmed
           change.status = "cancelled";
-          readRows_("Tickets").forEach(function (t) { if (t.orderId === o.id && t.status === "awaiting") writes.push({ table: "Tickets", id: t.id, set: { status: "cancelled" }, was: { status: "awaiting" } }); });
+          readRows_("Tickets").forEach(function (t) { if (t.orderId === o.id && (t.status === "awaiting" || t.status === "disabled")) writes.push({ table: "Tickets", id: t.id, set: { status: "cancelled", disabledFrom: "" }, was: { status: t.status } }); });
         }
         writes.push({ table: "Orders", id: o.id, set: change, was: { received: o.received == null ? "" : o.received, status: o.status } });
       });

@@ -119,13 +119,14 @@ async function showMyTickets(who) {
   $("my-cards").innerHTML = reply.tickets.length ? reply.tickets.map((t) => {
     // Cancelled (or refunded) tickets say so, with no payment code: same as the member portal
     const cancelled = t.status === "cancelled" || t.status === "refunded";
+    const disabled = t.status === "disabled";
     const state = t.status === "paid" ? (t.checkedIn ? T.myTicketsCheckedIn : T.myTicketsPaid)
-      : cancelled ? T.myTicketsCancelled : T.myTicketsWaiting(t.orderCode);
-    const cls = t.status === "paid" ? "" : cancelled ? "void" : "wait";
+      : disabled ? T.myTicketsDisabled : cancelled ? T.myTicketsCancelled : T.myTicketsWaiting(t.orderCode);
+    const cls = t.status === "paid" ? "" : cancelled || disabled ? "void" : "wait";
     return `<li><span class="my-ticket"><strong>${escapeText(t.event.name)}</strong>
       <span class="when">${escapeText(formatWhen(t.event))}</span><br>
       ${escapeText(t.name)} · ${escapeText(t.ticketType)}<br>
-      <a class="ticket-open" href="ticket.html?t=${encodeURIComponent(t.secret)}">${T.openTicket}</a></span>
+      ${t.secret && !disabled ? `<a class="ticket-open" href="ticket.html?t=${encodeURIComponent(t.secret)}">${T.openTicket}</a>` : ""}</span>
       <span class="my-ticket"><span class="state ${cls}">${escapeText(state)}</span></span></li>`;
   }).join("") : `<li class="muted">${T.myTicketsEmpty}</li>`;
   $("my-list").hidden = false;

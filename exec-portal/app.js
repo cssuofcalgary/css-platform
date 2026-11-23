@@ -296,6 +296,7 @@ function showMember(m) {
   $("member-fields").innerHTML = rows
     .map(([label, value]) => `<dt>${label}</dt><dd>${escapeHtml(value)}</dd>`)
     .join("");
+  renderMemberSignupAnswers(m);
 
   // Someone who signed up on the website and hasn't been confirmed yet: one tap to mark the payment received.
   state.member = m;

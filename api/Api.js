@@ -121,6 +121,12 @@ function route_(req) {
       requireSession_(req.token);
       return listPendingMembers_(req.offset, req.limit);
 
+    case "getMembershipForm":
+      return getMembershipForm_(requireAdmin_(req.token));
+
+    case "saveMembershipForm":
+      return saveMembershipForm_(requireAdmin_(req.token), req.questions);
+
     case "listAllMembers":
       requireSession_(req.token);
       return listAllMembers_();
@@ -221,6 +227,9 @@ function route_(req) {
 
     case "invalidateTickets":
       return invalidateTickets_(requireSession_(req.token), req);
+
+    case "setTicketEnabled":
+      return setTicketEnabled_(requireSession_(req.token), req);
 
     case "restoreTickets":
       return restoreTickets_(requireSession_(req.token), req);

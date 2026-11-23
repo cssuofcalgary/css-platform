@@ -210,6 +210,7 @@ function ticketRowsFor_(order, people, now) {
       ticketType: p.ticketTypeName,
       price: p.price,
       answers: p.answers,
+      note: p.note || "",
       flag: p.flag,
       status: order.status,
       checkedInAt: "",
@@ -295,7 +296,7 @@ function addOrder_(session, eventId, input, force, siteUrl, requestId) {
     return {
       id: newTicketId_(), secret: Utilities.getUuid().replace(/-/g, ""), orderId: order.id, eventId: event.id,
       name: person.name, email: person.email, ucid: person.ucid, memberId: person.memberId,
-      ticketType: person.ticketTypeName, price: person.price, answers: person.answers, flag: person.flag,
+      ticketType: person.ticketTypeName, price: person.price, answers: person.answers, note: person.note || "", flag: person.flag,
       status: "paid", checkedInAt: "", checkedInBy: "", createdAt: now
     };
   };
@@ -376,7 +377,7 @@ function cleanPerson_(p, event, index, lenient) {
   return {
     name: name, email: email, ucid: ucid, memberId: memberId,
     ticketTypeId: type.id, ticketTypeName: type.name, price: Number(type.price) || 0,
-    needsMembership: !!type.needsMembership, answers: answers, flag: ""
+    needsMembership: !!type.needsMembership, answers: answers, note: registrationNote_(p.note, 1000), flag: ""
   };
 }
 

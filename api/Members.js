@@ -18,7 +18,8 @@ const MEMBER_COLUMNS = {
   paymentMethod: ["Payment method"],
   paymentWhen:   ["When"],
   paymentWhere:  ["Where"],
-  paymentWho:    ["Who"]
+  paymentWho:    ["Who"],
+  signupAnswers: ["Signup answers", "Sign-up answers", "Membership answers"]
 };
 
 function normalizeHeader_(text) {
@@ -51,6 +52,16 @@ function isYes_(value) {
   return text === "TRUE" || text === "YES" || text === "Y" || text === "PAID" || text === "1" || text === "✓";
 }
 
+/** Older sheets have no answers column; malformed cells never break the member list. */
+function memberSignupAnswers_(value) {
+  let parsed;
+  try { parsed = JSON.parse(cellText_(value) || "{}"); } catch (e) { return {}; }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+  const answers = Object.create(null);
+  Object.keys(parsed).forEach(function (label) { if (typeof parsed[label] === "string") answers[label] = parsed[label]; });
+  return answers;
+}
+
 /** values = the whole tab as a 2D array (row 0 = headers). */
 function rowsToMembers_(values) {
   if (!values || values.length < 2) return [];
@@ -74,6 +85,7 @@ function rowsToMembers_(values) {
       cardSent: cellText_(read(row, "mailStatus")).toLowerCase() === "sent",
       mailStatus: cellText_(read(row, "mailStatus")),   // "Pending" = joined through the site and the card email never went out
       signedUp: cellText_(read(row, "signedUp")),
+      signupAnswers: memberSignupAnswers_(read(row, "signupAnswers")),
       row: r + 1,                                 // where it sits on the sheet (so a payment can be marked on the right line)
       status: cellText_(read(row, "paid")),       // the Paid Status as typed, e.g. "Awaiting Cash"
       payment: {

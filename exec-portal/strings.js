@@ -276,11 +276,14 @@ const STRINGS = {
     // ---- Money: part payments, refunds owed, invalidating tickets, "a payment I can't match" ----
     orderPartPaid: (got, total, left) => `Part paid: ${got} of ${total} received. ${left} still to come.`,
     btnRecordRest: (left) => `Record the rest (${left})`,
-    btnInvalidate: "Invalidate tickets…",
+    btnInvalidate: "Cancel tickets…",
     btnDisableTicket: "Disable ticket",
-    disableTicketTitle: (code) => `Disable ticket · ${code}`,
-    disableTicketIntro: "This ticket's QR code will stop working when you confirm. Return any refund separately, then record it in Payments.",
-    disableTicketUnavailable: "This ticket can no longer be disabled. Refresh the list and check its status.",
+    btnEnableTicket: "Enable ticket",
+    confirmDisableTicket: (name, code) => `Disable ${name}'s ticket (${code})? It stays in the registration list, stops working at the door, and does not use a place. Payment and refunds stay unchanged.`,
+    confirmEnableTicket: (name, code) => `Enable ${name}'s ticket (${code})? It will count towards capacity again and return to its previous payment status.`,
+    disableTicketUnavailable: "This ticket's status has changed. Refresh the list and try again.",
+    ticketDisabledDone: "Ticket disabled. Registration kept; its place is available again.",
+    ticketEnabledDone: "Ticket enabled.",
     btnCancelReg: "Cancel registration…",
     refundOwedLine: (amount, name) => `Refund owed: return ${amount} to ${name}.`,
     restoredPaid: "Restored. The money was never returned, so this order is paid again.",
@@ -294,7 +297,7 @@ const STRINGS = {
     refundUnrecordedLine: "Refunded before returns were tracked. Whether the money went back isn't recorded.",
     btnAlreadyReturned: "Money already returned",
     btnRecordDetails: "Record the details",
-    ticketStopped: { refunded: "Invalidated", cancelled: "Cancelled" },
+    ticketStopped: { refunded: "Cancelled", cancelled: "Cancelled" },
     btnPutBack: "Put back",
     confirmPutBack: (name) => `Put ${name}'s ticket back? It will work again, and the refund owed for it is cancelled.`,
     putBackDone: "Ticket put back.",
@@ -346,7 +349,7 @@ const STRINGS = {
       return parts.join(" ");
     },
 
-    invTitlePaid: (code) => `Invalidate tickets · ${code}`,
+    invTitlePaid: (code) => `Cancel tickets · ${code}`,
     invTitleUnpaid: (code) => `Cancel registration · ${code}`,
     invIntroPaid: "Tick the people whose tickets should stop working. Their QR codes are rejected at the door the moment you confirm. This doesn't send any money: Finance returns it separately, then records it.",
     invIntroUnpaid: "Tick the registrations to cancel. Nothing has been paid, so nothing needs to be returned.",
@@ -355,12 +358,12 @@ const STRINGS = {
     invCheckedIn: "Already checked in. Undo the check-in at the Door tab first.",
     invRefundLabel: "Money to give back ($)",
     invReasonLabel: "Reason (optional)",
-    invConfirmPaid: (n) => `Invalidate ${n} ticket${n === 1 ? "" : "s"}`,
+    invConfirmPaid: (n) => `Cancel ${n} ticket${n === 1 ? "" : "s"}`,
     invConfirmUnpaid: (n, all) => (all ? "Cancel the registration" : `Cancel ${n} ticket${n === 1 ? "" : "s"}`),
     invPickSome: "Tick at least one ticket.",
     invOutcome: (r) => {
       const n = r.invalidated;
-      if (r.qrRejected) return `${n} ticket${n === 1 ? "" : "s"} invalidated. Their old QR codes will be rejected.` + (r.refund ? ` Return ${dollars(r.refund.owed)}, then mark the refund completed.` : " No money to return.");
+      if (r.qrRejected) return `${n} ticket${n === 1 ? "" : "s"} cancelled. Their old QR codes will be rejected.` + (r.refund ? ` Return ${dollars(r.refund.owed)}, then mark the refund completed.` : " No money to return.");
       return (r.whole ? "Registration cancelled." : `${n} ticket${n === 1 ? "" : "s"} cancelled.`) + (r.refund ? ` ${dollars(r.refund.owed)} was already received: return it, then mark the refund completed.` : " Nothing was paid, so nothing is owed back.");
     },
 
@@ -514,6 +517,18 @@ Restore it anyway?`,
     resent: (sent) => `Sent ${sent} ticket email${sent === 1 ? "" : "s"} again.`,
     statusAwaiting: "Awaiting payment",
     statusPaid: "Paid",
+    statusDisabled: "Disabled",
+    attendeeNote: "Attendee note",
+    evAnnouncement: "Important note (optional)",
+    mfOpen: "Join CSS form settings",
+    mfTitle: "Join CSS questions",
+    mfAdd: "Add question",
+    mfSave: "Save questions",
+    mfSaved: "Join CSS questions saved.",
+    mfAnswers: "Join CSS answers",
+    mfLimit: "You can add up to 20 questions.",
+    mfNeedLabel: "Enter the wording for each question.",
+    mfNeedOptions: "Add at least two options for each choice question.",
     statusRefunded: "Refunded",
     statusCancelled: "Cancelled",
     checkedInMark: "checked in",
@@ -538,8 +553,9 @@ Restore it anyway?`,
     editSaving: "Saving…",
     editNothing: "Nothing was changed.",
     edited: (sent) => sent ? `Saved. Ticket re-sent to the new email.` : "Saved.",
-    editedTotal: (was, now, status) => `Order total is now ${money(now)} (was ${money(was)}).` +
-      (status === "paid" ? (now > was ? " Collect the difference." : " Send the difference back by e-transfer.") : " The payer's email still shows the old amount."),
+    editedTotal: (was, now, status, stillDue) => `Order total is now ${money(now)} (was ${money(was)}).` +
+      (status === "awaiting" && stillDue > 0 ? ` ${money(stillDue)} still to come. Record the payment in Payments.`
+        : status === "paid" ? (now > was ? " Payment already covers this amount." : " Send the difference back by e-transfer.") : " The payer's email still shows the old amount."),
     reconnecting: "Connection is slow. Trying again…",
     liveInside: "inside",
     liveNotPaid: (n) => `${n} not paid yet`,

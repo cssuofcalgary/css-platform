@@ -363,3 +363,133 @@ document.querySelectorAll("#mem-filters .chip").forEach((chip) => chip.addEventL
 $("pending-list").addEventListener("click", onPendingClick);
 $("pending-more").addEventListener("click", () => loadPending(true));
 $("pending-refresh").addEventListener("click", () => loadPending(false));
+
+// ---- The questions on the public Join CSS form -------------------------------------------
+
+const membershipFormState = { questions: [], loading: false, saving: false };
+
+function setMembershipFormError(message) {
+  $("membership-form-error").textContent = message;
+  $("membership-form-error").hidden = !message;
+}
+
+function membershipFormQuestionRows() {
+  return [...document.querySelectorAll("#membership-form-questions [data-mf-question]")];
+}
+
+/** Existing IDs stay attached to their rows when wording or order changes. */
+function readMembershipFormQuestions() {
+  return membershipFormQuestionRows().map((row) => ({
+    id: row.dataset.questionId || "",
+    label: row.querySelector("[data-mf-label]").value.trim(),
+    type: row.querySelector("[data-mf-type]").value === "choice" ? "choice" : "text",
+    required: row.querySelector("[data-mf-required]").checked,
+    options: row.querySelector("[data-mf-options]").value.split(/[\n,]+/).map((value) => value.trim()).filter(Boolean)
+  }));
+}
+
+function renderMembershipFormQuestions() {
+  $("membership-form-questions").innerHTML = membershipFormState.questions.map((question, index) => `
+    <div class="repeat-row" data-mf-question data-question-id="${escapeHtml(question.id || "")}">
+      <label for="mfq-${index}-label">${T.questionLabel}</label>
+      <input id="mfq-${index}-label" data-mf-label maxlength="120" value="${escapeHtml(question.label || "")}">
+      <div class="grid-2">
+        <div><label for="mfq-${index}-type">${T.questionType}</label>
+          <select id="mfq-${index}-type" data-mf-type>
+            <option value="text" ${question.type !== "choice" ? "selected" : ""}>${T.typeText}</option>
+            <option value="choice" ${question.type === "choice" ? "selected" : ""}>${T.typeChoice}</option>
+          </select></div>
+        <label class="check align-end"><input type="checkbox" data-mf-required ${question.required ? "checked" : ""}> ${T.required}</label>
+      </div>
+      <div data-mf-options-box ${question.type === "choice" ? "" : "hidden"}>
+        <label for="mfq-${index}-options">${T.questionOptions}</label>
+        <textarea id="mfq-${index}-options" data-mf-options rows="3">${escapeHtml((question.options || []).join("\n"))}</textarea>
+      </div>
+      <button type="button" class="link danger" data-mf-remove="${index}">${T.remove}</button>
+    </div>`).join("");
+  $("membership-form-add").disabled = membershipFormState.saving || membershipFormState.questions.length >= 20;
+}
+
+async function openMembershipFormSettings() {
+  if (state.role !== "admin") { openAdminDialog(); return; }
+  if (membershipFormState.loading || membershipFormState.saving) return;
+  membershipFormState.loading = true;
+  $("member-form-settings").disabled = true;
+  const reply = await api("getMembershipForm");
+  membershipFormState.loading = false;
+  $("member-form-settings").disabled = false;
+  if (!reply.ok) {
+    if (reply.error === "NOT_LOGGED_IN") return handleEventError(reply, $("pending-status"));
+    return showToast(errorText(reply));
+  }
+  membershipFormState.questions = (reply.questions || []).map((q) => ({ ...q, options: (q.options || []).slice() }));
+  setMembershipFormError("");
+  renderMembershipFormQuestions();
+  $("membership-form-dialog").showModal();
+}
+
+function addMembershipFormQuestion() {
+  if (membershipFormState.saving) return;
+  membershipFormState.questions = readMembershipFormQuestions();
+  if (membershipFormState.questions.length >= 20) return setMembershipFormError(T.mfLimit);
+  membershipFormState.questions.push({ id: "", label: "", type: "text", required: false, options: [] });
+  setMembershipFormError("");
+  renderMembershipFormQuestions();
+  $("mfq-" + (membershipFormState.questions.length - 1) + "-label").focus();
+}
+
+function removeMembershipFormQuestion(event) {
+  const button = event.target.closest("[data-mf-remove]");
+  if (!button || membershipFormState.saving) return;
+  membershipFormState.questions = readMembershipFormQuestions();
+  membershipFormState.questions.splice(Number(button.dataset.mfRemove), 1);
+  renderMembershipFormQuestions();
+}
+
+function syncMembershipQuestionType(event) {
+  if (!event.target.matches("[data-mf-type]")) return;
+  event.target.closest("[data-mf-question]").querySelector("[data-mf-options-box]").hidden = event.target.value !== "choice";
+}
+
+function setMembershipFormBusy(busy) {
+  membershipFormState.saving = busy;
+  document.querySelectorAll("#membership-form-form button, #membership-form-form input, #membership-form-form textarea, #membership-form-form select").forEach((control) => { control.disabled = busy; });
+  $("membership-form-save").textContent = busy ? T.saving : T.mfSave;
+  $("membership-form-add").disabled = busy || membershipFormState.questions.length >= 20;
+}
+
+async function saveMembershipFormSettings(event) {
+  event.preventDefault();
+  if (membershipFormState.saving) return;
+  if (state.role !== "admin") { openAdminDialog(); return; }
+  const questions = readMembershipFormQuestions();
+  if (questions.some((q) => !q.label)) return setMembershipFormError(T.mfNeedLabel);
+  if (questions.some((q) => q.type === "choice" && q.options.length < 2)) return setMembershipFormError(T.mfNeedOptions);
+  membershipFormState.questions = questions;
+  setMembershipFormError("");
+  setMembershipFormBusy(true);
+  const reply = await api("saveMembershipForm", { questions });
+  setMembershipFormBusy(false);
+  if (!reply.ok) {
+    if (reply.error === "NOT_LOGGED_IN") { $("membership-form-dialog").close(); return handleEventError(reply, $("pending-status")); }
+    return setMembershipFormError(errorText(reply));
+  }
+  membershipFormState.questions = reply.questions || questions;
+  $("membership-form-dialog").close();
+  showToast(T.mfSaved, "success");
+}
+
+/** Answer labels are the wording saved when this person joined, even after questions change. */
+function renderMemberSignupAnswers(member) {
+  const answers = Object.entries(member.signupAnswers || {}).filter(([, value]) => value !== "" && value !== null && value !== undefined);
+  $("member-signup-section").hidden = !answers.length;
+  $("member-signup-answers").innerHTML = answers.map(([label, value]) => `<dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value).replace(/\r?\n/g, "<br>")}</dd>`).join("");
+}
+
+$("member-form-settings").addEventListener("click", openMembershipFormSettings);
+$("membership-form-add").addEventListener("click", addMembershipFormQuestion);
+$("membership-form-questions").addEventListener("click", removeMembershipFormQuestion);
+$("membership-form-questions").addEventListener("change", syncMembershipQuestionType);
+$("membership-form-form").addEventListener("submit", saveMembershipFormSettings);
+$("membership-form-cancel").addEventListener("click", () => { if (!membershipFormState.saving) $("membership-form-dialog").close(); });
+$("membership-form-dialog").addEventListener("cancel", (event) => { if (membershipFormState.saving) event.preventDefault(); });

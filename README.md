@@ -3,7 +3,7 @@
 The Chinese Students' Society's own event, ticket and membership platform: a mini Luma/Eventbrite built on free Google tools.
 **Execs:** you want `HANDBOOK.md`. **Something broke:** `RUNBOOK.md`.
 
-Status: **API 0.18.4** (the `API_VERSION` in `api/Config.js`; the Apps Script deployment label says the same). Events, registration, payments, door and the redesigned Exec Portal are live. Membership sign-up (`member.ucalgarycss.ca/create`), the Members tab's Pending list, Add member and Mark paid were added 2026-09-30. Roadmap and what is left: the vault note "CSS Platform - Roadmap".
+Status: **API 0.19.0** (the `API_VERSION` in `api/Config.js`; the Apps Script deployment label says the same). Events, registration, payments, door and the redesigned Exec Portal are live. Membership sign-up (`member.ucalgarycss.ca/create`), the Members tab's Pending list, Add member and Mark paid were added 2026-09-30. Roadmap and what is left: the vault note "CSS Platform - Roadmap".
 The old system (`../CSS Ticketing System/`) keeps running until this one is proven. Nothing here touches it.
 
 ---

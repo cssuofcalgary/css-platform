@@ -200,7 +200,7 @@ function ensureTicketTypeIds() {
 
 function openEditor(existing, isEdit = !!existing, title) {
   const e = existing ? { ...existing, ...existing.editDraft } : {
-    name: "", date: "", startTime: "", endTime: "", location: "", description: "",
+    name: "", date: "", startTime: "", endTime: "", location: "", description: "", announcement: "",
     capacity: null, capacityRule: "paid", imageFileId: "", imageUrl: "", codePrefix: "",
     ticketTypes: [{ name: "Member", price: 0, needsMembership: true }, { name: "Non-member", price: 0 }],
     questions: []
@@ -219,6 +219,7 @@ function openEditor(existing, isEdit = !!existing, title) {
   $("ev-end").value = e.endTime;
   $("ev-location").value = e.location;
   $("ev-description").value = e.description;
+  $("ev-announcement").value = e.announcement || "";
   $("ev-capacity").value = e.capacity ?? "";
   $("ev-capacity-rule").value = e.capacityRule || "paid";
   $("ev-waitlist").checked = !!e.waitlist;
@@ -464,6 +465,7 @@ function readEventEditor() {
     endTime: $("ev-end").value,
     location: $("ev-location").value,
     description: $("ev-description").value,
+    announcement: $("ev-announcement").value,
     capacity: $("ev-capacity").value,
     capacityRule: $("ev-capacity-rule").value,
     waitlist: $("ev-waitlist").checked,
@@ -521,7 +523,7 @@ function previewEvent() {
   const receive = (message) => {
     if (message.source !== preview || message.origin !== url.origin || message.data?.previewReady !== key) return;
     preview.postMessage({ previewKey: key, event: {
-      name: draft.name, slug: draft.slug || "", description: draft.description, date: draft.date,
+      name: draft.name, slug: draft.slug || "", description: draft.description, announcement: draft.announcement, date: draft.date,
       startTime: draft.startTime, endTime: draft.endTime, location: draft.location, imageUrl: draft.imageUrl,
       ticketTypes: draft.ticketTypes, questions: draft.questions,
       registrationCloses: draft.registrationCloses || (draft.date ? draft.date + "T" + (draft.startTime || "23:59") : ""),

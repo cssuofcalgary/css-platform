@@ -149,6 +149,7 @@ function scanCode_(session, eventId, code, atDesk) {
       const other = findEvent_(function (e) { return e.id === ticket.eventId; });
       return deskResult_("red", "This ticket is for " + (other ? other.name : "another event") + ".", person);
     }
+    if (ticket.status === "disabled") return deskResult_("red", "This ticket is disabled. Send to the help desk.", person);
     if (ticket.status === "refunded" || ticket.status === "cancelled") {
       return deskResult_("red", "This ticket was " + ticket.status + ".", person);
     }
@@ -422,7 +423,7 @@ function memberTicketForEvent_(member, eventId) {
     if (owner === "self") own.push(t);
     else if (owner) others.push(t);
   });
-  const rank = function (t) { return (t.status === "paid" ? 0 : 2) + (t.checkedInAt ? 1 : 0); };
+  const rank = function (t) { return (t.status === "paid" ? 0 : t.status === "awaiting" ? 2 : 4) + (t.checkedInAt ? 1 : 0); };
   own.sort(function (a, b) { return rank(a) - rank(b); });
   return { ticket: own[0] || null, others: others };
 }

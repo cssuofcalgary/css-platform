@@ -88,7 +88,7 @@ function listOrders_(eventId, opts) {
         return {
           id: t.id, name: t.name, email: t.email, ucid: t.ucid, memberId: t.memberId,
           ticketType: t.ticketType, price: Number(t.price) || 0, answers: t.answers,
-          flag: t.flag, status: t.status, checkedInAt: t.checkedInAt, emailedAt: t.emailedAt,
+          flag: t.flag, status: t.status, disabledFrom: t.disabledFrom || "", note: t.note || "", checkedInAt: t.checkedInAt, emailedAt: t.emailedAt,
           secret: t.secret   // execs only: lets the help desk open someone's ticket page
         };
       })
@@ -174,6 +174,7 @@ function markPaidLocked_(session, orderId, force) {
   const order = readRows_("Orders").filter(function (o) { return o.id === orderId; })[0];
   if (!order) throw new ApiError_("NOT_FOUND", "Order not found.");
   if (order.status === "paid") {
+    syncDisabledPayment_(order);
     // Already paid. If an earlier run died halfway (order paid, a ticket still waiting), finish the job now.
     const stuck = readRows_("Tickets").filter(function (t) { return t.orderId === order.id && t.status === "awaiting"; });
     stuck.forEach(function (t) { updateRow_("Tickets", t.id, { status: "paid" }, t._row); });
@@ -193,6 +194,7 @@ function markPaidLocked_(session, orderId, force) {
 
   const now = new Date().toISOString();
   updateRow_("Orders", order.id, { status: "paid", paidAt: now, paidBy: session.name }, order._row);
+  syncDisabledPayment_(Object.assign({}, order, { status: "paid" }));
   tickets.forEach(function (t) { updateRow_("Tickets", t.id, { status: "paid" }, t._row); });
   log_(session.name, "order.paid", order.code, { total: order.total, tickets: tickets.length, overCapacity: !!force });
   return { already: false, confirmed: tickets.length, order: order };
@@ -539,6 +541,34 @@ function updateTicket_(session, ticketId, changes, siteUrl, orderChanges) {
       }
     }
 
+    // Keep actual money received fixed when a ticket's price changes. A free approval is never a $5 payment.
+    let total = null;
+    if (order && retainedTicket_(ticket) && (next.price !== undefined || (changes.ticketTypeId !== undefined && changes.ticketTypeId !== ""))) {
+      const now = readRows_("Tickets").filter(function (t) { return t.orderId === order.id && retainedTicket_(t); });
+      const newTotal = dollars_(now.reduce(function (sum, t) { return sum + cents_(t.id === ticket.id && next.price !== undefined ? next.price : t.price); }, 0));
+      const oldTotal = Number(order.total) || 0;
+      if (next.price !== undefined || newTotal !== oldTotal) {
+        const received = receivedOf_(order);
+        total = { was: oldTotal, now: newTotal, received: received };
+        if (newTotal !== oldTotal) {
+          orderNext.total = newTotal;
+          if (adminOnly.indexOf("ticket type") === -1) adminOnly.push("ticket type");
+          if (order.status === "paid") orderNext.received = String(received);
+          if (newTotal > oldTotal && cents_(newTotal) > cents_(received)) {
+            if (order.status === "paid") {
+              orderNext.status = "awaiting";
+              orderNext.paidAt = "";
+              orderNext.paidBy = "";
+            }
+            if (ticket.status === "disabled") next.disabledFrom = "awaiting";
+            else if (ticket.status === "paid" && !ticket.checkedInAt) next.status = "awaiting";
+            if (next.disabledFrom === "awaiting" || next.status === "awaiting") next.emailedAt = "";
+          }
+        }
+        total.stillDue = (orderNext.status || order.status) === "awaiting" ? dollars_(Math.max(0, cents_(newTotal) - cents_(received))) : 0;
+      }
+    }
+
     if (adminOnly.length && !isAdmin) {
       throw new ApiError_("ADMIN_ONLY", "Changing " + adminOnly.join(", ") + " needs the admin password.");
     }
@@ -550,16 +580,7 @@ function updateTicket_(session, ticketId, changes, siteUrl, orderChanges) {
       if (next.email !== undefined && orderNext.payerEmail === undefined) orderNext.payerEmail = next.email;
     }
 
-    // A different ticket type = a different price: recompute the order total.
-    let total = null;
-    if (next.price !== undefined && order) {
-      const now = readRows_("Tickets").filter(function (t) { return t.orderId === order.id && (t.status === "paid" || t.status === "awaiting"); });
-      const newTotal = now.reduce(function (sum, t) { return sum + (t.id === ticket.id ? next.price : Number(t.price) || 0); }, 0);
-      total = { was: Number(order.total) || 0, now: newTotal };
-      orderNext.total = newTotal;
-    }
-
-    const emailChanged = next.email !== undefined && ticket.status === "paid";
+    const emailChanged = next.email !== undefined && (next.status || ticket.status) === "paid";
     if (emailChanged) next.emailedAt = "";
     if (Object.keys(next).length) updateRow_("Tickets", ticket.id, next, ticket._row);
     if (order && Object.keys(orderNext).length) updateRow_("Orders", order.id, orderNext, order._row);
@@ -568,7 +589,7 @@ function updateTicket_(session, ticketId, changes, siteUrl, orderChanges) {
     Object.keys(next).forEach(function (k) { if (k !== "emailedAt") { from[k] = ticket[k]; to[k] = next[k]; } });
     Object.keys(orderNext).forEach(function (k) { from["order." + k] = order[k]; to["order." + k] = orderNext[k]; });
     log_(session.name, "ticket.edit", ticket.id, { name: ticket.name, order: order ? order.code : "", from: from, to: to });
-    return { changed: true, resend: emailChanged, orderId: ticket.orderId, total: total, orderStatus: order ? order.status : "" };
+    return { changed: true, resend: emailChanged, orderId: ticket.orderId, total: total, orderStatus: order ? (orderNext.status || order.status) : "" };
   });
 
   if (!result.changed) return { ok: true, changed: false, emailsSent: 0 };

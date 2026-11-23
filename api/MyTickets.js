@@ -218,7 +218,7 @@ function memberProfile_(req) {
  *   - it names the member's ID or UCID AND the name on it fits the member's name.
  * An ID or UCID typed next to a different name is NOT added; it is counted in `possible` so the screen can say so.
  */
-const LISTED_STATUS_ = { paid: true, awaiting: true, refunded: true, cancelled: true };
+const LISTED_STATUS_ = { paid: true, awaiting: true, disabled: true, refunded: true, cancelled: true };
 
 /**
  * THE rule for "is this ticket this member's?", used by My tickets, the door's member-pass scan and a member's history,
@@ -283,7 +283,7 @@ function myTickets_(req) {
   }).map(function (t) {
     const e = events[t.eventId];
     return {
-      id: t.id, secret: t.secret, name: t.name, ticketType: t.ticketType, status: t.status === "refunded" ? "cancelled" : t.status, checkedIn: !!t.checkedInAt,
+      id: t.id, secret: t.status === "disabled" ? "" : t.secret, name: t.name, ticketType: t.ticketType, status: t.status === "refunded" ? "cancelled" : t.status, checkedIn: !!t.checkedInAt,
       orderCode: (orders[t.orderId] || {}).code || "",
       event: { name: e.name, date: e.date, startTime: e.startTime, endTime: e.endTime, location: e.location, slug: e.slug }
     };

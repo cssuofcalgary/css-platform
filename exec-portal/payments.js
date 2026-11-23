@@ -103,9 +103,11 @@ function orderCard(o) {
         <li>${escapeHtml(t.name)} · ${escapeHtml(t.ticketType)} ${money(t.price)}
           ${t.ucid ? ` · UCID ${escapeHtml(t.ucid)}` : ""}${t.memberId ? ` · ${escapeHtml(t.memberId)}` : ""}
           ${Object.entries(t.answers || {}).map(([k, v]) => ` · ${escapeHtml(k)}: ${escapeHtml(v)}`).join("")}
+          ${t.note ? `<br><span class="sub"><strong>${escapeHtml(T.attendeeNote)}:</strong> ${escapeHtml(t.note).replace(/\r?\n/g, "<br>")}</span>` : ""}
           ${t.status === "paid" ? ` · <a class="link" target="_blank" rel="noopener" href="${ticketUrl(t)}">${T.openTicket}</a>` : ""}
-          ${t.status === "paid" || t.status === "awaiting" ? ` · <button class="link" data-edit-ticket="${t.id}">${T.editPerson}</button>` : ""}
+          ${t.status === "paid" || t.status === "awaiting" || t.status === "disabled" ? ` · <button class="link" data-edit-ticket="${t.id}">${T.editPerson}</button>` : ""}
           ${canDisableTicket(t) && (o.status === "paid" || o.status === "awaiting") ? ` · <button class="link danger" data-act="disable" data-ticket="${t.id}">${T.btnDisableTicket}</button>` : ""}
+          ${t.status === "disabled" && (o.status === "paid" || o.status === "awaiting") ? ` · <button class="link" data-act="enable" data-ticket="${t.id}">${T.btnEnableTicket}</button>` : ""}
           ${t.checkedInAt ? ` · ${T.checkedInMark}` : ""}${stoppedTicketMark(o, t)}${t.emailedAt && !t.emailedAt.startsWith("test") && !t.emailedAt.startsWith("claim:") ? ` · ${T.emailedMark}` : ""}
           ${t.flag ? `<br><span class="flag">${escapeHtml(t.flag)}</span>` : ""}</li>`).join("")}
       </ul>
@@ -150,7 +152,7 @@ async function onOrdersClick(event) {
   const edit = event.target.closest("button[data-edit-ticket]");
   if (edit) return editTicket(edit);
   const button = event.target.closest("button[data-act]");
-  if (!button) return;
+  if (!button || button.disabled) return;
   const card = button.closest(".order");
   const order = payState.data.orders.find((o) => o.id === card.dataset.order);
   const result = card.querySelector(".order-result");
@@ -159,9 +161,10 @@ async function onOrdersClick(event) {
 
   // These open their own windows (money.js): recording a payment, invalidating tickets, recording a refund.
   const act = button.dataset.act;
-  if (act === "pay") return openPayDialog(order);
+  if (act === "pay") return Number(order.total) === 0 ? markFreeOrderPaid(order, button, result, siteUrl) : openPayDialog(order);
   if (act === "invalidate") return openInvalidateDialog(order);
   if (act === "disable") return openSingleTicketDialog(order, button.dataset.ticket);
+  if (act === "enable") return setSingleTicketEnabled(order, button.dataset.ticket, true);
   if (act === "recordrefund") return openRefundDialog(order);
   if (act === "histrefund") return markAlreadyReturned(order);
   if (act === "putback") return putTicketBack(order, button.dataset.ticket);
@@ -201,6 +204,23 @@ async function onOrdersClick(event) {
   }
   setTimeout(loadOrders, button.dataset.act === "restore" ? 0 : 1800);
   eventsState.loaded = false;   // counts on the Events tab changed
+}
+
+/** A free registration needs approval, with no payment amount to ask for. */
+async function markFreeOrderPaid(order, button, result, siteUrl) {
+  button.disabled = true;
+  let reply = await apiOnce("markOrderPaid", { orderId: order.id, siteUrl });
+  if (!reply.ok && reply.error === "OVER_CAPACITY") {
+    if (!(await askConfirm(T.overCapacity(reply.message), T.markPaid(T.free)))) { button.disabled = false; return; }
+    reply = await apiOnce("markOrderPaid", { orderId: order.id, siteUrl, force: true });
+  }
+  if (!reply.ok) {
+    button.disabled = false;
+    return handleEventError(reply, result);
+  }
+  result.textContent = T.emailOutcome(reply);
+  eventsState.loaded = false;
+  setTimeout(loadOrders, 1800);
 }
 
 async function sendUnsent() {

@@ -31,8 +31,10 @@ function waitlistRoom_(event) {
   const entries = readRows_("Waitlist").filter(function (w) { return w.eventId === event.id; });
   const orders = {};
   readRows_("Orders").forEach(function (o) { if (o.eventId === event.id) orders[o.id] = o; });
+  const tickets = readRows_("Tickets");
   const outstanding = entries.filter(function (w) {
-    return w.status === "offered" && orders[w.orderId] && orders[w.orderId].status === "awaiting";
+    return w.status === "offered" && orders[w.orderId] && orders[w.orderId].status === "awaiting" &&
+      tickets.some(function (t) { return t.orderId === w.orderId && t.eventId === event.id && t.status === "awaiting"; });
   }).length;
   let paid = 0, awaiting = 0;
   readRows_("Tickets").forEach(function (t) {
@@ -86,7 +88,7 @@ function joinWaitlist_(req) {
     if (entries.filter(function (w) { return w.status === "waiting"; }).length >= WAITLIST_MAX_PER_EVENT) throw new ApiError_("WAITLIST_FULL", "The waitlist is full.");
     insertRow_("Waitlist", {
       id: newId_("WL"), eventId: event.id, name: person.name, email: person.email, ucid: person.ucid, memberId: person.memberId,
-      ticketTypeId: person.ticketTypeId, ticketType: person.ticketTypeName, answers: person.answers, status: "waiting",
+      ticketTypeId: person.ticketTypeId, ticketType: person.ticketTypeName, answers: person.answers, note: person.note || "", status: "waiting",
       createdAt: new Date().toISOString(), offeredAt: "", offeredBy: "", orderId: "", orderCode: "", notes: ""
     });
     return { already: false };
@@ -124,7 +126,7 @@ function listWaitlist_(eventId) {
   const list = entries.map(function (w) {
     const hasTicket = w.status === "waiting" && have.some(function (t) { return sameRegistrationPerson_(w, t); });   // signed up the normal way since joining
     return {
-      id: w.id, name: w.name, email: w.email, ucid: w.ucid, memberId: w.memberId, ticketType: w.ticketType, answers: w.answers || {},
+      id: w.id, name: w.name, email: w.email, ucid: w.ucid, memberId: w.memberId, ticketType: w.ticketType, answers: w.answers || {}, note: w.note || "",
       status: w.status, createdAt: w.createdAt, offeredAt: w.offeredAt, offeredBy: w.offeredBy, orderCode: w.orderCode,
       hasTicket: hasTicket,
       position: w.status === "waiting" && !hasTicket ? ++place : 0
@@ -229,7 +231,7 @@ function waitlistTicket_(entry, order, type, flag, now) {
   return {
     id: newTicketId_(), secret: Utilities.getUuid().replace(/-/g, ""), orderId: order.id, eventId: order.eventId,
     name: entry.name, email: entry.email, ucid: entry.ucid, memberId: entry.memberId, ticketType: type.name, price: Number(type.price) || 0,
-    answers: entry.answers || {}, flag: flag, status: order.status, checkedInAt: "", checkedInBy: "", createdAt: now
+    answers: entry.answers || {}, note: entry.note || "", flag: flag, status: order.status, checkedInAt: "", checkedInBy: "", createdAt: now
   };
 }
 

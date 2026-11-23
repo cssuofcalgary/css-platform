@@ -84,7 +84,7 @@ function invalidateTickets_(session, req) {
     if (!order) throw new ApiError_("NOT_FOUND", "Order not found.");
     if (order.status !== "paid" && order.status !== "awaiting") throw new ApiError_("BAD_REQUEST", "This order is already " + order.status + ".");
 
-    const live = readRows_("Tickets").filter(function (t) { return t.orderId === order.id && (t.status === "paid" || t.status === "awaiting"); });
+    const live = readRows_("Tickets").filter(function (t) { return t.orderId === order.id && retainedTicket_(t); });
     const chosen = ids.map(function (id) { return live.filter(function (t) { return t.id === id; })[0]; });
     if (chosen.some(function (t) { return !t; })) throw new ApiError_("BAD_REQUEST", "One of those tickets isn't part of this order, or it was already cancelled.");
     const inside = chosen.filter(function (t) { return t.checkedInAt; });
@@ -94,7 +94,7 @@ function invalidateTickets_(session, req) {
     }
 
     const whole = chosen.length === live.length;
-    const paidOnes = chosen.filter(function (t) { return t.status === "paid"; });
+    const paidOnes = chosen.filter(function (t) { return ticketPaymentStatus_(t, order) === "paid"; });
     const receivedBefore = receivedOf_(order);
     const priceOf = function (list) { return list.reduce(function (sum, t) { return sum + cents_(t.price); }, 0); };
 
@@ -115,7 +115,7 @@ function invalidateTickets_(session, req) {
     if (whole) orderChange.status = wasPaid ? "refunded" : "cancelled";
     else orderChange.total = dollars_(live.filter(function (t) { return chosen.indexOf(t) === -1; }).reduce(function (sum, t) { return sum + cents_(t.price); }, 0));
     const writes = [{ table: "Orders", id: order.id, set: orderChange, was: { status: order.status, total: order.total } }];
-    chosen.forEach(function (t) { writes.push({ table: "Tickets", id: t.id, set: { status: t.status === "paid" ? "refunded" : "cancelled" }, was: { status: t.status } }); });
+    chosen.forEach(function (t) { writes.push({ table: "Tickets", id: t.id, set: { status: ticketPaymentStatus_(t, order) === "paid" ? "refunded" : "cancelled", disabledFrom: "" }, was: { status: t.status } }); });
 
     let refund = null;
     if (owedCents > 0) {
@@ -156,7 +156,7 @@ function carryOutInvalidate_(session, rid, plan) {
 
 /** The old whole-order button (and any page still on the old version): invalidate every ticket in the order. */
 function refundOrder_(session, orderId, reason) {
-  const live = readRows_("Tickets").filter(function (t) { return t.orderId === orderId && (t.status === "paid" || t.status === "awaiting"); });
+  const live = readRows_("Tickets").filter(function (t) { return t.orderId === orderId && retainedTicket_(t); });
   return invalidateTickets_(session, { orderId: orderId, ticketIds: live.map(function (t) { return t.id; }), reason: reason });
 }
 
@@ -292,7 +292,7 @@ function restoreTickets_(session, req) {
     }
 
     chosen.forEach(function (t) { updateRow_("Tickets", t.id, { status: t.status === "refunded" ? "paid" : "awaiting" }, t._row); });
-    const orderTotal = readRows_("Tickets").filter(function (t) { return t.orderId === order.id && (t.status === "paid" || t.status === "awaiting"); })
+    const orderTotal = readRows_("Tickets").filter(function (t) { return t.orderId === order.id && retainedTicket_(t); })
       .reduce(function (sum, t) { return sum + cents_(t.price); }, 0);
     updateRow_("Orders", order.id, {
       total: dollars_(orderTotal),

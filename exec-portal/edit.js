@@ -106,7 +106,7 @@ async function onEditSubmit(event) {
   }
   $("edit-dialog").close();
   const message = [T.edited(reply.emailsSent), reply.total && reply.total.was !== reply.total.now
-    ? T.editedTotal(reply.total.was, reply.total.now, reply.orderStatus) : ""].filter(Boolean).join(" ");
+    ? T.editedTotal(reply.total.was, reply.total.now, reply.orderStatus, reply.total.stillDue) : ""].filter(Boolean).join(" ");
   if (editState.onSaved) editState.onSaved(message);
 }
 

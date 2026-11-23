@@ -39,6 +39,7 @@ function waitlistCard(w, holdHours) {
       <div class="o-who order-meta">
         <span><strong>${escapeHtml(w.name)}</strong> · ${escapeHtml(w.email)}</span>
         <span>${escapeHtml(w.ticketType)}${w.ucid ? ` · UCID ${escapeHtml(w.ucid)}` : ""}${w.memberId ? ` · ${escapeHtml(w.memberId)}` : ""}${answers}</span>
+        ${w.note ? `<span><strong>${T.attendeeNote}:</strong> ${escapeHtml(w.note).replace(/\n/g, "<br>")}</span>` : ""}
         ${w.status === "offered" ? `<span>${escapeHtml(T.wlOfferedInfo(w.offeredBy, shortTime(w.offeredAt), w.orderCode))}</span>` : ""}
         ${stale ? `<span class="flag">${escapeHtml(T.wlStale(holdHours))}</span>` : ""}
       </div>

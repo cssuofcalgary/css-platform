@@ -28,6 +28,7 @@ function moneyLines(o) {
 
 /** Chip + "Put back" next to a ticket that was cancelled or invalidated inside an order that is still live. */
 function stoppedTicketMark(o, t) {
+  if (t.status === "disabled") return ` · <span class="pill neutral">${escapeHtml(T.statusDisabled)}</span>`;
   if ((t.status !== "refunded" && t.status !== "cancelled") || (o.status !== "paid" && o.status !== "awaiting")) return "";
   return ` · <span class="pill neutral">${escapeHtml(T.ticketStopped[t.status])}</span> <button class="link" data-act="putback" data-ticket="${t.id}">${T.btnPutBack}</button>`;
 }
@@ -207,9 +208,36 @@ function canDisableTicket(ticket) {
 }
 
 function openSingleTicketDialog(order, ticketId, onSaved) {
+  return setSingleTicketEnabled(order, ticketId, false, onSaved);
+}
+
+const ticketAvailabilityPending = new Set();
+
+/** Disable keeps the registration and its money; cancellation has its own refund dialog below. */
+async function setSingleTicketEnabled(order, ticketId, enabled, onSaved) {
   const ticket = order.tickets.find((t) => t.id === ticketId);
-  if ((order.status !== "paid" && order.status !== "awaiting") || !canDisableTicket(ticket)) return showToast(T.disableTicketUnavailable);
-  openInvalidateDialog(order, { ticketId, onSaved });
+  if ((order.status !== "paid" && order.status !== "awaiting") || !ticket || (enabled ? ticket.status !== "disabled" : !canDisableTicket(ticket))) return showToast(T.disableTicketUnavailable);
+  if (ticketAvailabilityPending.has(ticketId)) return;
+  ticketAvailabilityPending.add(ticketId);
+  try {
+    const label = enabled ? T.btnEnableTicket : T.btnDisableTicket;
+    if (!(await askConfirm(enabled ? T.confirmEnableTicket(ticket.name, order.code) : T.confirmDisableTicket(ticket.name, order.code), label))) return;
+    const payload = { orderId: order.id, ticketIds: [ticketId], enabled };
+    let reply = await apiOnce("setTicketEnabled", payload);
+    if (!reply.ok && enabled && reply.error === "OVER_CAPACITY") {
+      if (!(await askConfirm(T.restoreOverLimit(reply.message), label))) return;
+      reply = await apiOnce("setTicketEnabled", { ...payload, force: true });
+    }
+    if (!reply.ok) {
+      if (reply.error === "NOT_LOGGED_IN") return handleEventError(reply, $("pay-status"));
+      return showToast(errorText(reply));
+    }
+    eventsState.loaded = false;
+    showToast(enabled ? T.ticketEnabledDone : T.ticketDisabledDone, "success");
+    if (onSaved) onSaved(); else loadOrders();
+  } finally {
+    ticketAvailabilityPending.delete(ticketId);
+  }
 }
 
 function openInvalidateDialog(order, options = {}) {
@@ -219,12 +247,12 @@ function openInvalidateDialog(order, options = {}) {
   invDlg.onSaved = options.onSaved || null;
   invDlg.saving = false;
   const paid = order.status === "paid";
-  $("inv-title").textContent = invDlg.ticketId ? T.disableTicketTitle(order.code) : paid ? T.invTitlePaid(order.code) : T.invTitleUnpaid(order.code);
-  $("inv-intro").textContent = invDlg.ticketId ? T.disableTicketIntro : paid ? T.invIntroPaid : T.invIntroUnpaid;
+  $("inv-title").textContent = paid ? T.invTitlePaid(order.code) : T.invTitleUnpaid(order.code);
+  $("inv-intro").textContent = paid ? T.invIntroPaid : T.invIntroUnpaid;
   $("inv-all").hidden = !!invDlg.ticketId;
   $("inv-partpaid").hidden = paid || !(order.received > 0);
   if (order.received > 0 && !paid) $("inv-partpaid").textContent = T.invIntroPartPaid(dollars(order.received));
-  const live = order.tickets.filter((t) => t.status === "paid" || t.status === "awaiting");
+  const live = order.tickets.filter((t) => t.status === "paid" || t.status === "awaiting" || t.status === "disabled");
   $("inv-tickets").innerHTML = live.filter((t) => !invDlg.ticketId || t.id === invDlg.ticketId).map((t) => `
     <li><label class="check-row pay-order"><input type="checkbox" data-inv="${t.id}" ${t.id === invDlg.ticketId ? "checked" : ""} ${t.checkedInAt ? "disabled" : ""}>
       <span>${escapeHtml(t.name)} · ${escapeHtml(t.ticketType)} ${money(t.price)}${t.status === "awaiting" ? "" : ""}
@@ -245,15 +273,15 @@ function updateInvalidate() {
   const o = invDlg.order;
   const picked = invChosen();
   const paid = o.status === "paid";
-  const live = o.tickets.filter((t) => t.status === "paid" || t.status === "awaiting");
+  const live = o.tickets.filter((t) => t.status === "paid" || t.status === "awaiting" || t.status === "disabled");
   const whole = picked.length === live.length;
-  const paidPicked = picked.filter((t) => t.status === "paid");
+  const paidPicked = picked.filter((t) => t.status === "paid" || (t.status === "disabled" && t.disabledFrom === "paid"));
   const suggested = paid ? paidPicked.reduce((s, t) => s + payCents(t.price), 0) / 100 : (whole ? o.received || 0 : 0);
   const showRefund = suggested > 0 || (paid && picked.length > 0);
   $("inv-refund-box").hidden = !showRefund;
   if (!invDlg.refundEdited) $("inv-refund").value = suggested ? String(suggested) : (showRefund ? "0" : "");
   $("inv-save").disabled = !picked.length;
-  $("inv-save").textContent = invDlg.ticketId ? T.btnDisableTicket : paid ? T.invConfirmPaid(picked.length) : T.invConfirmUnpaid(picked.length, whole);
+  $("inv-save").textContent = paid ? T.invConfirmPaid(picked.length) : T.invConfirmUnpaid(picked.length, whole);
 }
 
 async function submitInvalidate(e) {

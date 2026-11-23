@@ -12,18 +12,18 @@ const TABLES = {
            "capacity", "capacityRule", "status", "entryOpen", "imageFileId", "imageUrl",
            "ticketTypes", "questions", "codePrefix", "createdBy", "createdAt", "updatedBy", "updatedAt",
            "registrationCloses", "archivedAt", "archiveYear", "summary", "waitlist",
-           "mailRegistration", "mailTickets", "mailReminders"],
+           "mailRegistration", "mailTickets", "mailReminders", "announcement"],
   Orders: ["id", "code", "eventId", "payerName", "payerEmail", "etransferName", "total", "status",
            "createdAt", "paidAt", "paidBy", "notes", "remindedAt", "cancelRequestedAt", "cancelRequestedBy", "requestId", "received", "lastWrite"],   // lastWrite stays LAST: see applyWrites_
   Tickets: ["id", "secret", "orderId", "eventId", "name", "email", "ucid", "memberId", "ticketType",
-            "price", "answers", "flag", "status", "checkedInAt", "checkedInBy", "createdAt", "emailedAt"],
+            "price", "answers", "flag", "status", "checkedInAt", "checkedInBy", "createdAt", "emailedAt", "note", "disabledFrom"],
   Emails: ["id", "subject", "title", "subtitle", "intro", "closing", "updatedBy", "updatedAt"],
   Feedback: ["id", "eventId", "memberId", "name", "rating", "comment", "createdAt", "updatedAt"],
   Partners: ["id", "name", "offer", "address", "active", "sort", "createdAt", "createdBy", "updatedAt", "updatedBy"],
   MemberNotes: ["id", "memberId", "year", "text", "createdBy", "createdAt", "removedAt", "removedBy"],
   Redemptions: ["id", "time", "receivedAt", "memberId", "memberName", "partnerId", "partnerName", "offer"],
   Waitlist: ["id", "eventId", "name", "email", "ucid", "memberId", "ticketTypeId", "ticketType", "answers", "status",
-             "createdAt", "offeredAt", "offeredBy", "orderId", "orderCode", "notes", "offerEmail"],
+             "createdAt", "offeredAt", "offeredBy", "orderId", "orderCode", "notes", "offerEmail", "note"],
   // Money owed back to people (see Refunds.js). One row per decision; "returns" lists each time money was handed back.
   Refunds: ["id", "orderId", "orderCode", "eventId", "payerName", "payerEmail", "kind", "ticketIds", "owed", "returns", "status", "reason", "createdAt", "createdBy", "closedAt"],
   // One row per press of a button that records money or registrations, so pressing it again (or a retry) can't record it twice.

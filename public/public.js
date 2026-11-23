@@ -73,6 +73,7 @@ function renderEvent(e) {
   $("page").innerHTML = `
     <a class="back" href="./">${T.allEvents}</a>
     <article class="event">
+      ${eventAnnouncement(e)}
       ${e.imageUrl ? `<img class="hero" src="${escapeAttr(e.imageUrl)}" alt="" onerror="this.remove()">` : ""}
       <h1 class="event-name">${escapeHtml(e.name)}</h1>
       ${e.previewLabel ? `<p class="notice">${escapeHtml(e.previewLabel)}</p>` : ""}
@@ -99,6 +100,12 @@ function renderEvent(e) {
   if (open) open.addEventListener("click", () => showRegisterForm(e));
   const wl = $("open-waitlist");
   if (wl) wl.addEventListener("click", () => showWaitlistForm(e));
+}
+
+/** Organizer text is plain text, escaped before displaying its paragraphs. */
+function eventAnnouncement(e) {
+  const text = String(e.announcement || "").trim();
+  return text ? `<section class="important-note"><h2>${T.announcementTitle}</h2>${paragraphs(text)}</section>` : "";
 }
 
 function registerBlock(e) {
@@ -142,6 +149,8 @@ function showRegisterForm(e, fresh) {
     $("page").replaceChildren(...registerDraft.nodes);   // the same boxes, with everything still typed in them
     guestCount = registerDraft.guestCount;
     registerDraft = null;
+    const announcement = $("registration-announcement");
+    if (announcement) announcement.innerHTML = eventAnnouncement(e);
     updateMemberFields();
     updateQuestions();
     updateTotal();
@@ -156,6 +165,7 @@ function showRegisterForm(e, fresh) {
       <button type="button" class="back link-button" id="back-to-event">${T.cancel}</button>
       <button type="button" class="link-button" id="clear-form">${T.clearForm}</button>
     </div>
+    <div id="registration-announcement">${eventAnnouncement(e)}</div>
     <h1 class="page-title">${escapeHtml(e.name)}</h1>
     <form id="register-form" class="register-form" novalidate>
       <section class="person card-block" data-person="0">
@@ -218,6 +228,7 @@ function showWaitlistForm(e) {
   guestCount = 0;
   $("page").innerHTML = `
     <button class="back link-button" id="back-to-event">${T.cancel}</button>
+    ${eventAnnouncement(e)}
     <h1 class="page-title">${escapeHtml(e.name)}</h1>
     <p class="lead">${T.waitlistIntro}</p>
     <form id="register-form" class="register-form" novalidate>
@@ -303,7 +314,10 @@ function personFields(e, i) {
       ${q.type === "choice"
         ? `<select id="${id(q.id)}" data-q="${escapeAttr(q.id)}"><option value="">${T.choose}</option>${q.options.map((o) => `<option>${escapeHtml(o)}</option>`).join("")}</select>`
         : `<input id="${id(q.id)}" data-q="${escapeAttr(q.id)}" maxlength="300">`}
-      </div>`).join("")}`;
+      </div>`).join("")}
+
+    <label for="${id("note")}">${T.registrationNote}</label>
+    <textarea id="${id("note")}" data-f="note" maxlength="1000" rows="3"></textarea>`;
 }
 
 /** A question can be limited to some ticket types (forTickets). None listed = it is for every ticket. */

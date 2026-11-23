@@ -65,7 +65,7 @@ function readCache(secret) {
 function writeCache(secret, data, qr) {
   try {
     const keep = { ticket: data.ticket, event: data.event, etransferEmail: data.etransferEmail, orderTotal: data.orderTotal, orderReceived: data.orderReceived };   // no cancel or feedback: those need a connection
-    localStorage.setItem(CACHE_PREFIX + secret, JSON.stringify({ savedAt: Date.now(), data: keep, qr: qr || (readCache(secret) || {}).qr || "" }));
+    localStorage.setItem(CACHE_PREFIX + secret, JSON.stringify({ savedAt: Date.now(), data: keep, qr: keep.ticket.status === "paid" ? qr || (readCache(secret) || {}).qr || "" : "" }));
     const all = Object.keys(localStorage).filter((k) => k.startsWith(CACHE_PREFIX)).map((k) => {
       let at = 0; try { at = JSON.parse(localStorage.getItem(k)).savedAt || 0; } catch (e) { /* unreadable: oldest */ }
       return { k, at };
@@ -122,7 +122,8 @@ function render(data, meta = { state: "live" }) {
     checkedin: { stamp: T.stampCheckedIn, cls: "", note: "" },
     awaiting: { stamp: T.stampPending, cls: "pending", note: orderReceived > 0 && orderReceived < orderTotal ? T.ticketPartPaid(money(orderReceived), money(Math.round((orderTotal - orderReceived) * 100) / 100), etransferEmail, ticket.orderCode) : T.ticketAwaiting(money(orderTotal), etransferEmail, ticket.orderCode) },
     refunded: { stamp: T.stampVoid, cls: "void", note: T.ticketRefunded },
-    cancelled: { stamp: T.stampVoid, cls: "void", note: T.ticketCancelled }
+    cancelled: { stamp: T.stampVoid, cls: "void", note: T.ticketCancelled },
+    disabled: { stamp: T.stampDisabled, cls: "void", note: T.ticketDisabled }
   }[status] || { stamp: "", cls: "", note: "" };
   const showQr = ticket.status === "paid";
   $("page").className = "card " + look.cls;   // coloured top edge matches the status

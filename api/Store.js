@@ -63,7 +63,9 @@ function openMemberSheet_() {
 /** record = { field: value } using the Member field names (name, ucid, email, memberId, paid, mailStatus, signedUp, payment...). */
 function appendMemberRow_(book, record) {
   const row = book.header.map(function () { return ""; });
-  Object.keys(record).forEach(function (field) { if (book.columns[field] !== -1) row[book.columns[field]] = record[field]; });
+  Object.keys(record).forEach(function (field) {
+    if (book.columns[field] !== undefined && book.columns[field] !== -1) row[book.columns[field]] = field === "signupAnswers" ? JSON.stringify(record[field] || {}) : record[field];
+  });
   if (book.portalColumn !== -1 && record.memberId) row[book.portalColumn] = MEMBER_PORTAL_URL.replace(/[/]+$/, "") + "/" + encodeURIComponent(record.memberId);
   book.sheet.getRange(book.lastRow + 1, 1, 1, row.length).setValues([row]);
   forgetMembers_();

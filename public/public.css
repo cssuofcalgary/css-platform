@@ -162,11 +162,12 @@ p { line-height: 1.55; }
 .card-block h2 { font-size: 14px; margin-bottom: 4px; }
 .row-between { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
 .register-form label { display: block; font-weight: 700; font-size: 15px; margin: 12px 0 4px; }
-.register-form input:not([type="radio"]), .register-form select {
+.register-form input:not([type="radio"]), .register-form select, .register-form textarea {
   width: 100%; padding: 13px 14px; font: 600 16px var(--serif);
   border: 2px dashed var(--gold); border-radius: 6px; background: var(--paper-deep); color: var(--ink); outline: none; transition: 0.2s;
 }
-.register-form input:focus, .register-form select:focus { border-color: var(--ink); background: #fff; box-shadow: 0 0 0 4px rgba(42, 37, 32, 0.1); }
+.register-form input:focus, .register-form select:focus, .register-form textarea:focus { border-color: var(--ink); background: #fff; box-shadow: 0 0 0 4px rgba(42, 37, 32, 0.1); }
+.register-form textarea { resize: vertical; }
 .register-form select {
   appearance: none; padding-right: 44px;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%237c611f'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'/%3E%3C/svg%3E");
@@ -295,4 +296,7 @@ dialog.ask p { margin: 0 0 16px; font-weight: 600; }
 .my-ticket .state.void { color: #8a7f6a; text-decoration: line-through; }
 
 /* "Keep this page" reminder when an event doesn't email confirmations or tickets */
+.important-note { margin: 0 0 22px; padding: 16px; border: 2px dashed var(--gold); border-radius: 8px; background: var(--paper-light); color: var(--ink); overflow-wrap: anywhere; }
+.important-note h2 { margin: 0 0 8px; font-family: var(--pixel); font-size: 14px; line-height: 1.5; }
+.important-note p { margin: 8px 0 0; }
 .keep-note { padding: 10px 14px; border-radius: 10px; background: color-mix(in srgb, var(--accent, #c8202f) 8%, transparent); border: 1px dashed color-mix(in srgb, var(--accent, #c8202f) 40%, transparent); }

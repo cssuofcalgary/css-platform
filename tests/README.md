@@ -22,9 +22,16 @@ These run the API code (`api/*.js`) in Node with a fake Google (in-memory tables
 | `duplicates.test.js` | repeat signups, shared email addresses, groups, retries, Finance additions, walk-ins and waitlist duplicate checks |
 | `membershipmatch.test.js` | paid-status parsing, fresh membership reads and invalidating both cached copies after edits |
 | `membershipedit.test.js` | manually rechecking stale membership warnings, preserving other flags, permissions and failed reads |
+| `ticketpricing.test.js` | correcting free/member tickets before or after approval, preserving actual payments, collecting differences, disabled tickets and interrupted edits |
 | `signup-validation.test.js` | server UCID/member-code requirements, email typo detection and refusing invalid registrations before writes |
 | `signup-ui.test.js` | browser validation, the member-code exception, actionable email errors and retaining request IDs across retries |
-| `ticket-actions-ui.test.js` | individual disabling from both lists, confirmation, sibling tickets, refund choices, original QR rejection and restoration |
+| `ticket-actions-ui.test.js` | separate disable/enable and cancellation actions, retained registration visibility, and direct $0 confirmation for free orders |
+| `ticketavailability.test.js` | disabled tickets free capacity and waitlist offers, keep payments, reject scans, and safely re-enable or cancel with retry protection |
+| `ticket-status-ui.test.js` | disabled ticket pages and member lists show no QR, old QR copies are cleared, and the door shows Disabled |
+| `eventnotes.test.js` | organizer notes, private attendee comments, draft/public behavior and preserving comments when waitlist places are offered |
+| `announcements-ui.test.js` | Important Note placement, safe text rendering, optional per-person comments and preserving entered comments |
+| `membershipform.test.js` | configurable membership questions, admin access, required/choice validation, original-answer snapshots and older sheets |
+| `membershipform-ui.test.js` | Members question editor, stable question IDs, error handling and safe display of signup answers |
 | `retry.test.js` | pressing a button twice or a retry: Add registration, Mark paid, waitlist offers, e-transfers, refunds owed and money returned give one record and the same answer (answer lost, busy email step, stopped halfway) |
 | `membership.test.js` | the membership year (September to August), the membership fee in Settings and where it shows |
 | `memberchanges.test.js` | shared member notes, author/time, sign-in and door permissions, successful/failed card sends, a row moving during a send, cached card status, and the different contents of Awaiting payment and Not paid |
@@ -52,6 +59,7 @@ node tests/feedback.test.js
 node tests/duplicates.test.js
 node tests/membershipmatch.test.js
 node tests/membershipedit.test.js
+node tests/ticketpricing.test.js
 node tests/signup-validation.test.js
 node tests/signup-ui.test.js
 node tests/ticket-actions-ui.test.js
@@ -64,9 +72,15 @@ node tests/eventedit.test.js
 node tests/members.test.js
 node tests/memberchanges.test.js
 node tests/emailhistory.test.js
+node tests/ticketavailability.test.js
+node tests/ticket-status-ui.test.js
+node tests/eventnotes.test.js
+node tests/announcements-ui.test.js
+node tests/membershipform.test.js
+node tests/membershipform-ui.test.js
 ```
 
-Each prints PASS/FAIL lines and exits with an error if anything fails. Run all 29 suites before a deploy:
+Each prints PASS/FAIL lines and exits with an error if anything fails. Run all 36 suites before a deploy:
 
 ```bash
 for f in tests/*.test.js; do node "$f"; done

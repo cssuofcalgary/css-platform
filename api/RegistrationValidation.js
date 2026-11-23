@@ -15,3 +15,10 @@ function emailProblem_(email) {
   }
   return "";
 }
+
+/** Optional plain-text notes: preserve line breaks and prevent spreadsheet formula input. */
+function registrationNote_(value, max) {
+  return String(value === undefined || value === null ? "" : value)
+    .replace(/\r\n?/g, "\n").replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, "")
+    .trim().replace(/^[=+\-@'\s]+/, "").slice(0, max || 1000);
+}

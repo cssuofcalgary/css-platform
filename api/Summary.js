@@ -64,8 +64,8 @@ function eventSummary_(eventId, opts) {
     const o = orders[t.orderId] || {};
     return {
       id: t.id, name: t.name, email: t.email, ucid: t.ucid, memberId: t.memberId,
-      ticketType: t.ticketType, price: Number(t.price) || 0, status: t.status, flag: t.flag,
-      answers: t.answers || {}, checkedInAt: t.checkedInAt, checkedInBy: t.checkedInBy,
+      ticketType: t.ticketType, price: Number(t.price) || 0, status: t.status, disabledFrom: t.disabledFrom || "", flag: t.flag,
+      answers: t.answers || {}, note: t.note || "", checkedInAt: t.checkedInAt, checkedInBy: t.checkedInBy,
       createdAt: t.createdAt, emailedAt: t.emailedAt,
       order: {
         id: o.id, code: o.code, status: o.status, total: Number(o.total) || 0,
@@ -79,6 +79,7 @@ function eventSummary_(eventId, opts) {
     switch (opts.filter) {
       case "paid": return a.status === "paid";
       case "awaiting": return a.status === "awaiting";
+      case "disabled": return a.status === "disabled";
       case "inside": return !!a.checkedInAt && !closedStatus(a);
       case "notArrived": return a.status === "paid" && !a.checkedInAt;
       case "flagged": return !!a.flag && !closedStatus(a);
@@ -115,7 +116,8 @@ function eventSummary_(eventId, opts) {
       checkedIn: checkedIn.length,
       notArrived: paid.length - paid.filter(function (t) { return t.checkedInAt; }).length,
       flagged: active.filter(function (t) { return t.flag; }).length,
-      closed: all.length - active.length
+      disabled: all.filter(function (t) { return t.status === "disabled"; }).length,
+      closed: all.filter(closedStatus).length
     },
     spotsTaken: taken,
     spotsLeft: event.capacity ? Math.max(event.capacity - taken, 0) : null,
