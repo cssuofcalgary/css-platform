@@ -34,6 +34,22 @@ const MockApi = (() => {
   const sessionPeople = {};
   const accountHashes = {}, accountVersions = {}, setupTokens = {};
   let peopleLocked = false;
+  async function demoPasswordInput(password, salt) {
+    const encoder = new TextEncoder();
+    const key = await crypto.subtle.importKey("raw", encoder.encode(salt), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+    const digest = new Uint8Array(await crypto.subtle.sign("HMAC", key, encoder.encode(password)));
+    return btoa(String.fromCharCode(...digest));
+  }
+  async function demoHashPassword(password) {
+    const salt = bcrypt.genSaltSync(12);
+    const hash = bcrypt.hashSync(await demoPasswordInput(password, salt.slice(7)), salt);
+    return "$bcrypt-sha256$v=2,t=2b,r=12$" + hash.slice(7, 29) + "$" + hash.slice(29);
+  }
+  async function demoVerifyPassword(password, stored) {
+    const match = stored.match(/^\$bcrypt-sha256\$v=2,t=2b,r=12\$([./A-Za-z0-9]{22})\$([./A-Za-z0-9]{31})$/);
+    return match ? bcrypt.compareSync(await demoPasswordInput(password, match[1]), "$2b$12$" + match[1] + match[2])
+      : !bcrypt.truncates(password) && bcrypt.compareSync(password, stored);
+  }
 
   // ---- Tasks (made-up team and tasks, kept in memory until the page reloads) ----
   const day = (n) => { const d = new Date(new Date().toLocaleDateString("en-CA", { timeZone: "America/Edmonton" }) + "T12:00:00Z"); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
@@ -231,7 +247,7 @@ const MockApi = (() => {
           return demoSignIn(known ? known.name : req.name.trim(), "admin");
         }
         if (known && known.active === false) return { ok: false, error: "WRONG_PASSWORD" };
-        if (known && accountHashes[known.id]) return bcrypt.compareSync(String(req.password || ""), accountHashes[known.id])
+        if (known && accountHashes[known.id]) return await demoVerifyPassword(String(req.password || ""), accountHashes[known.id])
           ? demoSignIn(known.name, "exec", known) : { ok: false, error: "WRONG_PASSWORD" };
         if (req.password !== DEMO_PASSWORD) return { ok: false, error: "WRONG_PASSWORD" };
         if (!known && peopleLocked) return { ok: false, error: "PERSON_NOT_LISTED", message: "Your name isn't on the People list. Ask an admin to add you first." };
@@ -243,13 +259,13 @@ const MockApi = (() => {
         const setup = setupTokens[req.setupToken];
         if (!setup || Date.now() - setup.at > 600000) return { ok: false, error: "PASSWORD_SETUP_EXPIRED", message: "Sign in with the club password again." };
         const password = String(req.password || "");
-        if (password.length < 8 || bcrypt.truncates(password)) return { ok: false, error: "BAD_REQUEST", message: "Use at least 8 characters, up to 72 bytes, for your password." };
+        if (!password) return { ok: false, error: "BAD_REQUEST", message: "Enter a password." };
         if ([DEMO_PASSWORD, DEMO_ADMIN_PASSWORD].includes(password)) return { ok: false, error: "BAD_REQUEST", message: "Choose a password different from the club and settings passwords." };
         let known = findPerson(setup.name);
         if ((setup.id && (!known || setup.id !== known.id)) || (known && (known.active === false || accountHashes[known.id] || accountVersions[known.id] !== setup.version))) return { ok: false, error: "PASSWORD_SETUP_EXPIRED", message: "Your sign-in details changed. Sign in again." };
         if (!known && peopleLocked) return { ok: false, error: "PERSON_NOT_LISTED", message: "Ask an admin to add your name first." };
         if (!known) { addPerson(setup.name); known = findPerson(setup.name); }
-        accountHashes[known.id] = bcrypt.hashSync(password, 12);
+        accountHashes[known.id] = await demoHashPassword(password);
         accountVersions[known.id] = Math.random().toString(36);
         delete setupTokens[req.setupToken];
         return demoSignIn(known.name, "exec", known);

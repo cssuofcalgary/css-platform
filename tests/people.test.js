@@ -47,13 +47,12 @@ ok(attempt(`personalLogin_('wrong','Kevin B')`).error === "WRONG_PASSWORD", "fir
 const setup = run(`personalLogin_('club-test','kevin b')`);
 ok(setup.needsPasswordSetup && setup.setupToken && !setup.token && setup.name === "Kevin B", "the club password opens password setup, without granting a portal session");
 ok(attempt(`requireSession_('${setup.setupToken}')`).error === "NOT_LOGGED_IN", "the setup token cannot access the portal");
-ok(attempt(`finishExecSetup_('${setup.setupToken}','short')`).error === "BAD_REQUEST", "short personal passwords are refused");
-ok(attempt(`finishExecSetup_('${setup.setupToken}','${"界".repeat(25)}')`).error === "BAD_REQUEST", "passwords that exceed bcrypt's UTF-8 limit are refused");
+ok(attempt(`finishExecSetup_('${setup.setupToken}','')`).error === "BAD_REQUEST", "an empty personal password is refused");
 const configured = run(`finishExecSetup_('${setup.setupToken}','private-pass-1')`);
 ok(configured.ok && configured.role === "exec" && configured.token, "saving the new password signs the exec in");
 ok(run(`requireSession_('${configured.token}').name`) === "Kevin B", "a personal session can access signed-in actions");
 ok(attempt(`route_({action:'saveSettings',token:'${configured.token}',settings:{peopleLocked:false}})`).error === "ADMIN_ONLY", "a signed-in listed exec cannot change the list lock");
-ok(run(`/^\\$2[aby]\\$12\\$/.test(taskTeamByName_('Kevin B').passwordHash)`), "the sheet stores a bcrypt hash at cost 12");
+ok(run(`/^\\$bcrypt-sha256\\$v=2,t=2b,r=12\\$/.test(taskTeamByName_('Kevin B').passwordHash)`), "the sheet stores a versioned bcrypt-sha256 hash at cost 12");
 ok(run(`JSON.stringify(taskTeam_()).indexOf('passwordHash') < 0 && JSON.stringify(__logs).indexOf('private-pass-1') < 0`), "People replies and Activity never expose passwords or hashes");
 ok(run(`taskTeam_().find(p => p.name === 'Kevin B').passwordSet`) === true, "admins see only whether a password has been set");
 ok(attempt(`finishExecSetup_('${setup.setupToken}','other-pass')`).error === "PASSWORD_SETUP_EXPIRED", "a used setup token cannot change the password again");
@@ -91,5 +90,15 @@ for (let i = 0; i < 30; i++) attempt(`personalLogin_('bad','Locked Test')`);
 ok(attempt(`personalLogin_('club-test','Locked Test')`).error === "TOO_MANY_TRIES", "too many wrong attempts temporarily block that name");
 ok(run(`personalLogin_('private-pass-2','Kevin B').ok`), "another person's failed attempts do not block a working account");
 ok(run("__held") === false, "all locks are released");
+
+// Personal passwords have no minimum or maximum character count. No long-password truncation.
+ok(run(`verifyExecPassword_('password', '$bcrypt-sha256$v=2,t=2b,r=12$n79VH.0Q2TMWmt3Oqt9uku$Kq4Noyk3094Y2QlB8NdRT8SvGiI4ft2')`), "password hashing matches the published Passlib v2 test vector");
+const shortSetup = run(`personalLogin_('club-test','Short Password Test')`);
+ok(run(`finishExecSetup_('${shortSetup.setupToken}','x').ok && personalLogin_('x','Short Password Test').ok`), "a one-character password can be set and used to sign in");
+const longSetup = run(`personalLogin_('club-test','Long Password Test')`);
+const longPassword = '界'.repeat(100) + '😀'.repeat(50) + ' ending';
+ok(run(`finishExecSetup_('${longSetup.setupToken}',${JSON.stringify(longPassword)}).ok && personalLogin_(${JSON.stringify(longPassword)},'Long Password Test').ok`), "long Unicode passwords can be set and used to sign in");
+ok(attempt(`personalLogin_(${JSON.stringify(longPassword + ' changed')},'Long Password Test')`).error === "WRONG_PASSWORD", "characters beyond bcrypt's old 72-byte boundary still count");
+ok(run(`verifyExecPassword_('old-test-password', execPasswordLibrary_().hashSync('old-test-password', 12))`), "passwords created before this update still work");
 console.log(fails ? `\n${fails} FAILED` : "\nALL PASSED");
 process.exit(fails ? 1 : 0);

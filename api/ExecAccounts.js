@@ -14,6 +14,33 @@ function execPasswordLibrary_() {
   return bcrypt;
 }
 
+// Passlib's bcrypt-sha256 v2 format: salt-keyed HMAC prevents bcrypt truncating long passwords.
+// https://passlib.readthedocs.io/en/stable/lib/passlib.hash.bcrypt_sha256.html
+function execPasswordInput_(password, salt) {
+  return Utilities.base64Encode(Utilities.computeHmacSha256Signature(password, salt));
+}
+
+function hashExecPassword_(password) {
+  const library = execPasswordLibrary_();
+  const salt = library.genSaltSync(EXEC_BCRYPT_COST);
+  const hashed = library.hashSync(execPasswordInput_(password, salt.slice(7)), salt);
+  return "$bcrypt-sha256$v=2,t=2b,r=" + EXEC_BCRYPT_COST + "$" + hashed.slice(7, 29) + "$" + hashed.slice(29);
+}
+
+function verifyExecPassword_(password, stored) {
+  if (!password) return false;
+  const match = String(stored || "").match(/^\$bcrypt-sha256\$v=2,t=2b,r=(\d{1,2})\$([./A-Za-z0-9]{22})\$([./A-Za-z0-9]{31})$/);
+  const library = execPasswordLibrary_();
+  if (match) {
+    const cost = Number(match[1]);
+    if (cost < 4 || cost > 16) return false;
+    const hash = "$2b$" + ("0" + cost).slice(-2) + "$" + match[2] + match[3];
+    return library.compareSync(execPasswordInput_(password, match[2]), hash);
+  }
+  // Existing accounts keep working with their original bcrypt hashes.
+  return !library.truncates(password) && library.compareSync(password, String(stored || ""));
+}
+
 function execLoginAttempt_(name) {
   const cache = CacheService.getScriptCache();
   const key = loginFailKey_(name);
@@ -39,7 +66,7 @@ function personalLogin_(password, name) {
   if (person && !isOn_(person.active)) return execWrongPassword_(attempt);
   if (person && person.passwordHash) {
     const expectedHash = person.passwordHash, expectedVersion = person.authVersion;
-    if (typed.length > 72 || execPasswordLibrary_().truncates(typed) || !execPasswordLibrary_().compareSync(typed, String(person.passwordHash))) return execWrongPassword_(attempt);
+    if (!verifyExecPassword_(typed, person.passwordHash)) return execWrongPassword_(attempt);
     const reply = withLock_(function () {
       delete DB_.rows["Team"];
       const fresh = readRows_("Team").filter(function (p) { return p.id === person.id; })[0];
@@ -65,10 +92,10 @@ function finishExecSetup_(setupToken, password) {
   if (!raw) throw new ApiError_("PASSWORD_SETUP_EXPIRED", "Sign in with the club password again to set your password.");
   const setup = JSON.parse(raw);
   const typed = typeof password === "string" ? password : "";
-  if (typed.length < 8 || typed.length > 72 || execPasswordLibrary_().truncates(typed)) throw new ApiError_("BAD_REQUEST", "Use at least 8 characters, up to 72 bytes, for your password.");
+  if (!typed) throw new ApiError_("BAD_REQUEST", "Enter a password.");
   const config = getConfig_();
   if (typed === config.password || typed === config.adminPassword) throw new ApiError_("BAD_REQUEST", "Choose your own password, different from the club and settings passwords.");
-  const hash = execPasswordLibrary_().hashSync(typed, EXEC_BCRYPT_COST);
+  const hash = hashExecPassword_(typed);
   const reply = withLock_(function () {
     if (!cache.get(key)) throw new ApiError_("PASSWORD_SETUP_EXPIRED", "Sign in with the club password again.");
     delete DB_.rows["Team"];

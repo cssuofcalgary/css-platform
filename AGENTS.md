@@ -82,7 +82,7 @@ git add <files> && git commit -m "…" && git push origin main
 
 ## Product decisions already made (don't reopen unless asked)
 - Execs set a personal password after their first sign-in with the club password. Settings → People can bulk-add names, lock registration to listed active execs, and reset a person's password without revealing it. The settings password remains the admin recovery sign-in. Door sign-in is unchanged.
-- Passwords are bcrypt hashes (vendored bcryptjs 3.0.3 in `api/Bcrypt.js`; license in `api/Bcrypt-LICENSE.txt`); never return or log passwords or hashes. Password resets and deactivation revoke that person's sessions.
+- Personal passwords may have any nonzero length. Store them using bcrypt-sha256 v2 (salt-keyed HMAC-SHA256, then bcrypt cost 12; existing plain bcrypt hashes remain valid). Vendored bcryptjs 3.0.3 is in `api/Bcrypt.js`, with its license in `api/Bcrypt-LICENSE.txt`. Never return or log passwords or hashes. Resets and deactivation revoke that person's sessions.
 - New email defaults apply to all upcoming events. Refunds work per person. Old refunded orders show "return not recorded" in grey. The full payment-exception workflow exists.
 - Offline ticket copy, help-desk alerts, scan log, undo for volunteers (own check-in, 10 minutes) are in.
 

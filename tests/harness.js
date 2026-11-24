@@ -13,6 +13,7 @@ const ctx = {
     formatDate: (d, tz, fmt) => { const x = new Date(d); const p = (n) => String(n).padStart(2, "0");
       return fmt.replace("yyyy", x.getUTCFullYear()).replace("MM", p(x.getUTCMonth() + 1)).replace("dd", p(x.getUTCDate())).replace("HH", p(x.getUTCHours())).replace("mm", p(x.getUTCMinutes())).replace("'T'", "T").replace("h:mm a", "x").replace("u", "3"); },
     base64EncodeWebSafe: (s) => Buffer.from(String(s)).toString("base64url"),
+    base64Encode: (bytes) => Buffer.from(bytes).toString("base64"),
     computeHmacSha256Signature: (a, b) => [...crypto.createHmac("sha256", b).update(a).digest()],
     sleep() {}, newBlob() {}, parseDate: (s) => new Date(s.replace(" ", "T") + ":00Z")
   },
