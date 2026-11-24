@@ -41,5 +41,17 @@ ok(/Unpaid Night/.test(text) && /Refund Night/.test(text), "the health check nam
 run(`TBL.Events.push(ev("A", "Old A", "2020-02-01"), ev("B", "Old B", "2020-02-02")); __archived = []; archiveOldEvents_();`);
 ok(run("__archived.slice().sort().join()") === "A,B", "held events don't block other old events: " + run("__archived.join()"));
 
+// An open NEEDS_REVIEW item also holds an old event until Finance presses Done
+run(`
+  TBL.Events = [ev("REV", "Card Review Night", "2020-03-01")];
+  TBL.Orders.push({ id:"OREV", eventId:"REV", status:"cancelled", total:0, received:"15" });
+  TBL.Requests = [{ id:"confirmCardPayment:OREV:PAY1", action:"confirmCardPayment", status:"done", createdAt:new Date().toISOString(), doneAt:new Date().toISOString(), reply:{ ok:false, error:"NEEDS_REVIEW", conflicts:["OREV"], message:"Check card payment" } }];
+`);
+ok(run("moneyOpen_(findEvent_(function (e) { return e.id === 'REV'; }))") === true, "an open NEEDS_REVIEW request holds the event from archiving");
+run(`TBL.Requests[0].doneAt = TBL.Requests[0].createdAt = "2020-01-01T00:00:00Z";`);
+ok(run("moneyOpen_(findEvent_(function (e) { return e.id === 'REV'; }))") === true, "an unresolved review still blocks archiving after 60 days");
+run(`dismissReview_({ name:"Fin", role:"exec" }, "confirmCardPayment:OREV:PAY1");`);
+ok(run("moneyOpen_(findEvent_(function (e) { return e.id === 'REV'; }))") === false, "once Finance marks the review Done, the event can archive");
+
 console.log(fails ? "\n" + fails + " FAILED" : "\nALL PASSED");
 process.exit(fails ? 1 : 0);

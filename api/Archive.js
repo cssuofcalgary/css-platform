@@ -319,11 +319,18 @@ function deleteEvent_(session, eventId, confirmName, force) {
  * Archives events more than 30 days old, and finishes any half-done archive (an event marked archived whose
  * rows are still in the live sheet, for example after a crash or a late sign-up). A few events per run.
  */
-/** Money still to sort out: an unpaid or part-paid order, or a refund still owed. The nightly job leaves such an event live, so Finance can finish it. */
+/** Money still to sort out: an unpaid or part-paid order, a refund still owed, or an open payment review. The nightly job leaves such an event live, so Finance can finish it. */
 function moneyOpen_(event) {
-  if (readRows_("Orders").some(function (o) { return o.eventId === event.id && o.status === "awaiting"; })) return true;
+  const orders = readRows_("Orders").filter(function (o) { return o.eventId === event.id; });
+  if (orders.some(function (o) { return o.status === "awaiting"; })) return true;
   const refunds = refundsByOrder_(event.id);
-  return Object.keys(refunds).some(function (id) { return refunds[id].some(function (v) { return v.remaining > 0; }); });
+  if (Object.keys(refunds).some(function (id) { return refunds[id].some(function (v) { return v.remaining > 0; }); })) return true;
+  const orderIds = {};
+  orders.forEach(function (o) { orderIds[o.id] = true; });
+  return readRows_("Requests").some(function (r) {
+    if (r.status !== "done" || !r.reply || r.reply.error !== "NEEDS_REVIEW") return false;
+    return (Array.isArray(r.reply.conflicts) ? r.reply.conflicts : []).some(function (id) { return orderIds[id]; });
+  });
 }
 
 function archiveOldEvents_() {

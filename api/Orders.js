@@ -224,6 +224,8 @@ function ticketRowsFor_(order, people, now) {
 function registrationReply_(order, tickets, etransferEmail, event) {
   const needsReview = Number(order.total) === 0 && /Requires exec verification/.test(order.notes || "");
   const mails = eventMails_(event);
+  const cardOn = cardEnabled_();
+  const quote = cardOn && !needsReview && order.status === "awaiting" && cents_(order.total) > 0 ? cardQuote_(cents_(order.total)) : { chargeCents: 0, feeCents: 0 };
   return {
     ok: true,
     // What this event will email, so the page can say so (and tell people to keep the page when nothing is emailed).
@@ -231,7 +233,9 @@ function registrationReply_(order, tickets, etransferEmail, event) {
     order: { code: order.code, total: Number(order.total) || 0, status: order.status },
     needsReview: needsReview,
     etransferEmail: etransferEmail,
-    cardEnabled: cardEnabled_(),   // the ticket page may offer "Pay by card" (Square.js)
+    cardEnabled: cardOn,   // the ticket page may offer "Pay by card" (Square.js)
+    cardTotal: dollars_(quote.chargeCents),
+    cardFee: dollars_(quote.feeCents),
     tickets: tickets.map(function (t) {
       return { name: t.name, ticketType: t.ticketType, price: Number(t.price) || 0, flag: t.flag, page: needsReview ? "" : "ticket.html?t=" + t.secret };
     })

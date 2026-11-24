@@ -12,7 +12,6 @@
  */
 
 const ATTENTION_MAX_PER_KIND = 30;
-const REVIEW_DAYS = 60;   // a "check this order" older than this is assumed sorted out
 
 function attentionList_() {
   const items = [];
@@ -23,9 +22,8 @@ function attentionList_() {
   const eventName = function (id) { return events[id] ? events[id].name : ""; };
 
   // ---- Payments that couldn't be finished safely
-  const since = Date.now() - REVIEW_DAYS * 86400000;
   readRows_("Requests").filter(function (r) {
-    return r.status === "done" && r.reply && r.reply.error === "NEEDS_REVIEW" && Date.parse(r.doneAt || r.createdAt) >= since;
+    return r.status === "done" && r.reply && r.reply.error === "NEEDS_REVIEW";
   }).slice(-ATTENTION_MAX_PER_KIND).reverse().forEach(function (r) {
     const ids = Array.isArray(r.reply.conflicts) ? r.reply.conflicts : [];
     const first = orders[ids[0]] || {};

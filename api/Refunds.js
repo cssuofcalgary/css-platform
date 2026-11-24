@@ -9,7 +9,7 @@
  * records the return. Orders keep `received` (what actually arrived); `total` is what the still-valid tickets cost.
  */
 
-const REFUND_METHODS = ["e-transfer", "cash", "other"];
+const REFUND_METHODS = ["e-transfer", "card", "cash", "other"];
 const REFUND_MAX = 5000;
 
 function cents_(n) { return Math.round((Number(n) || 0) * 100); }
@@ -185,7 +185,7 @@ function recordRefund_(session, req) {
   req = req || {};
   const unknown = req.unknown === true;
   const method = unknown ? "unknown" : String(req.method || "");
-  if (!unknown && REFUND_METHODS.indexOf(method) === -1) throw new ApiError_("BAD_REQUEST", "Choose how the money was returned: e-transfer, cash or other.");
+  if (!unknown && REFUND_METHODS.indexOf(method) === -1) throw new ApiError_("BAD_REQUEST", "Choose how the money was returned: e-transfer, card, cash or other.");
   let date = clip_(req.date, 10);
   if (!unknown) {
     if (!date) date = todayEdmonton_();

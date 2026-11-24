@@ -79,6 +79,7 @@ const STRINGS = {
     statusHeading: "Payment status",
     statusWaiting: "Waiting for payment",
     payByCard: "Pay by card",
+    payByCardFee: (total, fee) => `Pay by card (${total} incl. ${fee} fee)`,
     payByEtransfer: "Pay by Interac e-transfer",
     cardOpening: "Opening card payment…",
     cardFailed: "We couldn't open card payment. Please try again, or pay by e-transfer.",

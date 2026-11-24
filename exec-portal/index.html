@@ -626,6 +626,11 @@
         <input id="set-card-location" maxlength="64" autocomplete="off" spellcheck="false">
         <label for="set-card-token" data-t="setCardToken"></label>
         <input id="set-card-token" type="password" maxlength="300" autocomplete="new-password" spellcheck="false">
+        <label id="set-card-fee-toggle" class="check-row" hidden><input id="set-card-pass-fee" type="checkbox"> <span data-t="setCardPassFee"></span></label>
+        <div id="set-card-fee-fields" class="grid-2" hidden>
+          <div><label for="set-card-fee-pct" data-t="setCardFeePct"></label><input id="set-card-fee-pct" inputmode="decimal" maxlength="6" autocomplete="off"></div>
+          <div><label for="set-card-fee-fixed" data-t="setCardFeeFixed"></label><input id="set-card-fee-fixed" inputmode="decimal" maxlength="6" autocomplete="off"></div>
+        </div>
         <p id="set-card-result" class="muted small"></p>
         <div class="row-buttons">
           <button type="submit" id="set-card-save" class="primary" data-t="setCardSave"></button>
@@ -852,7 +857,7 @@
       <div class="grid-2">
         <div><label for="rf-amount" data-t="rfAmount"></label><input id="rf-amount" inputmode="decimal" autocomplete="off"></div>
         <div><label for="rf-method" data-t="rfMethod"></label>
-          <select id="rf-method"><option value="e-transfer">E-transfer</option><option value="cash">Cash</option><option value="other">Something else</option></select></div>
+          <select id="rf-method"><option value="e-transfer">E-transfer</option><option value="card">Card (Square)</option><option value="cash">Cash</option><option value="other">Something else</option></select></div>
       </div>
       <div class="grid-2">
         <div><label for="rf-date" data-t="rfDate"></label><input id="rf-date" type="date"></div>
@@ -1291,8 +1296,8 @@
     </form>
   </dialog>
   <script src="config.js?v=0.3.7"></script>
-  <script src="strings.js?v=1.15.6"></script>
-  <script src="mock.js?v=0.8.5"></script>
+  <script src="strings.js?v=1.15.7"></script>
+  <script src="mock.js?v=0.8.6"></script>
   <script src="panda.js?v=1.5.1"></script>
   <script src="peekaboo.js?v=1.0.0"></script>
   <script src="app.js?v=1.11.4"></script>
@@ -1303,9 +1308,9 @@
   <script src="payments.js?v=1.10.2"></script>
   <script src="edit.js?v=0.10.1"></script>
   <script src="finance.js?v=1.4.2"></script>
-  <script src="money.js?v=1.1.0"></script>
+  <script src="money.js?v=1.1.1"></script>
   <script src="activity.js?v=0.5.0"></script>
-  <script src="settings.js?v=0.11.3"></script>
+  <script src="settings.js?v=0.11.4"></script>
   <script src="emails.js?v=0.4.0"></script>
   <script src="mailall.js?v=0.3.9"></script>
   <script src="partners.js?v=1.6.2"></script>

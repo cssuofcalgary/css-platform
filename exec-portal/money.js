@@ -330,8 +330,9 @@ function openRefundDialog(order) {
   const owed = open ? open.remaining : order.received || order.total;
   $("rf-owed").textContent = T.rfOwedLine(dollars(owed), order.payerName, order.payerEmail) + (open && open.returned ? " " + T.rfPartLine(dollars(open.returned), dollars(open.remaining)) : "");
   $("rf-intro").textContent = T.rfIntro;
+  const fromCard = order.paidBy === "Square (Card)" || (open && /card:/i.test(open.reason || ""));
   $("rf-amount").value = String(owed);
-  $("rf-method").value = "e-transfer";
+  $("rf-method").value = fromCard ? "card" : "e-transfer";
   $("rf-date").value = localToday();
   $("rf-date").max = localToday();
   $("rf-by").value = state.name || "";

@@ -19,11 +19,14 @@
  *   SQUARE_ACCESS_TOKEN  The Square access token. Secret: never shown, logged or sent to a page.
  *   SQUARE_LOCATION_ID   The Square location the payments go to.
  *   SQUARE_ENV           "sandbox" for Square's test mode. Blank: real payments.
+ *   SQUARE_PASS_FEE      Sandbox prototype only: "true" adds the fee in test mode. Live payments never add a card surcharge.
+ *   SQUARE_FEE_PERCENT   Square's percentage fee when passed to the buyer. Default: 2.9.
+ *   SQUARE_FEE_FIXED     Square's fixed dollar fee when passed to the buyer. Default: 0.30.
  *
  * Set automatically by the system (don't edit): DATA_SHEET_ID, IMAGE_FOLDER_ID.
  */
 
-const API_VERSION = "0.25.0";
+const API_VERSION = "0.25.1";
 const MEMBER_CACHE_SECONDS = 300;   // search data is re-read from the sheet at most every 5 min
 const SESSION_SECONDS = 21600;      // signed out after 6 h without use (the Apps Script cache maximum)
 const SESSION_RENEW_MS = 600000;    // while in use, those 6 h restart at most this often
@@ -31,6 +34,8 @@ const REMINDER_AFTER_HOURS = 48;   // an unpaid order gets a "please pay" remind
 const MAX_FAILED_LOGINS = 30;       // after this many wrong passwords in 10 min, new sign-ins pause for 10 min (people already signed in are unaffected)
 
 const DEFAULT_MEMBERSHIP_FEE = 12;   // until a fee is saved in Settings → Membership
+const DEFAULT_SQUARE_FEE_PERCENT = 2.9;
+const DEFAULT_SQUARE_FEE_FIXED = 0.3;
 
 function getConfig_() {
   const props = PropertiesService.getScriptProperties();
@@ -57,12 +62,21 @@ function squareConfig_() {
   const token = String(props.getProperty("SQUARE_ACCESS_TOKEN") || "").trim();
   const locationId = String(props.getProperty("SQUARE_LOCATION_ID") || "").trim();
   const sandbox = String(props.getProperty("SQUARE_ENV") || "").trim().toLowerCase() === "sandbox";
+  const passRaw = String(props.getProperty("SQUARE_PASS_FEE") || "").trim().toLowerCase();
+  const pctRaw = String(props.getProperty("SQUARE_FEE_PERCENT") || "").trim();
+  const fixRaw = String(props.getProperty("SQUARE_FEE_FIXED") || "").trim();
+  const pct = pctRaw !== "" && isFinite(Number(pctRaw)) && Number(pctRaw) >= 0 && Number(pctRaw) <= 10 ? Number(pctRaw) : DEFAULT_SQUARE_FEE_PERCENT;
+  const fix = fixRaw !== "" && isFinite(Number(fixRaw)) && Number(fixRaw) >= 0 && Number(fixRaw) <= 5 ? Number(fixRaw) : DEFAULT_SQUARE_FEE_FIXED;
   return {
     token: token,
     locationId: locationId,
     environment: sandbox ? "sandbox" : "production",
     base: sandbox ? "https://connect.squareupsandbox.com" : "https://connect.squareup.com",
-    enabled: !!(token && locationId)
+    enabled: !!(token && locationId),
+    // Square Canada does not support card surcharges. Keep the prototype opt-in and sandbox-only.
+    passFee: sandbox && passRaw === "true",
+    feePercent: pct,
+    feeFixed: fix
   };
 }
 

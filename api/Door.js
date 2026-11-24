@@ -186,8 +186,13 @@ function scanCode_(session, eventId, code, atDesk) {
     }
     if (ticket.status === "awaiting") {
       const order = readRows_("Orders").filter(function (o) { return o.id === ticket.orderId; })[0] || {};
-      if (!squareAsked && squareCheckDue_(order)) { squareOrder = order; return null; }   // maybe paid by card: check Square, then decide again
-      return deskResult_("orange", "Not paid yet. Send to the help desk (" + (order.code || "") + ", " + moneyText_(order.total) + ").", person);
+      if (order.status === "paid") {
+        markPaidLocked_({ name: session.name }, order.id, true, true);
+        ticket.status = "paid";
+      } else {
+        if (!squareAsked && squareCheckDue_(order)) { squareOrder = order; return null; }   // maybe paid by card: check Square, then decide again
+        return deskResult_("orange", "Not paid yet. Send to the help desk (" + (order.code || "") + ", " + moneyText_(order.total) + ").", person);
+      }
     }
     if (ticket.checkedInAt) {
       return scanResult_("orange", "Already checked in at " + clockText_(ticket.checkedInAt) + " by " + (ticket.checkedInBy || "someone") + ".", person);

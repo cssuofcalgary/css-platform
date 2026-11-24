@@ -37,7 +37,10 @@ function getSettings_(token) {
       squareConfigured: cardEnabled_(),   // card payments: whether they are on, never the token itself
       squareEnvironment: squareConfig_().environment,
       squareLocationId: squareConfig_().locationId,   // not a secret: it only names the shop
-      squareTokenSet: !!squareConfig_().token
+      squareTokenSet: !!squareConfig_().token,
+      squarePassFee: squareConfig_().passFee,
+      squareFeePercent: squareConfig_().feePercent,
+      squareFeeFixed: squareConfig_().feeFixed
     },
     activeSessions: activeSessions_(token)   // who is online right now (no tokens)
   };
@@ -135,7 +138,8 @@ function saveSettings_(session, token, input) {
   const clearSquare = input.clearSquare === true;
   if (clearSquare) {
     if (squareConfig_().token || squareConfig_().locationId) changed.push("card payments turned off");
-  } else if (input.squareAccessToken !== undefined || input.squareLocationId !== undefined || input.squareEnvironment !== undefined) {
+  } else if (input.squareAccessToken !== undefined || input.squareLocationId !== undefined || input.squareEnvironment !== undefined ||
+             input.squarePassFee !== undefined || input.squareFeePercent !== undefined || input.squareFeeFixed !== undefined) {
     const now = squareConfig_();
     const token = input.squareAccessToken ? String(input.squareAccessToken).trim() : now.token;
     const location = input.squareLocationId !== undefined ? text(input.squareLocationId, 64) : now.locationId;
@@ -143,15 +147,41 @@ function saveSettings_(session, token, input) {
     if (env !== "sandbox" && env !== "production") throw new ApiError_("BAD_REQUEST", "Choose real payments or Square's test mode.");
     if (input.squareAccessToken && !/^[A-Za-z0-9_\-]{20,300}$/.test(token)) throw new ApiError_("BAD_REQUEST", "That access token doesn't look right. Copy it again from Square's Developer Dashboard.");
     if (location && !/^[A-Za-z0-9_\-]{4,64}$/.test(location)) throw new ApiError_("BAD_REQUEST", "That location ID doesn't look right. Copy it again from Square.");
-    const squareChanged = token !== now.token || location !== now.locationId || env !== now.environment;
-    if (squareChanged) {
+    let passFee = now.passFee, feePercent = now.feePercent, feeFixed = now.feeFixed;
+    if (input.squarePassFee !== undefined) {
+      if (typeof input.squarePassFee !== "boolean") throw new ApiError_("BAD_REQUEST", "Choose whether buyers pay the card processing fee.");
+      passFee = input.squarePassFee;
+    }
+    if (input.squareFeePercent !== undefined) {
+      const rawPct = text(input.squareFeePercent, 10).replace(/%\s*$/, "");
+      if (!/^\d{1,2}(\.\d{1,2})?$/.test(rawPct) || Number(rawPct) > 10) throw new ApiError_("BAD_REQUEST", "The card fee percentage should be between 0 and 10, like 2.9.");
+      feePercent = Number(rawPct);
+    }
+    if (input.squareFeeFixed !== undefined) {
+      const rawFix = text(input.squareFeeFixed, 10).replace(/^\$\s*/, "");
+      if (!/^\d(\.\d{1,2})?$/.test(rawFix) || Number(rawFix) > 5) throw new ApiError_("BAD_REQUEST", "The fixed card fee should be between $0 and $5, like 0.30.");
+      feeFixed = Number(rawFix);
+    }
+    if (env !== "sandbox" && input.squarePassFee === true) throw new ApiError_("BAD_REQUEST", "Buyer card fees are only available in test mode. Square Canada does not support card surcharges.");
+    if (env !== "sandbox") passFee = false;
+    const keysChanged = token !== now.token || location !== now.locationId || env !== now.environment;
+    const feeChanged = passFee !== now.passFee || feePercent !== now.feePercent || feeFixed !== now.feeFixed;
+    if (keysChanged || feeChanged) {
       if (!token || !location) throw new ApiError_("BAD_REQUEST", "Card payments need both the access token and the location ID.");
-      testSquareKeys_(token, location, env);   // throws a plain-English error if Square says no
-      updates.SQUARE_ACCESS_TOKEN = token;
-      updates.SQUARE_LOCATION_ID = location;
-      updates.SQUARE_ENV = env === "sandbox" ? "sandbox" : "";
-      changed.push("card payments (Square)");
-      notes = env === "sandbox" ? "Card payments are on in Square's test mode." : "Card payments are on.";
+      if (keysChanged) {
+        testSquareKeys_(token, location, env);   // throws a plain-English error if Square says no
+        updates.SQUARE_ACCESS_TOKEN = token;
+        updates.SQUARE_LOCATION_ID = location;
+        updates.SQUARE_ENV = env === "sandbox" ? "sandbox" : "";
+        changed.push("card payments (Square)");
+        notes = env === "sandbox" ? "Card payments are on in Square's test mode." : "Card payments are on.";
+      }
+      if (feeChanged) {
+        updates.SQUARE_PASS_FEE = passFee ? "true" : "false";
+        updates.SQUARE_FEE_PERCENT = String(feePercent);
+        updates.SQUARE_FEE_FIXED = String(feeFixed);
+        if (!keysChanged) changed.push("card fee settings");
+      }
     }
   }
 
@@ -160,7 +190,7 @@ function saveSettings_(session, token, input) {
   withLock_(function () {
     props.setProperties(updates);
     if (clearDoor) props.deleteProperty("SCANNER_PASSWORD");
-    if (clearSquare) ["SQUARE_ACCESS_TOKEN", "SQUARE_LOCATION_ID", "SQUARE_ENV"].forEach(function (k) { props.deleteProperty(k); });
+    if (clearSquare) ["SQUARE_ACCESS_TOKEN", "SQUARE_LOCATION_ID", "SQUARE_ENV", "SQUARE_PASS_FEE", "SQUARE_FEE_PERCENT", "SQUARE_FEE_FIXED"].forEach(function (k) { props.deleteProperty(k); });
     if (door || clearDoor) {
       props.setProperty("DOOR_SESSION_EPOCH", Utilities.getUuid().slice(0, 8));
       CacheService.getScriptCache().remove("failed_shared_door");
@@ -287,7 +317,7 @@ function healthCheck_(session) {
   if (square.enabled) {
     checks.push({
       name: "Card payments (Square)", ok: true,
-      detail: square.environment === "sandbox" ? "On, in Square's test mode (no real money)." : "On. People can pay by card or e-transfer."
+      detail: square.environment === "sandbox" ? "On, in Square's test mode (no real money)." : (square.passFee ? "On (buyer pays card fee). People can pay by card or e-transfer." : "On. People can pay by card or e-transfer.")
     });
   }
   run("Email allowance", function () {

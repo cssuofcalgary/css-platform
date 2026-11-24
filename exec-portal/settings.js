@@ -68,8 +68,23 @@ function showCardSettings(s) {
   $("set-card-token").value = "";
   $("set-card-token").placeholder = s.squareTokenSet ? T.setCardTokenSaved : "";
   $("set-card-token").dataset.saved = s.squareTokenSet ? "1" : "";
+  const passFee = s.squareEnvironment === "sandbox" && s.squarePassFee === true;
+  $("set-card-pass-fee").checked = passFee;
+  $("set-card-fee-pct").value = s.squareFeePercent !== undefined ? s.squareFeePercent : 2.9;
+  $("set-card-fee-fixed").value = s.squareFeeFixed !== undefined ? Number(s.squareFeeFixed).toFixed(2) : "0.30";
+  updateCardFeeFields();
   $("set-card-off").hidden = !s.squareConfigured && !s.squareTokenSet && !s.squareLocationId;
 }
+
+function updateCardFeeFields() {
+  const sandbox = $("set-card-env").value === "sandbox";
+  if (!sandbox) $("set-card-pass-fee").checked = false;
+  $("set-card-fee-toggle").hidden = !sandbox;
+  $("set-card-fee-fields").hidden = !sandbox || !$("set-card-pass-fee").checked;
+}
+
+$("set-card-env").addEventListener("change", updateCardFeeFields);
+$("set-card-pass-fee").addEventListener("change", updateCardFeeFields);
 
 $("set-card-form").addEventListener("submit", async (e) => {
   e.preventDefault();
@@ -79,7 +94,16 @@ $("set-card-form").addEventListener("submit", async (e) => {
     result.textContent = T.setCardNeedToken;
     return;
   }
-  const fields = { squareEnvironment: $("set-card-env").value, squareLocationId: $("set-card-location").value.trim() };
+  const passFee = $("set-card-env").value === "sandbox" && $("set-card-pass-fee").checked;
+  const fields = {
+    squareEnvironment: $("set-card-env").value,
+    squareLocationId: $("set-card-location").value.trim(),
+    squarePassFee: passFee
+  };
+  if (passFee) {
+    fields.squareFeePercent = $("set-card-fee-pct").value.trim();
+    fields.squareFeeFixed = $("set-card-fee-fixed").value.trim();
+  }
   if ($("set-card-token").value.trim()) fields.squareAccessToken = $("set-card-token").value.trim();
   if (await saveSettings(fields, "set-card-result", $("set-card-save"))) {
     const msg = result.textContent;

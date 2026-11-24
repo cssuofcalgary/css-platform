@@ -309,12 +309,14 @@ function sendReminders_(session, eventId, dryRun) {
  * registration: refused when the event has no room, unless Finance confirms (`force`). Nothing is emailed.
  */
 function restoreOrder_(session, orderId, force) {
-  return withIntakeAndScriptLock_(function () {
+  const out = withIntakeAndScriptLock_(function () {
     delete DB_.rows["Orders"]; delete DB_.rows["Tickets"]; delete DB_.rows["Refunds"]; delete DB_.rows["Events"];
     const order = readRows_("Orders").filter(function (o) { return o.id === orderId; })[0];
     if (!order) throw new ApiError_("NOT_FOUND", "Order not found.");
     return restoreLocked_(session, order, force);
   });
+  if (out.status === "paid") emailsAfterSave_(orderId);
+  return out;
 }
 
 /** The part of "restore" that changes data. Call it while holding the lock. */
@@ -330,27 +332,35 @@ function planRestoreOrder_(session, order, force) {
     });
     if (!tickets.length) throw new ApiError_("BAD_REQUEST", "No tickets can be restored. Tickets whose refunds were returned need a new registration.");
 
-    // An untouched ticket refund can be undone back to PAID. Tickets tied to any returned money were excluded above.
+    // An untouched ticket refund (or untouched late payment on a cancelled order) can be undone back to PAID when it covers the total.
     const ticketIds = tickets.map(function (t) { return t.id; });
-    const open = refunds.filter(function (r) { return r.status === "owed" && (r.ticketIds || []).length && r.ticketIds.every(function (id) { return ticketIds.indexOf(id) !== -1; }); });
-    const returnedSome = open.some(function (r) { return refundView_(r).returned > 0; });
-    const undoPaid = order.status === "refunded" && open.length > 0 && !returnedSome;
+    const ticketOpen = refunds.filter(function (r) { return r.status === "owed" && (r.ticketIds || []).length && r.ticketIds.every(function (id) { return ticketIds.indexOf(id) !== -1; }); });
+    const lateOpen = order.status === "cancelled" ? refunds.filter(function (r) { return r.status === "owed" && r.kind === "late payment" && !(r.ticketIds || []).length && refundView_(r).returned === 0; }) : [];
+    const waive = lateOpen.slice();
+    const total = readRows_("Tickets").filter(function (t) { return t.orderId === order.id && (retainedTicket_(t) || ticketIds.indexOf(t.id) !== -1); })
+      .reduce(function (sum, t) { return sum + cents_(t.price); }, 0);
+    const returnedSome = ticketOpen.some(function (r) { return refundView_(r).returned > 0; });
+    let undoPaid = order.status === "refunded" && ticketOpen.length > 0 && !returnedSome;
+    if (undoPaid) Array.prototype.push.apply(waive, ticketOpen);
+    else if (lateOpen.length) {
+      const freedCents = lateOpen.reduce(function (sum, r) { return sum + cents_(refundView_(r).remaining); }, 0);
+      if (availableReceivedCents_(order) + freedCents >= total && total > 0) undoPaid = true;
+    }
 
     const was = order.status;
     const back = undoPaid ? "paid" : "awaiting";
     const returning = tickets.map(function (t) { return Object.assign({}, t, { status: back }); });
     assertRestoredTickets_(event, returning, force);
-    const total = readRows_("Tickets").filter(function (t) { return t.orderId === order.id && (retainedTicket_(t) || ticketIds.indexOf(t.id) !== -1); })
-      .reduce(function (sum, t) { return sum + cents_(t.price); }, 0);
+    const now = new Date().toISOString();
     const change = {
       total: dollars_(total), received: String(receivedOf_(order)),
       status: back, remindedAt: "", cancelRequestedAt: "", cancelRequestedBy: "",
       notes: [order.notes, "restored from " + was + " by " + session.name + (undoPaid ? " (the money was never returned, so it is paid again)" : "")].filter(Boolean).join(" | ")
     };
+    if (undoPaid && !order.paidAt) change.paidAt = now;
+    if (undoPaid && !order.paidBy) change.paidBy = squarePaymentIds_(order).length ? SQUARE_PAID_BY : session.name;
     const writes = tickets.map(function (t) { return { table: "Tickets", id: t.id, set: { status: back }, was: { status: t.status } }; });
-    if (undoPaid) {
-      open.forEach(function (r) { writes.push({ table: "Refunds", id: r.id, set: { status: "waived", reason: [r.reason, "order restored by " + session.name].filter(Boolean).join(" | "), closedAt: new Date().toISOString() }, was: { status: r.status } }); });
-    }
+    waive.forEach(function (r) { writes.push({ table: "Refunds", id: r.id, set: { status: "waived", reason: [r.reason, "order restored by " + session.name].filter(Boolean).join(" | "), closedAt: now }, was: { status: r.status } }); });
     return { event: event, returning: returning, change: change, writes: writes, was: was, back: back, undoPaid: undoPaid };
 }
 
@@ -701,6 +711,9 @@ function getTicket_(secret) {
     ticket = readRows_("Tickets").filter(function (t) { return t.secret === key; })[0] || ticket;
     order = readRows_("Orders").filter(function (o) { return o.id === ticket.orderId; })[0] || order;
   }
+  const cardOn = cardEnabled_();
+  const dueCents = order.status === "awaiting" ? Math.max(0, cents_(order.total) - availableReceivedCents_(order)) : 0;
+  const quote = cardOn && dueCents > 0 ? cardQuote_(dueCents) : { chargeCents: 0, feeCents: 0 };
   return {
     ok: true,
     ticket: {
@@ -713,7 +726,9 @@ function getTicket_(secret) {
     },
     site: siteInfo_(),
     etransferEmail: getConfig_().etransferEmail,
-    cardEnabled: cardEnabled_(),   // the page may offer "Pay by card" (Square.js)
+    cardEnabled: cardOn,   // the page may offer "Pay by card" (Square.js)
+    cardTotal: dollars_(quote.chargeCents),
+    cardFee: dollars_(quote.feeCents),
     orderTotal: Number(order.total) || 0,
     orderReceived: order.status === "awaiting" ? dollars_(availableReceivedCents_(order)) : 0,   // refund money cannot also pay the outstanding ticket balance
     canGiveFeedback: ticket.status === "paid" && !!ticket.checkedInAt,

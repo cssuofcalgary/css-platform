@@ -12,6 +12,7 @@
 const crypto = require("node:crypto");
 
 const MAX_BODY_BYTES = 256 * 1024;
+const DEFAULT_TIMEOUT_MS = 8500;   // Square requires a response within 10 s; time out cleanly so Square retries instead of hanging
 
 /** True when `signature` is Square's: Base64(HMAC-SHA256(key, notification URL + raw body)), compared in constant time. */
 function verifySignature(rawBody, signature, key, url) {
@@ -23,20 +24,36 @@ function verifySignature(rawBody, signature, key, url) {
   return crypto.timingSafeEqual(a, b);
 }
 
-/** The request body exactly as Square sent it (the signature covers these exact bytes). */
+/**
+ * The request body exactly as Square sent it (the signature covers these exact bytes).
+ * NOTE: Never read `req.body` before calling `readRawBody(req)` — Vercel's lazy `req.body` getter would consume the stream.
+ */
 function readRawBody(req) {
   if (typeof req.rawBody === "string") return Promise.resolve(req.rawBody);
   if (Buffer.isBuffer(req.rawBody)) return Promise.resolve(req.rawBody.toString("utf8"));
+  if (req.readableEnded) return Promise.reject(new Error("body stream already consumed"));
   return new Promise((resolve, reject) => {
     const chunks = [];
     let size = 0;
+    let settled = false;
+    const fail = (err) => {
+      if (settled) return;
+      settled = true;
+      if (typeof req.destroy === "function") try { req.destroy(); } catch (e) { /* ignore */ }
+      reject(err);
+    };
     req.on("data", (chunk) => {
+      if (settled) return;
       size += chunk.length;
-      if (size > MAX_BODY_BYTES) { reject(new Error("too big")); return; }
+      if (size > MAX_BODY_BYTES) { fail(new Error("too big")); return; }
       chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
     });
-    req.on("end", () => resolve(Buffer.concat(chunks).toString("utf8")));
-    req.on("error", reject);
+    req.on("end", () => {
+      if (settled) return;
+      settled = true;
+      resolve(Buffer.concat(chunks).toString("utf8"));
+    });
+    req.on("error", fail);
   });
 }
 
@@ -55,13 +72,15 @@ function send(res, status, body) {
   res.end(JSON.stringify(body));
 }
 
-/** Builds the handler. `deps.fetch` and `deps.env` can be swapped in tests (no network, no real keys). */
+/** Builds the handler. `deps.fetch`, `deps.env` and `deps.timeoutMs` can be swapped in tests (no network, no real keys). */
 function makeHandler(deps) {
   deps = deps || {};
   return async function handler(req, res) {
     const env = deps.env || process.env;
     const doFetch = deps.fetch || globalThis.fetch;
+    const timeoutMs = Number(deps.timeoutMs) > 0 ? Number(deps.timeoutMs) : DEFAULT_TIMEOUT_MS;
     if (req.method !== "POST") return send(res, 405, { ok: false });
+    if (!env.SQUARE_WEBHOOK_SIGNATURE_KEY || !env.SQUARE_WEBHOOK_URL) return send(res, 500, { ok: false });
     let raw;
     try { raw = await readRawBody(req); } catch (e) { return send(res, 400, { ok: false }); }
     const signature = req.headers["x-square-hmacsha256-signature"];
@@ -71,9 +90,12 @@ function makeHandler(deps) {
     const squareOrderId = completedOrderId(event);
     if (!squareOrderId) return send(res, 200, { ok: true, ignored: true });   // another kind of event: nothing to do
     if (!env.API_URL) return send(res, 500, { ok: false });
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
       // Apps Script answers a POST with a redirect to the result: follow it.
       const reply = await doFetch(env.API_URL, {
+        signal: controller.signal,
         method: "POST",
         headers: { "Content-Type": "text/plain;charset=utf-8" },
         body: JSON.stringify({ action: "confirmSquareWebhook", squareOrderId: squareOrderId }),
@@ -85,12 +107,14 @@ function makeHandler(deps) {
       return send(res, 200, { ok: true });
     } catch (e) {
       return send(res, 502, { ok: false });
+    } finally {
+      clearTimeout(timer);
     }
   };
 }
 
 module.exports = makeHandler();
-module.exports.config = { api: { bodyParser: false } };
+module.exports.config = { api: { bodyParser: false } };   // Next.js hint; on plain Vercel functions, avoid reading req.body before readRawBody
 module.exports.makeHandler = makeHandler;
 module.exports.verifySignature = verifySignature;
 module.exports.completedOrderId = completedOrderId;

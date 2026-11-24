@@ -61,7 +61,7 @@ const list = () => run("attentionList_().items");
 const kinds = (k) => list().filter((x) => x.kind === k);
 
 let review = kinds("review");
-ok(review.length === 1 && review[0].codes[0] === "T-1" && review[0].eventName === "TEST EV1" && review[0].what === "payment", "A payment that needs checking is listed with its order code (an old one and a normal one aren't)");
+ok(review.length === 2 && review.every(x => x.codes[0] === "T-1" && x.eventName === "TEST EV1" && x.what === "payment"), "Unresolved payment reviews remain visible even after 60 days; successful payments aren't listed");
 let refunds = kinds("refunds");
 ok(refunds.length === 1 && refunds[0].count === 1 && Number(refunds[0].amount) === 6, "Refunds owed: only what's still to return ($6 of $10), not fully returned ones or archived events");
 let emails = kinds("emails");
@@ -72,7 +72,8 @@ let cards = kinds("card");
 ok(cards.length === 1 && cards[0].id === "CSS001", "Membership cards: paid members whose card is still Pending (not Sent, not blank old rows, not unpaid)");
 
 // ---- The buttons
-ok(fn(`dismissReview_(S, "applyTransfer:abc12345")`).v.ok && kinds("review").length === 0, "Done takes the payment check off the list");
+ok(fn(`dismissReview_(S, "applyTransfer:abc12345")`).v.ok && kinds("review").length === 1, "Done takes only the chosen payment check off the list");
+ok(fn(`dismissReview_(S, "applyTransfer:old12345")`).v.ok && kinds("review").length === 0, "An old unresolved review stays until Finance presses Done");
 ok(run(`TBL.Requests[0].status`) === "reviewed" && run(`TBL.Requests[0].reply.error`) === "NEEDS_REVIEW", "…and keeps the saved answer, so the old press still can't repeat");
 ok(fn(`dismissReview_(S, "nope")`).err === "NOT_FOUND", "Done on something no longer there says so");
 

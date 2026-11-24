@@ -9,8 +9,8 @@ const ok = (cond, msg) => { console.log((cond ? "PASS " : "FAIL ") + msg); if (!
 const fn = (code) => { try { return { ok: true, v: run(code) }; } catch (e) { return { error: e.code || String(e), message: e.message }; } };
 
 const TOKEN = "sq-SECRET-token-do-not-leak-123";
-const squareOn = () => { store.SQUARE_ACCESS_TOKEN = TOKEN; store.SQUARE_LOCATION_ID = "LOC1"; store.SQUARE_ENV = "sandbox"; };
-const squareOff = () => { delete store.SQUARE_ACCESS_TOKEN; delete store.SQUARE_LOCATION_ID; delete store.SQUARE_ENV; };
+const squareOn = () => { store.SQUARE_ACCESS_TOKEN = TOKEN; store.SQUARE_LOCATION_ID = "LOC1"; store.SQUARE_ENV = "sandbox"; store.SQUARE_PASS_FEE = "false"; };
+const squareOff = () => { delete store.SQUARE_ACCESS_TOKEN; delete store.SQUARE_LOCATION_ID; delete store.SQUARE_ENV; delete store.SQUARE_PASS_FEE; delete store.SQUARE_FEE_PERCENT; delete store.SQUARE_FEE_FIXED; };
 const replies = [];   // every reply a page got, checked for the token at the end
 const call = (code) => { const r = fn(code); replies.push(r); return r; };
 
@@ -25,7 +25,9 @@ fetchStub.handler = (url, opts) => {
     const body = JSON.parse(opts.payload);
     sq.lastLink = body;
     const id = "SQORD" + String(++sq.n).padStart(4, "0");
-    sq.orders[id] = { id: id, location_id: body.quick_pay.location_id, state: "OPEN", tenders: [] };
+    const locId = body.quick_pay ? body.quick_pay.location_id : (body.order && body.order.location_id);
+    const items = body.order && Array.isArray(body.order.line_items) ? body.order.line_items : [];
+    sq.orders[id] = { id: id, location_id: locId, state: "OPEN", line_items: items, tenders: [] };
     return { code: 200, body: { payment_link: { id: "PL" + sq.n, url: "https://sandbox.square.link/u/" + id, order_id: id } } };
   }
   let m = /\/v2\/orders\/([^/?]+)$/.exec(url);
@@ -273,6 +275,14 @@ function fakeRes() { return { statusCode: 0, headers: {}, body: "", setHeader(k,
   res = fakeRes();
   await busy(fakeReq(body, { "x-square-hmacsha256-signature": sign(body) }), res);
   ok(res.statusCode === 502, "the API was busy: a non-200 so Square sends the notification again later");
+  const hung = hook.makeHandler({
+    timeoutMs: 25,
+    fetch: (_u, opts) => new Promise((_resolve, reject) => { opts.signal.addEventListener("abort", () => reject(new Error("aborted"))); }),
+    env: { SQUARE_WEBHOOK_SIGNATURE_KEY: KEY, SQUARE_WEBHOOK_URL: URL_, API_URL: API }
+  });
+  res = fakeRes();
+  await hung(fakeReq(body, { "x-square-hmacsha256-signature": sign(body) }), res);
+  ok(res.statusCode === 502, "a hung API call is aborted before Square's 10s deadline and returns 502 for retry");
   res = fakeRes();
   const get = fakeReq("", {}); get.method = "GET";
   await handler(get, res);
@@ -338,6 +348,16 @@ function rest() {
   call(`confirmSquareWebhook_({ squareOrderId: "${order("T1").squareOrderId}" })`);
   o = order("T1");
   ok(o.status === "paid" && o.paidBy === "Fin Exec" && o.received === "25" && /paid twice/.test(o.notes), "paid twice (e-transfer, then card): $25 received and flagged as maybe paid twice");
+
+  // The buyer's return page must catch a double payment even if the webhook never arrives.
+  run(`ord("TR1", "EV1", "awaiting", 12.5); tk("TKTTR1A", "TR1", "EV1", "awaiting", 12.5);`);
+  create("TKTTR1A");
+  run(`markOrderPaid_(S, "TR1")`);
+  pay(order("TR1").squareOrderId, 1250);
+  const doubleReturn = confirm("TKTTR1A");
+  confirm("TKTTR1A");
+  ok(doubleReturn.v.paid && order("TR1").received === "25" && run(`TBL.Refunds.filter(r => r.orderId === "TR1" && r.status === "owed").length`) === 1,
+     "returning from Square catches a double payment once without relying on the webhook");
 
   // a payment Square hasn't completed, or in another currency, is never counted
   run(`ord("U1", "EV1", "awaiting", 12.5); tk("TKTU1A", "U1", "EV1", "awaiting", 12.5);`);
@@ -431,6 +451,127 @@ function rest() {
   const line = run(`activitySummary_({ action: "order.paid.card", target: "EV-A1", details: JSON.stringify({ amount: 25, tickets: 2 }) }, {})`);
   ok(line === "a card payment of $25 through Square paid EV-A1 (2 tickets)" && run(`activityGroup_("order.paid.card")`) === "payments", "Activity: " + line);
   ok(run(`activityGroup_("order.card.review")`) === "payments", "card payments to check are under Payments");
+
+  // ================= 9. Buyer pays Square fee + Audit regression checks =================
+  {
+    // Fees are off by default and cannot be enabled for real payments, even through Script Properties.
+    delete store.SQUARE_PASS_FEE;
+    ok(run(`cardQuote_(1000).chargeCents`) === 1000, "an unset fee setting never adds a buyer fee");
+    store.SQUARE_PASS_FEE = "true";
+    delete store.SQUARE_ENV;
+    ok(run(`cardQuote_(1000).chargeCents`) === 1000 && run(`squareConfig_().passFee`) === false, "production ignores an enabled buyer-fee property");
+    store.SQUARE_ENV = "sandbox";
+    const q10 = run(`cardQuote_(1000)`), q25 = run(`cardQuote_(2500)`);
+    ok(q10.dueCents === 1000 && q10.feeCents === 61 && q10.chargeCents === 1061, "$10.00 order grosses up to $10.61 ($0.61 fee)");
+    ok(q25.dueCents === 2500 && q25.feeCents === 106 && q25.chargeCents === 2606, "$25.00 order grosses up to $26.06 ($1.06 fee)");
+
+    run(`ord("BF1", "EV1", "awaiting", 10); tk("TKTBF1A", "BF1", "EV1", "awaiting", 10);`);
+    const regRep = run(`registrationReply_(order("BF1"), [ticket("TKTBF1A")], "pay@css.test", ev("EV1"))`);
+    const tixRep = call(`getTicket_(sec("TKTBF1A"))`).v;
+    ok(regRep.cardTotal === 10.61 && regRep.cardFee === 0.61 && tixRep.cardTotal === 10.61 && tixRep.cardFee === 0.61, "registration and ticket replies expose cardTotal ($10.61) and cardFee ($0.61)");
+
+    const bfCreate = create("TKTBF1A");
+    ok(bfCreate.ok && sq.lastLink.order && sq.lastLink.order.line_items.length === 2 &&
+       sq.lastLink.order.line_items[0].base_price_money.amount === 1000 &&
+       sq.lastLink.order.line_items[1].name === "Online card processing fee" &&
+       sq.lastLink.order.line_items[1].base_price_money.amount === 61, "checkout sends itemized ticket ($10.00) + Online card processing fee ($0.61)");
+
+    pay(order("BF1").squareOrderId, 1061);
+    const bfConf = confirm("TKTBF1A");
+    const bfOrd = order("BF1");
+    ok(bfConf.v.paid === true && bfOrd.status === "paid" && bfOrd.received === "10" && !/more than was owed/.test(bfOrd.notes),
+       "when $10.61 arrives, $10.00 ticket revenue is recorded in received with NO false overpayment warning");
+    const bfLog = logOf("order.paid.card", "EV-BF1")[0];
+    ok(bfLog && bfLog.details.amount === 10 && bfLog.details.fee === 0.61 && bfLog.details.charged === 10.61, "Activity details record ticket amount ($10), fee ($0.61) and total charged ($10.61)");
+
+    // Settings can update fee toggle/rates without re-calling Square when keys didn't change
+    run(`var __cfg2 = getConfig_; getConfig_ = function () { var c = __cfg2(); c.password = "exec-pass-1"; c.adminPassword = "admin-pass-2"; return c; };`);
+    const callsBefore = fetchStub.calls.length;
+    const productionFee = call(`saveSettings_(S, "", { squareEnvironment: "production", squarePassFee: true })`);
+    ok(productionFee.error === "BAD_REQUEST" && store.SQUARE_ENV === "sandbox" && fetchStub.calls.length === callsBefore,
+       "Settings refuses a real-payment surcharge before saving or calling Square");
+    const feeSave = call(`saveSettings_(S, "", { squarePassFee: true, squareFeePercent: "2.8", squareFeeFixed: "0.30" })`);
+    run(`getConfig_ = __cfg2;`);
+    ok(feeSave.ok && feeSave.v.changed.indexOf("card fee settings") !== -1 && fetchStub.calls.length === callsBefore && store.SQUARE_FEE_PERCENT === "2.8",
+       "Settings saves updated card fee rates without extra Square calls");
+    delete store.SQUARE_FEE_PERCENT; delete store.SQUARE_FEE_FIXED;
+    store.SQUARE_PASS_FEE = "false";
+
+    // Audit fix A1: Interrupted ticket confirmation repairs remaining group tickets on retry, webhook, or door scan
+    run(`ord("IR1", "EV1", "awaiting", 25); tk("TKTIR1A", "IR1", "EV1", "awaiting", 12.5); tk("TKTIR1B", "IR1", "EV1", "awaiting", 12.5); __tix.length = 0;`);
+    create("TKTIR1A");
+    pay(order("IR1").squareOrderId, 2500);
+    run(`var __u = updateRow_, __boom = true; updateRow_ = function(tbl, id, ch, h) { if (tbl === "Tickets" && id === "TKTIR1B" && __boom) { __boom = false; throw new Error("Simulated timeout"); } return __u(tbl, id, ch, h); };`);
+    const cut = confirm("TKTIR1A");
+    run(`updateRow_ = __u;`);
+    ok(!cut.ok && order("IR1").status === "paid" && ticket("TKTIR1B").status === "awaiting" && run("__tix.length") === 0, "mid-save timeout left order paid, friend's ticket awaiting, and 0 emails sent");
+    const repConfirm = confirm("TKTIR1B");
+    ok(repConfirm.ok && repConfirm.v.paid === true && ticket("TKTIR1B").status === "paid" && run("__tix.length") === 2, "re-running confirmCardPayment repairs the stuck friend ticket and sends both emails");
+    run(`ticket("TKTIR1B").status = "awaiting";`);
+    sq.down = true;
+    const outageRepair = confirm("TKTIR1B");
+    sq.down = false;
+    ok(outageRepair.ok && outageRepair.v.paid && ticket("TKTIR1B").status === "paid", "a Square outage cannot block repair of an already-paid group ticket");
+
+    // Door scan also repairs a stuck awaiting ticket on a paid order straight away
+    run(`ord("IR2", "EV1", "paid", 25, { paidBy: "Square (Card)", received: "25" }); tk("TKTIR2A", "IR2", "EV1", "paid", 12.5); tk("TKTIR2B", "IR2", "EV1", "awaiting", 12.5);`);
+    const doorRepair = call(`REQ_SCANNER_ = true; scan_(DOOR, "EV1", "https://events.ucalgarycss.ca/ticket.html?t=" + sec("TKTIR2B"), false)`);
+    ok(doorRepair.ok && doorRepair.v.result.color === "green" && ticket("TKTIR2B").status === "paid" && ticket("TKTIR2B").checkedInAt,
+       "door scan repairs a stuck awaiting ticket on a paid order and checks the attendee in green");
+
+    // Audit fix A2: Odd card payments (cancelled order X1 & double-paid order T1 from earlier) created Refunds rows, and Finance can record refund by card
+    const rfX1 = run(`TBL.Refunds.filter(function (r) { return r.orderId === "X1" && r.status === "owed"; })[0]`);
+    const rfT1 = run(`TBL.Refunds.filter(function (r) { return r.orderId === "T1" && r.status === "owed"; })[0]`);
+    ok(rfX1 && rfX1.owed === 12.5 && rfT1 && rfT1.owed === 12.5, "cancelled and double-paid card orders create real Refunds owed rows");
+    const recCard = call(`recordRefund_(S, { refundId: "${rfX1.id}", amount: 12.5, method: "card", date: "2026-10-02", note: "Refunded in Square" })`);
+    ok(recCard.ok && recCard.v.remaining === 0 && recCard.v.refund.status === "returned" && recCard.v.refund.returns[0].method === "card",
+       "Finance can record returning a Square card payment with method 'card'");
+    call(`confirmSquareWebhook_({ squareOrderId: "${order("X1").squareOrderId}" })`);
+    ok(run(`TBL.Refunds.filter(r => r.orderId === "X1").length`) === 1 && run(`availableReceivedCents_(order("X1"))`) === 0,
+       "a notification after recording a refund does not create another refund or make the returned money available");
+
+    // If Sheets fails after counting the payment, the next buyer return must finish the refund without counting twice.
+    run(`ord("OC1", "EV1", "awaiting", 25); tk("TKTOC1A", "OC1", "EV1", "awaiting", 25);`);
+    create("TKTOC1A");
+    pay(order("OC1").squareOrderId, 3000);
+    run(`var __insertCard = insertRow_; insertRow_ = function(tbl, rec) { if (tbl === "Refunds" && rec.orderId === "OC1") throw new Error("Simulated refund save timeout"); return __insertCard(tbl, rec); };`);
+    const refundCut = confirm("TKTOC1A");
+    run(`insertRow_ = __insertCard;`);
+    const refundRetry = confirm("TKTOC1A");
+    confirm("TKTOC1A");
+    const recoveredRefunds = run(`TBL.Refunds.filter(r => r.orderId === "OC1")`);
+    ok(!refundCut.ok && refundRetry.v.paid && order("OC1").received === "30" && recoveredRefunds.length === 1 && recoveredRefunds[0].owed === 5,
+       "retrying a cut-off overpayment creates exactly one $5 refund while keeping $30 received");
+
+    // Restoring a cancelled order whose late card payment has NOT been returned waives the refund and marks it paid
+    run(`ord("XR1", "EV1", "awaiting", 12.5); tk("TKTXR1A", "XR1", "EV1", "awaiting", 12.5);`);
+    create("TKTXR1A");
+    run(`order("XR1").status = "cancelled"; ticket("TKTXR1A").status = "cancelled";`);
+    pay(order("XR1").squareOrderId, 1250);
+    call(`confirmSquareWebhook_({ squareOrderId: "${order("XR1").squareOrderId}" })`);
+    const restLate = call(`restoreOrder_(S, "XR1")`);
+    const rfXR1 = run(`TBL.Refunds.filter(function (r) { return r.orderId === "XR1"; })[0]`);
+    ok(restLate.ok && restLate.v.status === "paid" && order("XR1").status === "paid" && order("XR1").received === "12.5" && ticket("TKTXR1A").status === "paid" && rfXR1.status === "waived",
+       "Restore on a cancelled order with an unreturned late card payment waives the refund and confirms the order as paid without doubling received");
+
+    // Audit fix A3a & A3b: Partial payment reuses the newest open link; a fully refunded completed link is never reused
+    run(`ord("PR1", "EV1", "awaiting", 25); tk("TKTPR1A", "PR1", "EV1", "awaiting", 25);`);
+    const prFirst = create("TKTPR1A");
+    pay(order("PR1").squareOrderId, 1000);
+    const prSecond = create("TKTPR1A");
+    const postsAfterSecond = posts();
+    const prThird = create("TKTPR1A");
+    ok(prSecond.v.url !== prFirst.v.url && prThird.v.url === prSecond.v.url && posts() === postsAfterSecond,
+       "after a partial card payment, the new checkout link for the remaining balance IS reused within 30 minutes");
+
+    run(`ord("RFU1", "EV1", "awaiting", 25); tk("TKTRFU1A", "RFU1", "EV1", "awaiting", 25);`);
+    const rfuFirst = create("TKTRFU1A");
+    const deadSq = order("RFU1").squareOrderId;
+    pay(deadSq, 2500, { refunded_money: { amount: 2500, currency: "CAD" } });
+    sq.orders[deadSq].state = "COMPLETED";
+    const rfuSecond = create("TKTRFU1A");
+    ok(rfuSecond.ok && rfuSecond.v.url !== rfuFirst.v.url, "a Square link whose payment was refunded in full is never handed back as an active link");
+  }
 
   // ================= The token never reaches a page =================
   ok(replies.every((x) => JSON.stringify(x).indexOf(TOKEN) === -1), "the Square token is in none of " + replies.length + " replies");

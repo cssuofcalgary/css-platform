@@ -378,7 +378,8 @@ const MockApi = (() => {
           etransferEmail: "payments@example.com", contactEmail: "club@example.com", instagramUrl: "",
           membershipSheetId: "", membershipTab: "Members", membershipYear: "", membershipFee: 10,
           execPasswordSet: true, adminPasswordSet: true, doorPasswordSet: false, publicSiteUrl: "../public/", peopleLocked,
-          squareConfigured: false, squareEnvironment: "production", squareLocationId: "", squareTokenSet: false
+          squareConfigured: false, squareEnvironment: "production", squareLocationId: "", squareTokenSet: false,
+          squarePassFee: false, squareFeePercent: 2.9, squareFeeFixed: 0.3
         } };
       case "saveSettings":
         if (!sessions.has(req.token)) return { ok: false, error: "NOT_LOGGED_IN" };

@@ -139,6 +139,7 @@ function render(data, meta = { state: "live" }) {
   }[status] || { stamp: "", cls: "", note: "" };
   const showQr = ticket.status === "paid";
   const payByCardShown = status === "awaiting" && !!data.cardEnabled && meta.state === "live";   // needs a connection: never on the saved copy
+  const cardLabel = Number(data.cardFee) > 0 && Number(data.cardTotal) > 0 ? T.payByCardFee(money(data.cardTotal), money(data.cardFee)) : T.payByCard;
   $("page").className = "card " + look.cls;   // coloured top edge matches the status
 
   $("page").innerHTML = `
@@ -153,7 +154,7 @@ function render(data, meta = { state: "live" }) {
       <hr class="perforation">
       ${look.stamp ? `<div class="stamp ${look.cls}">${look.stamp}</div>` : ""}
       ${look.note ? `<p class="ticket-state">${escapeHtml(look.note)}</p>` : ""}
-      ${payByCardShown ? `<button type="button" class="btn pay-card-button" id="pay-card">${T.payByCard}</button>
+      ${payByCardShown ? `<button type="button" class="btn pay-card-button" id="pay-card" data-label="${escapeHtml(cardLabel)}">${escapeHtml(cardLabel)}</button>
       <p class="form-error" id="card-error" role="alert" hidden></p>` : ""}
       ${showQr && !ticket.checkedIn ? `<p class="muted small">${T.showAtDoor}</p>` : ""}
       ${canGiveFeedback ? `
@@ -194,7 +195,7 @@ function render(data, meta = { state: "live" }) {
     data.feedback = reply.feedback;
     $("fb-note").textContent = T.feedbackSaved;
   });
-  if (payByCardShown) $("pay-card").addEventListener("click", payByCard);
+  if (payByCardShown) $("pay-card").addEventListener("click", () => payByCard(cardLabel));
   if ($("cancel-ask")) $("cancel-ask").addEventListener("click", () => askCancel(false));
   if ($("cancel-undo")) $("cancel-undo").addEventListener("click", () => askCancel(true));
 
@@ -232,9 +233,10 @@ function squareCheckoutUrl(value) {
 }
 
 /** Sends the buyer to Square's checkout page. It changes data, so it is sent once and never repeated by itself. */
-async function payByCard() {
+async function payByCard(fallbackLabel) {
   const button = $("pay-card"), error = $("card-error");
   if (button.disabled) return;
+  const idleLabel = fallbackLabel || (button.dataset && button.dataset.label) || button.textContent || T.payByCard;
   button.disabled = true;
   button.textContent = T.cardOpening;
   error.hidden = true;
@@ -244,12 +246,12 @@ async function payByCard() {
   const url = reply.ok ? squareCheckoutUrl(reply.url) : "";
   if (url) {
     // Coming back with the browser's Back button shows this page as it was left: make the button usable again
-    window.addEventListener("pageshow", (ev) => { if (ev.persisted) { button.disabled = false; button.textContent = T.payByCard; } }, { once: true });
+    window.addEventListener("pageshow", (ev) => { if (ev.persisted) { button.disabled = false; button.textContent = idleLabel; } }, { once: true });
     location.href = url;
     return;
   }
   button.disabled = false;
-  button.textContent = T.payByCard;
+  button.textContent = idleLabel;
   error.textContent = !reply.ok && reply.error !== "NETWORK" && reply.message ? reply.message : T.cardFailed;
   error.hidden = false;
 }

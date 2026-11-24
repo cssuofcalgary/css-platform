@@ -6,7 +6,7 @@ const ok = (condition, message) => { console.log((condition ? "PASS " : "FAIL ")
 const store = () => { const data = new Map(); return { getItem: (key) => data.get(key) || null, setItem: (key, value) => data.set(key, value), removeItem: (key) => data.delete(key) }; };
 function page(extra = {}) {
   const elements = {};
-  const el = (id) => elements[id] ||= { value: "", textContent: "", innerHTML: "", hidden: false, attributes: {},
+  const el = (id) => elements[id] ||= { value: "", textContent: "", innerHTML: "", hidden: false, attributes: {}, dataset: {},
     setAttribute(key, value) { this.attributes[key] = value; }, removeAttribute(key) { delete this.attributes[key]; }, focus() {}, addEventListener() {} };
   const context = vm.createContext({ console, URL, URLSearchParams, AbortController, setTimeout, clearTimeout, clearInterval,
     location: { search: "", hash: "", hostname: "events.ucalgarycss.ca" }, localStorage: store(), sessionStorage: store(),
@@ -123,6 +123,20 @@ async function main() {
     "opening entry uses one atomic setEntryOpen call and updates closed events from the reply");
 
   // ---- Card payments (Square Hosted Checkout): optional, behind cardEnabled, e-transfer always kept ----
+  const cardSettings = page();
+  cardSettings.context.$ = cardSettings.el;
+  cardSettings.run(read("exec-portal/strings.js"));
+  cardSettings.run(read("exec-portal/settings.js"));
+  cardSettings.run("showCardSettings({squareEnvironment:'production',squarePassFee:true})");
+  ok(cardSettings.el("set-card-fee-toggle").hidden && cardSettings.el("set-card-fee-fields").hidden && !cardSettings.el("set-card-pass-fee").checked,
+    "real-payment settings cannot expose or retain the sandbox fee toggle");
+  cardSettings.run("showCardSettings({squareEnvironment:'sandbox',squarePassFee:true});");
+  ok(!cardSettings.el("set-card-fee-toggle").hidden && !cardSettings.el("set-card-fee-fields").hidden,
+    "the explicitly enabled fee prototype remains available in test mode");
+  cardSettings.el("set-card-env").value = "production";
+  cardSettings.run("updateCardFeeFields()");
+  ok(cardSettings.el("set-card-fee-toggle").hidden && !cardSettings.el("set-card-pass-fee").checked,
+    "switching from test to real payments clears the buyer-fee selection");
   const strings = read("public/strings.js"), publicSrc = read("public/public.js"), ticketSrc = read("public/ticket.js");
   const T = page().run(strings + "; T");
   ok(T.payByCard === "Pay by card" && T.payByEtransfer === "Pay by Interac e-transfer" && !!T.cardOpening && !!T.cardFailed && !!T.payNoteCard,
@@ -157,6 +171,12 @@ async function main() {
     p.run(`showPaymentScreen(${unpaid(extra)})`);
     ok(!p.el("page").innerHTML.includes("pay-card"), "no card button when the registration is " + label);
   }
+  const withFee = payPage();
+  withFee.run(`showPaymentScreen(${unpaid({ cardEnabled: true, cardTotal: 15.76, cardFee: 0.76 })})`);
+  ok(withFee.el("page").innerHTML.includes(T.payByCardFee("$15.76", "$0.76")), "buyer card fee is shown upfront on the registration done button");
+  withFee.run("apiReply={ok:false,error:'SOLD_OUT',message:'TEST Full.'}");
+  await withFee.run("payByCard('TESTSECRET','',T.payByCardFee('$15.76','$0.76'))");
+  ok(withFee.el("pay-card").textContent === T.payByCardFee("$15.76", "$0.76"), "after an error, the button keeps its fee wording");
   on.run("apiReply={ok:true,url:'https://evil.example/square.link'}");
   await on.run("payByCard('TESTSECRET','https://events.ucalgarycss.ca/ticket.html?t=TESTSECRET')");
   ok(on.context.location.href === "https://events.ucalgarycss.ca/?e=test" && !on.el("card-error").hidden && !on.el("pay-card").disabled,
@@ -208,6 +228,9 @@ async function main() {
   ok(backHtml.includes(T.cardNotCompleted.replace(/'/g, "&#39;")) && backHtml.indexOf(T.cardNotCompleted.slice(0, 20)) < backHtml.indexOf("TEST Person"),
     "came back without paying: the calm message is above the normal unpaid ticket");
   ok(backHtml.includes('id="pay-card"') && backHtml.includes("pay@example.com") && backHtml.includes("TEST-1"), "an unpaid ticket offers Pay by card next to the e-transfer details");
+  const feeTicket = ticketPage("?t=TESTSECRET", awaitingTicket({ cardEnabled: true, cardTotal: 15.76, cardFee: 0.76 }), null);
+  await feeTicket.p.run("start()");
+  ok(feeTicket.p.el("page").innerHTML.includes(T.payByCardFee("$15.76", "$0.76")), "ticket page shows the card total and fee upfront when buyer fee is on");
   const paidBack = ticketPage("?t=TESTSECRET&card=1", awaitingTicket({ cardEnabled: true, ticket: { id: "TKTTEST1", name: "TEST Person", ticketType: "General", status: "paid", checkedIn: false, orderCode: "TEST-1" } }), { ok: true, paid: true });
   paidBack.p.run("function QRCode(holder, options){ qrText = options.text; } QRCode.CorrectLevel={M:1}; var qrText='';");
   paidBack.p.el("qr").querySelector = () => null;
