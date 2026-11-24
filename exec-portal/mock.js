@@ -266,6 +266,9 @@ const MockApi = (() => {
     }
 
     switch (req.action) {
+      case "loginDoor":   // door volunteers: name only (demo has no door password)
+        if (!String(req.name || "").trim()) return { ok: false, error: "NAME_NEEDED" };
+        return demoSignIn(String(req.name).trim(), "door");
       case "signInNames":
         return { ok: true, names: taskTeam.filter((p) => p.active !== false).map((p) => p.name) };
       case "login": {

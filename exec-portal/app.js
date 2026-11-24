@@ -262,6 +262,7 @@ function completeSignIn(reply, action) {
   sessionStorage.setItem("css_role", state.role);
   $("password").value = "";
   if (action === "login") rememberName(state.name);   // door sign-ins aren't remembered (often a shared phone)
+  if (action === "loginDoor" && !SCANNER_MODE) { location.replace("?mode=scanner"); return; }   // door sign-ins use the scanner page
   showApp();
   // Signed in again while Tasks was already the open tab: load it now (and send any changes waiting on this device).
   if (typeof loadTasks === "function" && !$("tab-tasks").hidden) loadTasks();
@@ -606,13 +607,18 @@ function fillText() {
 }
 
 function start() {
+  // A door-only sign-in belongs on the scanner page (it can only scan), whichever page it started on.
+  if (!SCANNER_MODE && state.token && state.role === "door") { location.replace("?mode=scanner"); return; }
   fillText();
   document.body.classList.toggle("scanner-mode", SCANNER_MODE);
+  // Door volunteers sign in with their name (and the door password if one is set): on phones and the scanner link only.
+  if (SCANNER_MODE || isPhone()) {
+    $("door-login-button").hidden = false;
+    $("door-login-button").addEventListener("click", onDoorLogin);
+  }
   if (SCANNER_MODE) {
     $("brand").textContent = T.scannerTitle;
     $("full-portal-link").hidden = false;
-    $("door-login-button").hidden = false;
-    $("door-login-button").addEventListener("click", onDoorLogin);
     document.title = T.scannerTitle;
   }
   document.body.classList.toggle("phone", isPhone());
