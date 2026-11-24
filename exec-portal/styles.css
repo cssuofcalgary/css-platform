@@ -613,6 +613,8 @@ button.all-row:hover { border-color: var(--border-2); }
 .combo-list li b { font-weight: 700; }
 .combo-list li:hover, .combo-list li.active { background: var(--sunken, var(--bg)); }
 .combo-list li.active { box-shadow: inset 2px 0 0 var(--accent); }
+.signin-name .combo-list li { min-height: 44px; display: flex; align-items: center; }
+.signin-name-status { position: absolute; z-index: 5; top: calc(100% + 4px); left: 0; right: 0; padding: 12px 14px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--muted); box-shadow: var(--shadow-2); font-size: 14px; }
 /* Reminders: one compact line each, like Google Calendar */
 .rem-list { display: grid; gap: 6px; }
 .rem-list:empty { display: none; }
@@ -688,7 +690,6 @@ button.all-row:hover { border-color: var(--border-2); }
 .people-row .people-remove { margin-left: 0; }
 .people-head { font-size: 11px; letter-spacing: .5px; text-transform: uppercase; color: var(--muted); }
 .people-head span:nth-child(4) { text-align: center; }
-.people-device { margin-top: 8px; border-top: 1px solid var(--border); border-bottom: 0; }
 @media (max-width: 560px) {
   .task-actions { width: 100%; }
   .task-actions #task-new-button { margin-left: auto; }

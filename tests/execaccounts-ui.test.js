@@ -6,6 +6,7 @@ const elements = {};
 function element(id) {
   if (!elements[id]) elements[id] = { value: "", hidden: true, disabled: false, open: false, listeners: {},
     addEventListener(type, fn) { this.listeners[type] = fn; }, focus() {},
+    setAttribute() {}, removeAttribute() {},
     showModal() { this.open = true; }, close() { this.open = false; this.listeners.close?.(); } };
   return elements[id];
 }
@@ -39,7 +40,7 @@ async function main() {
   element("exec-password-cancel").listeners.click();
   ok(element("exec-password-new").value === "" && run("execSetupToken") === "", "Cancel clears the unsubmitted password and setup token");
 
-  // Existing pre-feature sessions should also seed the remembered name on this device.
+  // Existing sessions still work, but no longer save names on this computer.
   const local = new Map(), session = new Map([["css_token", "old-session"], ["css_name", "TEST Remembered"], ["css_role", "exec"]]);
   const storage = (map) => ({ getItem: (key) => map.get(key) || null, setItem: (key, value) => map.set(key, String(value)), removeItem: (key) => map.delete(key) });
   const browser = vm.createContext({ console, URLSearchParams, location: { search: "" }, localStorage: storage(local), sessionStorage: storage(session),
@@ -47,7 +48,7 @@ async function main() {
     window: { matchMedia() { return { matches: false }; } } });
   vm.runInContext(fs.readFileSync(path.join(__dirname, "../exec-portal/app.js"), "utf8"), browser);
   vm.runInContext(`showSearch=()=>{}; switchTab=()=>{}; showApp();`, browser);
-  ok(JSON.parse(local.get("css_names"))[0] === "TEST Remembered", "an existing signed-in session remembers its name without requiring another login");
+  ok(!local.has("css_names"), "an existing signed-in session does not save its name on this computer");
   vm.runInContext(`var landed=''; switchTab=(tab)=>{landed=tab;}; window.matchMedia=()=>({matches:true}); showApp();`, browser);
   ok(vm.runInContext("landed", browser) === "tasks", "phones open Tasks without a scanner redirect");
   session.set("css_tab", "overview");

@@ -164,62 +164,109 @@ function errorText(reply) {
 
 // ---- Sign-in ----------------------------------------------------------------
 
-// Names used to sign in on this device (newest first), so the name box is filled in and suggests the others.
-// Only kept in this browser; nothing is asked of the server before signing in.
-const SAVED_NAMES_KEY = "css_names";
-
-function savedNames() {
-  try {
-    const list = JSON.parse(localStorage.getItem(SAVED_NAMES_KEY) || "[]");
-    return Array.isArray(list) ? list.filter((n) => typeof n === "string" && n.trim()) : [];
-  } catch (e) { return []; }
-}
-
-function rememberName(name) {
-  const clean = String(name || "").trim().replace(/\s+/g, " ");
-  if (!clean) return;
-  const list = [clean, ...savedNames().filter((n) => n.trim().toLowerCase() !== clean.toLowerCase())].slice(0, 10);
-  try { localStorage.setItem(SAVED_NAMES_KEY, JSON.stringify(list)); } catch (e) { /* not remembered: fine */ }
-}
-
-function clearSavedNames() {
-  try { localStorage.removeItem(SAVED_NAMES_KEY); } catch (e) { /* nothing saved */ }
-  $("name-input").value = "";
-  fillSavedNames();
-}
-
-// The names on the People list, asked once per page load, so the name box suggests everyone's full name.
+// Search the active People list; names previously used on this computer aren't suggestions.
 let peopleNames = [];
 let peopleNamesAsked = false;
+let peopleNamesLoading = false;
+let peopleNamesFailed = false;
+let signInMatches = [], signInActive = -1;
+let signInNamesDismissed = false;
 async function loadPeopleNames() {
   if (peopleNamesAsked) return;
   peopleNamesAsked = true;
-  const reply = await api("signInNames");
-  if (!reply.ok || !Array.isArray(reply.names)) { peopleNamesAsked = false; return; }
-  peopleNames = reply.names.filter((n) => typeof n === "string" && n.trim());
-  fillSavedNames();
+  peopleNamesLoading = true;
+  peopleNamesFailed = false;
+  renderSignInNames();
+  try {
+    const reply = await api("signInNames");
+    if (!reply.ok || !Array.isArray(reply.names)) throw new Error("Names unavailable");
+    const names = reply.names.filter((n) => typeof n === "string" && n.trim()).map((n) => n.trim().replace(/\s+/g, " "));
+    const seen = new Set();
+    peopleNames = names.filter((n) => { const key = n.toLowerCase(); if (seen.has(key)) return false; seen.add(key); return true; });
+  } catch (e) {
+    peopleNamesAsked = false;
+    peopleNamesFailed = true;
+  } finally {
+    peopleNamesLoading = false;
+    renderSignInNames();
+  }
 }
 
-/**
- * Fills the name box with the last name used here (unless something is typed) and suggests the others: the names used
- * on this device first, then everyone on the People list.
- */
-function fillSavedNames() {
-  const names = savedNames();
-  const seen = new Set(names.map((n) => n.trim().toLowerCase()));
-  const all = [...names, ...peopleNames.filter((n) => !seen.has(n.trim().toLowerCase()))];
-  $("name-list").innerHTML = all.map((n) => `<option value="${escapeHtml(n)}"></option>`).join("");
-  if (names.length && !$("name-input").value.trim()) $("name-input").value = names[0];
+function hideSignInNames() {
+  $("name-list").hidden = true;
+  $("name-status").hidden = true;
+  $("name-input").setAttribute("aria-expanded", "false");
+  $("name-input").removeAttribute("aria-activedescendant");
+  signInMatches = [];
+  signInActive = -1;
+}
+
+function renderSignInNames() {
+  hideSignInNames();
+  const input = $("name-input");
+  const query = input.value.trim().replace(/\s+/g, " ").toLowerCase();
+  if (signInNamesDismissed || $("login-view").hidden || document.activeElement !== input || query.length < 2) return;
+  const score = (name) => name === query ? 0 : name.startsWith(query) ? 1 : name.split(" ").some((word) => word.startsWith(query)) ? 2 : 3;
+  signInMatches = peopleNames.filter((name) => name.toLowerCase().includes(query))
+    .sort((a, b) => score(a.toLowerCase()) - score(b.toLowerCase()) || a.localeCompare(b)).slice(0, 8);
+  if (signInMatches.length) {
+    $("name-list").innerHTML = signInMatches.map((name, i) => `<li id="name-option-${i}" role="option" aria-selected="false" data-index="${i}">${escapeHtml(name)}</li>`).join("");
+    $("name-list").hidden = false;
+    input.setAttribute("aria-expanded", "true");
+  } else {
+    $("name-status").textContent = peopleNamesLoading ? T.nameSearching : peopleNamesFailed ? T.nameSearchFailed : T.nameNoMatches;
+    $("name-status").hidden = false;
+  }
+}
+
+function onSignInNameInput() {
+  signInNamesDismissed = false;
+  renderSignInNames();
+  if ($("name-input").value.trim().length >= 2) loadPeopleNames();
+}
+
+function pickSignInName(index) {
+  const name = signInMatches[index];
+  if (!name) return;
+  $("name-input").value = name;
+  hideSignInNames();
+  $("password").focus();
+}
+
+function onSignInNameKeydown(event) {
+  if (event.isComposing) return;
+  if (event.key === "Escape") {
+    if (!$("name-list").hidden || !$("name-status").hidden) { event.preventDefault(); event.stopPropagation(); signInNamesDismissed = true; hideSignInNames(); }
+  } else if (event.key === "Enter") {
+    event.preventDefault();
+    if (peopleNamesLoading && $("name-input").value.trim().length >= 2) return;
+    if (signInMatches.length) pickSignInName(signInActive < 0 ? 0 : signInActive);
+    else if ($("name-input").value.trim()) $("password").focus();
+  } else if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+    event.preventDefault();
+    if ($("name-list").hidden) { signInNamesDismissed = false; renderSignInNames(); }
+    if (!signInMatches.length) return;
+    const step = event.key === "ArrowDown" ? 1 : -1;
+    signInActive = signInActive < 0 ? (step > 0 ? 0 : signInMatches.length - 1) : (signInActive + step + signInMatches.length) % signInMatches.length;
+    document.querySelectorAll("#name-list [role=option]").forEach((option, i) => {
+      option.classList.toggle("active", i === signInActive);
+      option.setAttribute("aria-selected", String(i === signInActive));
+      if (i === signInActive) option.scrollIntoView({ block: "nearest" });
+    });
+    $("name-input").setAttribute("aria-activedescendant", "name-option-" + signInActive);
+  }
 }
 
 function showLogin(message) {
   $("app-view").hidden = true;
   $("login-view").hidden = false;
   setLoginError(message || "");
-  fillSavedNames();
+  try { localStorage.removeItem("css_names"); } catch (e) { /* old saved names are no longer used */ }
+  $("name-input").value = "";
+  signInNamesDismissed = false;
+  hideSignInNames();
+  $("name-input").focus();
   loadPeopleNames();
-  // Name already there: straight to the password.
-  ($("name-input").value.trim() ? $("password") : $("name-input")).focus();
 }
 
 function setLoginError(text) {
@@ -261,7 +308,6 @@ function completeSignIn(reply, action) {
   sessionStorage.setItem("css_name", state.name);
   sessionStorage.setItem("css_role", state.role);
   $("password").value = "";
-  if (action === "login") rememberName(state.name);   // door sign-ins aren't remembered (often a shared phone)
   if (action === "loginDoor" && !SCANNER_MODE) { location.replace("?mode=scanner"); return; }   // door sign-ins use the scanner page
   showApp();
   // Signed in again while Tasks was already the open tab: load it now (and send any changes waiting on this device).
@@ -290,7 +336,7 @@ function signOutLocally() {
 // ---- Member search ----------------------------------------------------------
 
 function showApp() {
-  if (state.role !== "door" && state.name) rememberName(state.name); // also backfill names from older saved sessions
+  hideSignInNames();
   $("login-view").hidden = true;
   $("app-view").hidden = false;
   $("who-name").textContent = state.name;
@@ -627,6 +673,17 @@ function start() {
     $("demo-banner").hidden = false;
   }
   $("login-form").addEventListener("submit", onLogin);
+  $("name-input").addEventListener("input", onSignInNameInput);
+  $("name-input").addEventListener("focus", onSignInNameInput);
+  $("name-input").addEventListener("blur", hideSignInNames);
+  $("name-input").addEventListener("keydown", onSignInNameKeydown);
+  $("name-list").addEventListener("pointerdown", (event) => {
+    if (event.target.closest("[data-index]")) event.preventDefault(); // keep focus until the click selects a name
+  });
+  $("name-list").addEventListener("click", (event) => {
+    const option = event.target.closest("[data-index]");
+    if (option) pickSignInName(Number(option.dataset.index));
+  });
   $("logout-button").addEventListener("click", onLogout);
   $("search-input").addEventListener("input", onSearchInput);
   $("results").addEventListener("click", onResultClick);

@@ -245,7 +245,6 @@ function sharePeople(team) {
 }
 
 async function loadPeople() {
-  syncDeviceNames();
   peopleSay(T.peopleLoading);
   const reply = await api("listTasks");
   if (!reply.ok) return handleEventError(reply, $("people-result"));
@@ -343,16 +342,6 @@ $("people-add").addEventListener("click", () => {
   if (none) none.remove();
   $("people-list").insertAdjacentHTML("afterbegin", personRowHtml({ active: true }));
   $("people-list").firstElementChild.querySelector(".people-name").focus();
-});
-
-// Names saved on this device (for the sign-in box)
-function syncDeviceNames() {
-  $("people-device-clear").disabled = !savedNames().length;
-}
-$("people-device-clear").addEventListener("click", () => {
-  clearSavedNames();
-  syncDeviceNames();
-  peopleSay(T.peopleDeviceCleared, "good");
 });
 
 $("people-locked").addEventListener("change", async () => {
