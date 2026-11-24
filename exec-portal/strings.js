@@ -558,7 +558,7 @@ Restore it anyway?`,
       (status === "awaiting" && stillDue > 0 ? ` ${money(stillDue)} still to come. Record the payment in Payments.`
         : status === "paid" ? (now > was ? " Payment already covers this amount." : " Send the difference back by e-transfer.") : " The payer's email still shows the old amount."),
     reconnecting: "Connection is slow. Trying again…",
-    offlineNotice: "No connection. Showing what was last loaded.",
+    offlineNotice: "No connection.",
     liveInside: "inside",
     liveNotPaid: (n) => `${n} not paid yet`,
     duplicate: "Duplicate",
