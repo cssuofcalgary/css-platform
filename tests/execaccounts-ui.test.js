@@ -48,6 +48,30 @@ async function main() {
   vm.runInContext(fs.readFileSync(path.join(__dirname, "../exec-portal/app.js"), "utf8"), browser);
   vm.runInContext(`showSearch=()=>{}; switchTab=()=>{}; showApp();`, browser);
   ok(JSON.parse(local.get("css_names"))[0] === "TEST Remembered", "an existing signed-in session remembers its name without requiring another login");
+  vm.runInContext(`var landed=''; switchTab=(tab)=>{landed=tab;}; window.matchMedia=()=>({matches:true}); showApp();`, browser);
+  ok(vm.runInContext("landed", browser) === "tasks", "phones open Tasks without a scanner redirect");
+  session.set("css_tab", "overview");
+  vm.runInContext(`document.querySelector=()=>({hidden:false}); showApp();`, browser);
+  ok(vm.runInContext("landed", browser) === "tasks", "a phone's old saved tab does not replace the Tasks landing page");
+  vm.runInContext(`state.role='door'; showApp();`, browser);
+  ok(vm.runInContext("landed", browser) === "door", "door-only volunteers still open Door");
+  vm.runInContext(`state.role='exec'; window.matchMedia=()=>({matches:false}); showApp();`, browser);
+  ok(vm.runInContext("landed", browser) === "overview", "desktop sign-ins retain their saved tab");
+  const scanner = vm.createContext({ console, URLSearchParams, location: { search: "?mode=scanner" }, localStorage: storage(local), sessionStorage: storage(session),
+    document: { getElementById: element, addEventListener() {}, readyState: "complete", querySelector() { return null; } },
+    window: { matchMedia() { return { matches: true }; } } });
+  vm.runInContext(fs.readFileSync(path.join(__dirname, "../exec-portal/app.js"), "utf8"), scanner);
+  vm.runInContext(`var landed=''; showSearch=()=>{}; switchTab=(tab)=>{landed=tab;}; showApp();`, scanner);
+  ok(vm.runInContext("landed", scanner) === "door", "choosing the scanner link explicitly still opens Door on phones");
+  const shell = vm.createContext({ console, $: element, sessionStorage: storage(new Map()) });
+  vm.runInContext(fs.readFileSync(path.join(__dirname, "../exec-portal/strings.js"), "utf8"), shell);
+  vm.runInContext(`var state={token:'exec-session',name:'TEST Exec',role:'exec'}, calls=[], eventsState={}, ovState={};
+    function api(action, details) { calls.push({action,details}); return Promise.resolve({ok:true,token:'unlocked-session',name:'TEST Exec',role:'admin'}); }
+    function showApp() {} function showToast() {} function errorText(r) {return r.error;}`, shell);
+  vm.runInContext(fs.readFileSync(path.join(__dirname, "../exec-portal/shell.js"), "utf8").split('$("admin-gear").addEventListener')[0], shell);
+  element("admin-pw").value = "fake-settings-password";
+  await vm.runInContext(`onAdminSubmit({preventDefault(){}})`, shell);
+  ok(vm.runInContext(`calls[0].action==='unlockSettings' && !('name' in calls[0].details) && calls[1].action==='logout' && calls[1].details.token==='exec-session' && state.role==='admin'`, shell), "the gear uses authenticated Settings unlock and retires the old session");
   console.log(fails ? `\n${fails} FAILED` : "\nALL PASSED");
   process.exit(fails ? 1 : 0);
 }

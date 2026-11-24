@@ -26,7 +26,7 @@ async function onAdminSubmit(ev) {
   button.disabled = true;
   button.textContent = T.adminEntering;
   const oldToken = state.token;
-  const reply = await api("login", { password: typed, name: state.name });
+  const reply = await api("unlockSettings", { password: typed });
   button.disabled = false;
   button.textContent = T.adminEnter;
   $("admin-pw").value = "";

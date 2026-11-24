@@ -3,15 +3,20 @@
 For execs. No tech knowledge needed.
 
 ## Signing in
-1. Open the **Exec Portal**: https://exec.ucalgarycss.ca/ (bookmark it). It opens on the **Overview**: what needs attention, upcoming events and recent activity. The menu is on the left.
+1. Open the **Exec Portal**: https://exec.ucalgarycss.ca/ (bookmark it). Phones open **Tasks**; laptops open **Overview** or the last tab you used. The menu is on the left.
 2. Type **your name** and **your own password**. The first time, use the **club password** (ask the President): a screen opens where you create your own password. Your name goes next to every change you make.
 3. You stay signed in while you keep using the portal, and are signed out after about 6 hours without it. **Sign out** on shared computers.
 
 Wrong password 30 times → sign-in pauses for 10 minutes.
 Forgot your password? Ask an admin to use **Settings → People → Reset password** beside your name. Sign in with the club password, then choose a replacement. Admins cannot view personal passwords.
 
-**Settings → People → Paste a list:** paste one name per line, optionally followed by a comma and department (for example `Kevin B, Events`). Preview, then **Add people**. Names already on the list are skipped without replacing their department or Discord ID. **Only listed execs can sign in** blocks new registrations until an admin adds the name; the settings password still allows admin recovery.
+**Settings → People → Paste a list:** paste one name per line, optionally followed by a comma and department (for example `Kevin B, Events`). Preview, then **Add people**. Names already on the list are skipped without replacing their department or Discord ID. **Only listed execs can sign in** blocks new registrations until an admin adds the name. Sign in normally, then press the **gear** and enter the Settings password to unlock admin controls. The Settings password does not work as a sign-in shortcut.
 The **sun/moon button** (bottom of the menu) switches light and dark. Tap the **CSS logo** to refresh the page.
+
+## Tasks
+Choose **New task**, enter what needs doing, then add people under **Who**. Pick a name from the suggestions or type it and press **Add**. Each selected name has an **×** button to remove it. A task can have several people; it appears under **My tasks** for everyone assigned. Editing a task keeps all its assignees unless you remove them.
+
+Discord task posts and reminders tag everyone assigned who has a Discord ID. When creating a task with the bot, mention several people to assign them together.
 
 ## Members tab: sign-ups, payments and search
 Membership costs the fee set in **Settings → Membership** for the school year (September to August). People join on their own at **member.ucalgarycss.ca/create** (this replaces the Google Form), or an exec adds them here. Both end up as one row on the Membership sheet.
@@ -127,7 +132,7 @@ Open **Partners** in the left menu for the partners and their offers. Any exec c
 
 ## The portal on a laptop vs a phone
 - **Laptop or tablet (help desk, Finance):** the full portal with a menu on the left. Pick the event once at the top and Payments and Door both follow it.
-- **Phone (door volunteers):** opens the **door scanner** by itself (see "The scanner page" below). A help-desk person on a phone can tap **Full portal** at the top.
+- **Phone:** opens **Tasks**. Choose **Check-in** from the menu for the door, or open the separate **scanner** link for volunteer scanning (see below).
 
 ## What the emails look like
 All system emails (registration, payment reminder, ticket, find-my-tickets, find-my-pass) share one look: the same paper-ticket design as the member pass email, with a sage header, the CSS banner, pandas and a signature. It lives in `emailShell_()` in `api/Mail.js`. The signature name is the Script Property `PRESIDENT_NAME` (default "Gordon Chen"); change it when the President changes.

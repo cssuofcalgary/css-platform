@@ -14,6 +14,7 @@ const taskState = {
   calMonth: "",       // "yyyy-mm" on show in the calendar
   calDay: "",         // the day listed under the calendar ("yyyy-mm-dd"), or ""
   editing: null,      // the task open in the New/Edit dialog (null = new)
+  owners: [],         // selected people in the New/Edit dialog
   deptTouched: false, // the department was picked by hand, so changing Who no longer changes it
   openId: "",         // the task open in the detail dialog
   menuId: "",         // the task whose status menu is open
@@ -183,7 +184,7 @@ function renderFilters() {
 
 function filteredTasks() {
   const f = taskState.filter;
-  return taskState.tasks.filter((t) => f === "all" ? true : f === "mine" ? sameName(t.owner, state.name) : t.department === f);
+  return taskState.tasks.filter((t) => f === "all" ? true : f === "mine" ? taskOwners(t).some((name) => sameName(name, state.name)) : t.department === f);
 }
 
 function taskGroupKey(task) {
@@ -235,7 +236,7 @@ function taskRow(t) {
   return `<li class="task-row st-${status}" data-task-id="${escapeHtml(t.id)}" tabindex="0">
     <div class="task-main">
       <div class="task-title">${escapeHtml(t.title)}</div>
-      <div class="task-meta"><span>${escapeHtml(t.owner || T.taskNobody)}</span>${dueChip(t)}${reminderChip(t)}</div>
+      <div class="task-meta"><span>${escapeHtml(taskOwners(t).join(", ") || T.taskNobody)}</span>${dueChip(t)}${reminderChip(t)}</div>
       ${note ? `<div class="task-last">${note.source === "discord" ? discordMark() : ""}<span>${escapeHtml(note.text)}</span></div>` : ""}
     </div>
     <button type="button" class="task-status st-${status}" data-status-for="${escapeHtml(t.id)}" aria-haspopup="menu">${escapeHtml(statusLabel(status))}</button>
@@ -374,6 +375,14 @@ async function changeTaskStatus(id, status) {
 
 // ---- "Who": type a name, pick from suggestions (or keep a new name: it gets added to People) ----------
 
+function taskOwners(task) {
+  return Array.isArray(task.owners) ? task.owners : task.owner ? [task.owner] : [];
+}
+
+function renderSelectedOwners() {
+  $("tk-owners").innerHTML = taskState.owners.map((name, i) => `<button type="button" class="chip" data-remove-owner="${i}" aria-label="${escapeHtml(T.taskOwnerRemove + " " + name)}">${escapeHtml(name)} <span aria-hidden="true">×</span></button>`).join("");
+}
+
 function ownerSuggestions(query) {
   const seen = new Set();
   const names = [];
@@ -388,7 +397,7 @@ function ownerSuggestions(query) {
     if (s.split(" ").some((w) => w.startsWith(q))) return 2;
     return s.includes(q) ? 3 : -1;
   };
-  return names.map((n) => [n, score(n)]).filter(([, s]) => s >= 0)
+  return names.filter((name) => !taskState.owners.some((picked) => sameName(picked, name))).map((n) => [n, score(n)]).filter(([, s]) => s >= 0)
     .sort((a, b) => a[1] - b[1] || a[0].localeCompare(b[0])).slice(0, 8).map(([n]) => n);
 }
 
@@ -397,8 +406,7 @@ function showOwnerList(everyone) {
   const names = ownerSuggestions(everyone ? "" : input.value);
   const box = $("tk-owner-list");
   taskState.combo = { names, active: -1 };
-  // Nothing to suggest, or the only suggestion is exactly what's typed: no list.
-  if (!names.length || (names.length === 1 && sameName(names[0], input.value))) return hideOwnerList();
+  if (!names.length) return hideOwnerList();
   const q = normName(input.value);
   box.innerHTML = names.map((n, i) => {
     const at = everyone || !q ? -1 : n.toLowerCase().indexOf(q);
@@ -429,13 +437,20 @@ function moveOwnerActive(step) {
 }
 
 function pickOwner(name) {
-  $("tk-owner").value = name;
+  const typed = String(name || "").trim().replace(/\s+/g, " ");
+  if (!typed) return;
+  const person = teamPerson(typed);
+  const canonical = person ? person.name.trim() : typed;
+  if (!taskState.owners.length && !taskState.deptTouched) $("tk-dept").value = deptFor(canonical);
+  if (!taskState.owners.some((picked) => sameName(picked, canonical))) taskState.owners.push(canonical);
+  $("tk-owner").value = "";
+  renderSelectedOwners();
   hideOwnerList();
-  syncDeptFromOwner();
+  $("tk-owner").focus();
 }
 
 function syncDeptFromOwner() {
-  if (taskState.deptTouched) return;
+  if (taskState.deptTouched || taskState.owners.length) return;
   const p = teamPerson($("tk-owner").value);
   if (p && TASK_DEPTS.includes(p.department)) $("tk-dept").value = p.department;
 }
@@ -446,10 +461,10 @@ function onOwnerKeydown(e) {
     e.preventDefault();
     if (!open) { showOwnerList(!!teamPerson($("tk-owner").value)); if ($("tk-owner-list").hidden) return; }
     moveOwnerActive(e.key === "ArrowDown" ? 1 : -1);
-  } else if (e.key === "Enter" && open && taskState.combo.active >= 0) {
+  } else if (e.key === "Enter" && (taskState.combo.active >= 0 || $("tk-owner").value.trim())) {
     e.preventDefault();
     e.stopPropagation();   // picks the name; doesn't save the task yet
-    pickOwner(taskState.combo.names[taskState.combo.active]);
+    pickOwner(open && taskState.combo.active >= 0 ? taskState.combo.names[taskState.combo.active] : $("tk-owner").value);
   } else if (e.key === "Escape" && open) {
     e.preventDefault();
     e.stopPropagation();   // closes the suggestions, not the dialog
@@ -542,10 +557,12 @@ function openTaskDialog(task, due) {
   $("tk-title").value = task ? task.title || "" : "";
   const deptFilter = TASK_DEPTS.includes(taskState.filter) ? taskState.filter : "";
   const me = teamPerson(state.name);
-  $("tk-owner").value = task ? task.owner || "" : (me ? me.name.trim() : String(state.name || "").trim());
+  taskState.owners = task ? taskOwners(task).slice() : [me ? me.name.trim() : String(state.name || "").trim()].filter(Boolean);
+  $("tk-owner").value = "";
+  renderSelectedOwners();
   hideOwnerList();
   $("tk-due").value = task ? taskIso(task.due) : taskIso(due);
-  $("tk-dept").value = task ? (TASK_DEPTS.includes(task.department) ? task.department : "General") : (deptFilter || deptFor($("tk-owner").value));
+  $("tk-dept").value = task ? (TASK_DEPTS.includes(task.department) ? task.department : "General") : (deptFilter || deptFor(taskState.owners[0]));
   if (!task && deptFilter) taskState.deptTouched = true;
   $("tk-reminders").innerHTML = (task ? remindersOf(task) : []).map(reminderRowHtml).join("");
   syncReminderAdd();
@@ -570,12 +587,11 @@ async function onTaskSubmit(event) {
   if (bad >= 0) { document.querySelectorAll("#tk-reminders .rem-row")[bad].querySelector(".rem-n").focus(); return showError(T.taskRemBad); }
   const editing = taskState.editing;
   // Typed the name in a different case? Use the spelling on the People list.
-  const typedOwner = $("tk-owner").value.trim().replace(/\s+/g, " ");
-  const person = teamPerson(typedOwner);
+  if ($("tk-owner").value.trim()) pickOwner($("tk-owner").value);
   const task = {
     id: editing ? editing.id : "",
     title,
-    owner: person ? person.name.trim() : typedOwner,
+    owners: taskState.owners.slice(),
     due: $("tk-due").value,
     department: $("tk-dept").value,
     notes: $("tk-notes").value.trim(),
@@ -597,7 +613,7 @@ async function onTaskSubmit(event) {
   if (existing) Object.assign(existing, saved, { updates: saved.updates || existing.updates });
   else taskState.tasks.push({ updates: [], ...saved });
   if (Array.isArray(reply.team)) taskState.team = reply.team;
-  else if (saved.owner && !teamPerson(saved.owner)) taskState.team.push({ id: "", name: saved.owner, department: saved.department, discordId: "", active: true });
+  else taskOwners(saved).forEach((name) => { if (!teamPerson(name)) taskState.team.push({ id: "", name, department: saved.department, discordId: "", active: true }); });
   renderTasks();
   if (taskState.openId === saved.id && $("task-detail-dialog").open) renderTaskDetail();
   const d = taskState.discord || {};
@@ -624,7 +640,7 @@ function renderTaskDetail() {
   if (!t) return;
   $("td-title").textContent = t.title;
   const link = /^https?:\/\//i.test(t.link || "") ? `<a class="link" href="${escapeHtml(t.link)}" target="_blank" rel="noopener noreferrer">${escapeHtml(T.taskLink)}</a>` : "";
-  $("td-meta").innerHTML = [`<span>${escapeHtml(t.owner || T.taskNobody)}</span>`, dueChip(t), reminderChip(t, true),
+  $("td-meta").innerHTML = [`<span>${escapeHtml(taskOwners(t).join(", ") || T.taskNobody)}</span>`, dueChip(t), reminderChip(t, true),
     `<span class="muted">${escapeHtml(t.department || "General")}</span>`, link].filter(Boolean).join("");
   $("td-notes").hidden = !t.notes;
   $("td-notes").textContent = t.notes || "";
@@ -788,6 +804,14 @@ function onTaskListKey(e) {
   $("tk-dept").addEventListener("change", () => { taskState.deptTouched = true; });
 
   // Who
+  $("tk-owner-add").addEventListener("click", () => pickOwner($("tk-owner").value));
+  $("tk-owners").addEventListener("click", (e) => {
+    const button = e.target.closest("[data-remove-owner]");
+    if (!button) return;
+    taskState.owners.splice(Number(button.dataset.removeOwner), 1);
+    renderSelectedOwners();
+    hideOwnerList();
+  });
   $("tk-owner").addEventListener("input", () => { showOwnerList(false); syncDeptFromOwner(); });
   $("tk-owner").addEventListener("keydown", onOwnerKeydown);
   // Tapping the box opens the list: everyone when a full name is already there, otherwise the matches.

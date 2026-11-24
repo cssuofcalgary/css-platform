@@ -252,8 +252,8 @@ function tbResolveDate_(phrase, today, dow) {
 
 /**
  * Reads a message to the bot. Pure: no sheet, no Discord. `now` = when it was written; `team` = Team rows; `botId` = the
- * bot's own Discord id (its mention is removed). Returns { title, due, remind, remindNeedsDue, ownerDiscordId, ownerName }:
- *   - owner: the first other @mention ("for @Kevin" works too); ownerDiscordId "" = nobody mentioned (the caller uses the author);
+ * bot's own Discord id (its mention is removed). Returns title/due/reminders and assignees, plus the first owner for compatibility:
+ *   - assignees: every other person @mentioned ("for @Kevin" works too); empty = assign the author;
  *   - due: "by/due/on/before <date phrase>" anywhere, or a date phrase at the very end;
  *   - remind: a list of { n, unit, at } from every "remind (me|them)? halfway | day before | both | 2 days before | 1 week before |
  *     on the day | on <date phrase> | <date phrase>", each optionally followed by "at 6pm" / "at 18:00" (otherwise 9:00 AM);
@@ -267,30 +267,26 @@ function parseTaskMessage_(text, now, team, botId) {
   let s = " " + String(text || "").replace(/[\r\n\t]+/g, " ") + " ";
   let ownerDiscordId = "", ownerName = "";
 
-  // Mentions: the bot's own and role pings go; the first person mentioned is the owner.
+  // Every person mentioned is assigned; bot and role mentions are never assignees.
   s = s.replace(/<@&\d+>/g, " ");
   if (botId) s = s.replace(new RegExp("<@!?" + botId + ">", "g"), " ");
   s = s.replace(/(^|\s)@taskbot\b/gi, " ");
-  const first = /<@!?(\d{17,20})>/.exec(s);
-  if (first) {
-    ownerDiscordId = first[1];
-    s = s.replace(new RegExp("(?:\\b(?:assign(?:ed)?\\s+to|for|to)\\s+)?<@!?" + ownerDiscordId + ">", "gi"), " ");
-  }
-  const rows = (team || []).filter(function (r) { return r && r.name; });
-  s = s.replace(/<@!?(\d{17,20})>/g, function (all, uid) {   // anyone else mentioned: their name, if they're on the team list
-    const r = rows.filter(function (x) { return String(x.discordId) === uid; })[0];
-    return r ? "@" + r.name : " ";
+  const assignees = [];
+  s = s.replace(/(?:\b(?:assign(?:ed)?\s+to|for|to|with|and)\s+)?<@!?(\d{17,20})>/gi, function (all, uid) {
+    if (!assignees.some(function (p) { return p.discordId === uid; })) assignees.push({ name: "", discordId: uid });
+    return " ";
   });
-  if (!ownerDiscordId) {   // "@Kevin" typed as plain text, for someone on the team list
-    rows.slice().sort(function (a, b) { return String(b.name).length - String(a.name).length; }).some(function (r) {
+  const rows = (team || []).filter(function (r) { return r && r.name; });
+  {   // "@Kevin" typed as plain text, for someone on the team list
+    rows.slice().sort(function (a, b) { return String(b.name).length - String(a.name).length; }).forEach(function (r) {
       const re = new RegExp("(^|\\s)(?:(?:assign(?:ed)?\\s+to|for|to)\\s+)?@" + String(r.name).replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "(?![\\w])", "i");
-      if (!re.test(s)) return false;
+      if (!re.test(s)) return;
       s = s.replace(re, " ");
-      ownerName = String(r.name);
-      ownerDiscordId = /^\d{17,20}$/.test(String(r.discordId || "")) ? String(r.discordId) : "";
-      return true;
+      const discordId = /^\d{17,20}$/.test(String(r.discordId || "")) ? String(r.discordId) : "";
+      if (!assignees.some(function (p) { return (discordId && p.discordId === discordId) || teamNameKey_(p.name) === teamNameKey_(r.name); })) assignees.push({ name: String(r.name), discordId: discordId });
     });
   }
+  if (assignees.length) { ownerName = assignees[0].name; ownerDiscordId = assignees[0].discordId; }
 
   // Reminders first, so "remind me on friday" isn't read as the due date. They are worked out once the due date is known.
   const taken = tbTakeReminders_(s);
@@ -322,7 +318,7 @@ function parseTaskMessage_(text, now, team, botId) {
   title = title.charAt(0).toUpperCase() + title.slice(1);
   const remind = tbRemindItems_(taken.specs, due, today, dow);
   return { title: title.slice(0, 140), due: due, remind: remind.items, remindNeedsDue: remind.needsDue, remindDropped: remind.dropped,
-    ownerDiscordId: ownerDiscordId, ownerName: ownerName };
+    ownerDiscordId: ownerDiscordId, ownerName: ownerName, assignees: assignees };
 }
 
 // ---- Reminders ---------------------------------------------------------------------------------
@@ -483,11 +479,10 @@ function takeDueReminders_(nowMs) {
     if (!due.length) return;
     updateRow_("Tasks", task.id, { remindSent: taskList_(task.remindSent).concat(due.map(function (r) { return r.key; })) }, task._row);
     if (!due.some(function (r) { return r.at >= nowMs - TASK_REMINDER_STALE_MS; })) return;
-    const ownerId = taskOwnerDiscordId_(task);
     posts.push({
-      content: "⏰ Reminder " + discordWho_(task.owner, ownerId) + ": **" + discordEscape_(task.title) + "**" +
+      content: "⏰ Reminder " + taskDiscordWho_(task) + ": **" + discordEscape_(task.title) + "**" +
         (task.due ? " is due " + taskDayText_(task.due) : "") + ". Reply with how it's going.",
-      userIds: [ownerId], replyTo: task.discordMessageId, taskId: task.id, reminder: true
+      userIds: taskOwnerDiscordIds_(task), replyTo: task.discordMessageId, taskId: task.id, reminder: true
     });
   });
   return posts;

@@ -1,4 +1,4 @@
-/** Personal exec passwords. The shared settings password remains the admin recovery sign-in. */
+/** Personal exec passwords. Settings unlocks separately, after signing in. */
 const EXEC_BCRYPT_COST = 12;
 const EXEC_SETUP_SECONDS = 600;
 
@@ -61,7 +61,6 @@ function personalLogin_(password, name) {
   if (!who) throw new ApiError_("NAME_NEEDED", "Pick your name.");
   const attempt = execLoginAttempt_(who);
   const typed = String(password || "");
-  if (config.adminPassword && typed === config.adminPassword) return login_(typed, who);
   const person = taskTeamByName_(who);
   if (person && !isOn_(person.active)) return execWrongPassword_(attempt);
   if (person && person.passwordHash) {
@@ -93,8 +92,6 @@ function finishExecSetup_(setupToken, password) {
   const setup = JSON.parse(raw);
   const typed = typeof password === "string" ? password : "";
   if (!typed) throw new ApiError_("BAD_REQUEST", "Enter a password.");
-  const config = getConfig_();
-  if (typed === config.password || typed === config.adminPassword) throw new ApiError_("BAD_REQUEST", "Choose your own password, different from the club and settings passwords.");
   const hash = hashExecPassword_(typed);
   const reply = withLock_(function () {
     if (!cache.get(key)) throw new ApiError_("PASSWORD_SETUP_EXPIRED", "Sign in with the club password again.");
@@ -123,9 +120,19 @@ function execSignInReply_(person) {
   return { ok: true, token: startSession_(person.name, "exec", person), name: person.name, role: "exec", membershipFee: getConfig_().membershipFee };
 }
 
+/** The gear unlocks settings for the already authenticated person; it never signs someone in. */
+function unlockSettings_(session, password) {
+  const attempt = execLoginAttempt_("settings_" + (session.personId || session.name));
+  const expected = getConfig_().adminPassword;
+  if (!expected || String(password || "") !== expected) return execWrongPassword_(attempt);
+  attempt.cache.remove(attempt.key);
+  const person = session.personId ? { id: session.personId, authVersion: session.personVersion } : null;
+  return { ok: true, token: startSession_(session.name, "admin", person), name: session.name, role: "admin", membershipFee: getConfig_().membershipFee };
+}
+
 /** Called before any signed-in action. A reset, removal or deactivation invalidates the person's sessions. */
 function checkExecAccountSession_(session) {
-  if (session.role !== "exec") return;
+  if (session.role !== "exec" && !(session.role === "admin" && session.personId)) return;
   const person = session.personId
     ? readRows_("Team").filter(function (p) { return p.id === session.personId; })[0]
     : taskTeamByName_(session.name);

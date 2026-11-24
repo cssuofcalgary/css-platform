@@ -276,8 +276,13 @@ label.check input { width: auto; }
   .grid-3 > div:first-child { grid-column: 1 / -1; }
 }
 
-/* Phone mode (small touch screens): scanner first, less chrome */
+/* Phone mode (small touch screens): compact chrome */
 body.phone .topbar { padding: 8px 12px; }
+.task-selected-owners { display: flex; flex-wrap: wrap; gap: 6px; }
+.task-selected-owners:empty { display: none; }
+.task-owner-entry { display: flex; align-items: start; gap: 8px; }
+.task-owner-entry .combo { flex: 1; min-width: 0; }
+.task-owner-entry input { width: 100%; }
 body.phone .who .muted { display: none; }
 body.phone .content { padding: 10px 12px 24px; }
 body.phone .tabs { padding: 4px 12px 0; }

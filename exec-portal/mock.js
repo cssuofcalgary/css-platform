@@ -145,10 +145,17 @@ const MockApi = (() => {
         const title = String(input.title || "").trim();
         if (!title) return { ok: false, error: "BAD_REQUEST", message: "Say what the task is." };
         if (title.length > 140) return { ok: false, error: "BAD_REQUEST", message: "Keep the task under 140 characters." };
-        const typed = String(input.owner || "").trim().replace(/\s+/g, " ");
-        let person = findPerson(typed);
-        if (typed && !person && !peopleLocked) { addPerson(typed, input.department && input.department !== "General" ? input.department : ""); person = findPerson(typed); }
-        const fields = { title, owner: person ? person.name : typed, due: input.due || "", department: input.department || (person && person.department) || "General",
+        const owners = [];
+        (Array.isArray(input.owners) ? input.owners : [input.owner || ""]).forEach((raw) => {
+          const typed = String(raw).trim().replace(/\s+/g, " ");
+          if (!typed) return;
+          let person = findPerson(typed);
+          if (!person && !peopleLocked) { addPerson(typed, input.department && input.department !== "General" ? input.department : ""); person = findPerson(typed); }
+          const name = person ? person.name : typed;
+          if (!owners.some((n) => n.toLowerCase() === name.toLowerCase())) owners.push(name);
+        });
+        const person = findPerson(owners[0] || "");
+        const fields = { title, owner: owners[0] || "", owners, due: input.due || "", department: input.department || (person && person.department) || "General",
           notes: input.notes || "", link: input.link || "", remind: cleanRemind(input.remind), updatedBy: me, updatedAt: new Date().toISOString() };
         if (input.id) {
           const t = find(input.id);
@@ -242,10 +249,6 @@ const MockApi = (() => {
       case "login": {
         if (!String(req.name || "").trim()) return { ok: false, error: "NAME_NEEDED" };
         const known = findPerson(req.name);
-        if (req.password === DEMO_ADMIN_PASSWORD) {
-          if (!peopleLocked) addPerson(req.name);
-          return demoSignIn(known ? known.name : req.name.trim(), "admin");
-        }
         if (known && known.active === false) return { ok: false, error: "WRONG_PASSWORD" };
         if (known && accountHashes[known.id]) return await demoVerifyPassword(String(req.password || ""), accountHashes[known.id])
           ? demoSignIn(known.name, "exec", known) : { ok: false, error: "WRONG_PASSWORD" };
@@ -260,7 +263,6 @@ const MockApi = (() => {
         if (!setup || Date.now() - setup.at > 600000) return { ok: false, error: "PASSWORD_SETUP_EXPIRED", message: "Sign in with the club password again." };
         const password = String(req.password || "");
         if (!password) return { ok: false, error: "BAD_REQUEST", message: "Enter a password." };
-        if ([DEMO_PASSWORD, DEMO_ADMIN_PASSWORD].includes(password)) return { ok: false, error: "BAD_REQUEST", message: "Choose a password different from the club and settings passwords." };
         let known = findPerson(setup.name);
         if ((setup.id && (!known || setup.id !== known.id)) || (known && (known.active === false || accountHashes[known.id] || accountVersions[known.id] !== setup.version))) return { ok: false, error: "PASSWORD_SETUP_EXPIRED", message: "Your sign-in details changed. Sign in again." };
         if (!known && peopleLocked) return { ok: false, error: "PERSON_NOT_LISTED", message: "Ask an admin to add your name first." };
@@ -269,6 +271,12 @@ const MockApi = (() => {
         accountVersions[known.id] = Math.random().toString(36);
         delete setupTokens[req.setupToken];
         return demoSignIn(known.name, "exec", known);
+      }
+      case "unlockSettings": {
+        if (!sessions.has(req.token)) return { ok: false, error: "NOT_LOGGED_IN" };
+        if (req.password !== DEMO_ADMIN_PASSWORD) return { ok: false, error: "WRONG_PASSWORD" };
+        const person = signedPerson && taskTeam.find((p) => p.id === signedPerson.id);
+        return demoSignIn(sessionNames[req.token], "admin", person);
       }
       case "logout":
         sessions.delete(req.token);

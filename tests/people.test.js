@@ -42,7 +42,8 @@ ok(attempt(`personalLogin_('club-test','Unlisted')`).error === "PERSON_NOT_LISTE
 run(`teamAddOnSignIn_('Unlisted'); taskAddOwner_({name:'TEST Exec'}, 'Unlisted Task Owner', 'Events');`);
 ok(run("!taskTeamByName_('Unlisted') && !taskTeamByName_('Unlisted Task Owner')"), "automatic sign-in and task-owner additions also respect the lock");
 ok(route("importPeople", { text: "New Listed,Finance" }).added === 1, "admins can deliberately bulk-add people while locked");
-ok(run(`personalLogin_('settings-test','Emergency Admin').role`) === "admin", "the settings password remains an admin recovery sign-in");
+ok(attempt(`route_({action:'login',password:'settings-test',name:'Emergency Admin'})`).error === "WRONG_PASSWORD", "the settings password cannot sign in or bypass a locked roster");
+ok(attempt(`route_({action:'unlockSettings',password:'settings-test'})`).error === "NOT_LOGGED_IN", "settings cannot unlock before signing in");
 ok(attempt(`personalLogin_('wrong','Kevin B')`).error === "WRONG_PASSWORD", "first-time setup requires the club password");
 const setup = run(`personalLogin_('club-test','kevin b')`);
 ok(setup.needsPasswordSetup && setup.setupToken && !setup.token && setup.name === "Kevin B", "the club password opens password setup, without granting a portal session");
@@ -60,11 +61,16 @@ ok(attempt(`personalLogin_('club-test','Kevin B')`).error === "WRONG_PASSWORD", 
 ok(attempt(`personalLogin_('wrong-pass','Kevin B')`).error === "WRONG_PASSWORD", "a wrong personal password is refused");
 const secondSession = run(`personalLogin_('private-pass-1','KEVIN B')`);
 ok(secondSession.token && secondSession.name === "Kevin B", "subsequent sign-ins use the personal password and canonical name");
+ok(attempt(`route_({action:'unlockSettings',token:'${secondSession.token}',password:'wrong'})`).error === "WRONG_PASSWORD", "a wrong settings password does not unlock settings");
+ok(run(`requireSession_('${secondSession.token}').role`) === "exec", "a failed unlock leaves the normal sign-in intact");
+const unlocked = run(`route_({action:'unlockSettings',token:'${secondSession.token}',password:'settings-test',name:'Someone Else'})`);
+ok(unlocked.role === "admin" && unlocked.name === "Kevin B" && run(`requireAdmin_('${unlocked.token}').personId`) === run(`taskTeamByName_('Kevin B').id`), "unlocking Settings preserves the signed-in person's identity and account version");
 const id = run(`taskTeamByName_('Kevin B').id`);
 run(`CacheService.getScriptCache().put(loginFailKey_('Kevin B'), '30', 600)`);
 route("resetPersonPassword", { id });
 ok(run(`!CacheService.getScriptCache().get(loginFailKey_('Kevin B'))`), "reset clears the failed-attempt pause so password recovery works immediately");
 ok(attempt(`requireSession_('${configured.token}')`).error === "NOT_LOGGED_IN" && attempt(`requireSession_('${secondSession.token}')`).error === "NOT_LOGGED_IN", "an admin reset immediately invalidates every personal session");
+ok(attempt(`requireAdmin_('${unlocked.token}')`).error === "NOT_LOGGED_IN", "reset also invalidates that person's unlocked Settings session");
 ok(attempt(`personalLogin_('private-pass-1','Kevin B')`).error === "WRONG_PASSWORD", "the previous password stops working after a reset");
 const resetSetup = run(`personalLogin_('club-test','Kevin B')`);
 ok(resetSetup.needsPasswordSetup && !resetSetup.token, "after reset, the club password opens setup again");
@@ -100,5 +106,20 @@ const longPassword = '界'.repeat(100) + '😀'.repeat(50) + ' ending';
 ok(run(`finishExecSetup_('${longSetup.setupToken}',${JSON.stringify(longPassword)}).ok && personalLogin_(${JSON.stringify(longPassword)},'Long Password Test').ok`), "long Unicode passwords can be set and used to sign in");
 ok(attempt(`personalLogin_(${JSON.stringify(longPassword + ' changed')},'Long Password Test')`).error === "WRONG_PASSWORD", "characters beyond bcrypt's old 72-byte boundary still count");
 ok(run(`verifyExecPassword_('old-test-password', execPasswordLibrary_().hashSync('old-test-password', 12))`), "passwords created before this update still work");
+for (const password of ["club-test", "settings-test"]) {
+  const name = "Matching " + password;
+  const proof = run(`personalLogin_('club-test',${JSON.stringify(name)})`);
+  const saved = run(`finishExecSetup_('${proof.setupToken}',${JSON.stringify(password)})`);
+  ok(saved.role === "exec" && run(`personalLogin_(${JSON.stringify(password)},${JSON.stringify(name)}).role`) === "exec", "a personal password matching a shared password is accepted and only signs in as an exec");
+}
+const settingsAccount = run(`taskTeamByName_('Matching settings-test')`);
+const settingsLogin = run(`personalLogin_('settings-test','Matching settings-test')`);
+const settingsUnlock = run(`route_({action:'unlockSettings',token:'${settingsLogin.token}',password:'settings-test'})`);
+const afterSignOut = run(`signOutAll_(requireAdmin_('${settingsUnlock.token}'))`);
+ok(run(`requireAdmin_('${afterSignOut.token}').personId`) === settingsAccount.id, "signing everyone out keeps the admin's replacement session linked to their account");
+const afterPasswordChange = run(`saveSettings_(requireAdmin_('${afterSignOut.token}'),'${afterSignOut.token}',{adminPassword:'replacement-settings-test'})`);
+ok(run(`requireAdmin_('${afterPasswordChange.token}').personId`) === settingsAccount.id, "changing a shared password also preserves the admin account link");
+run(`resetPersonPassword_({name:'TEST Admin'},'${settingsAccount.id}')`);
+ok(attempt(`requireAdmin_('${afterPasswordChange.token}')`).error === "NOT_LOGGED_IN", "a later personal reset revokes replacement admin sessions too");
 console.log(fails ? `\n${fails} FAILED` : "\nALL PASSED");
 process.exit(fails ? 1 : 0);

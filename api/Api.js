@@ -103,6 +103,9 @@ function route_(req) {
     case "finishExecSetup":
       return finishExecSetup_(req.setupToken, req.password);
 
+    case "unlockSettings":
+      return unlockSettings_(requireSession_(req.token), req.password);
+
     case "loginDoor":
       return loginDoor_(req.password, req.name);
 

@@ -1,9 +1,8 @@
 // CSS Exec Portal v0.1 — sign in, search members, view a member. Read-only.
 
-// ?mode=scanner = the stripped-down door scanner (phones open it by themselves; ?full=1 skips that)
+// ?mode=scanner explicitly opens the stripped-down door scanner.
 const PARAMS = new URLSearchParams(location.search);
 const SCANNER_MODE = PARAMS.get("mode") === "scanner";
-const FORCE_FULL = PARAMS.get("full") === "1";
 
 const state = {
   membershipFee: null,   // the fee saved in Settings, as the server last said
@@ -239,14 +238,14 @@ function showApp() {
   $("who-avatar").textContent = state.name.trim().split(/\s+/).map((p) => p[0]).join("").slice(0, 2).toUpperCase();
   showSearch();
   if (typeof startMailStatus === "function") startMailStatus();
-  // Phones are for the door: open straight to the Door tab. Everyone else lands on the Overview.
+  // Phones open Tasks. The scanner link and door-only sessions deliberately open Door.
   // (The tab code loads after this file, so on first load wait until every script has run.)
-  let landing = SCANNER_MODE || isPhone() ? "door" : "overview";
+  let landing = SCANNER_MODE || state.role === "door" ? "door" : isPhone() ? "tasks" : "overview";
   // A refresh keeps you where you were (same browser tab): the last tab is remembered for this sign-in.
   try {
     const saved = sessionStorage.getItem("css_tab");
     const button = saved && document.querySelector('.tab[data-tab="' + saved + '"]');
-    if (!SCANNER_MODE && state.role !== "door" && button && !button.hidden) landing = saved;
+    if (!SCANNER_MODE && !isPhone() && state.role !== "door" && button && !button.hidden) landing = saved;
   } catch (e) { /* no storage: land on the usual tab */ }
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", () => switchTab(landing));
   else switchTab(landing);
@@ -545,7 +544,6 @@ function fillText() {
 }
 
 function start() {
-  if (isPhone() && !SCANNER_MODE && !FORCE_FULL) { location.replace("?mode=scanner"); return; }   // phones = scanner
   fillText();
   document.body.classList.toggle("scanner-mode", SCANNER_MODE);
   if (SCANNER_MODE) {

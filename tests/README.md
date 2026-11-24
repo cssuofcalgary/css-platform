@@ -80,7 +80,8 @@ node tests/membershipform.test.js
 node tests/membershipform-ui.test.js
 ```
 
-`people.test.js` covers pasted rosters, admin permissions, the registration lock, personal-password setup and sign-in, hashed storage, password resets, revoked sessions and deactivation. `execaccounts-ui.test.js` covers the first-time password screen and remembered names from existing sessions.
+`people.test.js` covers pasted rosters, admin permissions, the registration lock, personal-password setup and sign-in, authenticated Settings unlock, hashed storage, password resets, revoked sessions and deactivation. `execaccounts-ui.test.js` covers the first-time password screen, remembered names and phone Tasks/scanner landing pages.
+`tasks-ui.test.js` covers adding/removing multiple assignees, saving typed names, editing shared tasks, My tasks for each assignee and escaping names. `tasks.test.js` also checks shared-task Discord posts, bot creation, manual/scheduled reminders and older single-owner tasks.
 
 Each prints PASS/FAIL lines and exits with an error if anything fails. Run every suite before a deploy:
 

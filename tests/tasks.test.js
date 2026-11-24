@@ -270,7 +270,7 @@ const cases = [
   ["<@900000000000000001> make reel", { title: "Make reel", due: "" }],
   ["<@900000000000000001> <@111111111111111111> design poster by wed", { title: "Design poster", due: "2026-11-25", ownerDiscordId: "111111111111111111" }],
   ["<@900000000000000001> book room for <@222222222222222222> on thursday", { title: "Book room", due: "2026-11-26", ownerDiscordId: "222222222222222222" }],
-  ["<@900000000000000001> sync with <@222222222222222222> and <@111111111111111111>", { title: "Sync with and @Kevin", ownerDiscordId: "222222222222222222" }],
+  ["<@900000000000000001> sync with <@222222222222222222> and <@111111111111111111>", { title: "Sync", ownerDiscordId: "222222222222222222" }],
   ["<@900000000000000001> @Amy Lee print flyers by fri", { title: "Print flyers", ownerDiscordId: "222222222222222222", ownerName: "Amy Lee" }],
   ["<@900000000000000001> for @noid print flyers", { title: "Print flyers", ownerDiscordId: "", ownerName: "Noid" }],
   ["<@900000000000000001> <@&123456> tell everyone", { title: "Tell everyone" }],
@@ -693,6 +693,30 @@ ok(/^👍 Reminder set for .+\nCouldn't set a reminder for .+ — it's after the
 run(`TBL.Tasks.forEach(function (t) { if (t.id === "${remTask}") { t.due = ymdAdd_(edmParts_(Date.now()).ymd, 90); t.remind = []; } });`);
 r = RR("remind me tomorrow");
 ok(/^🤔 Couldn't set a reminder for .+ — it's more than 60 days before the due date\.$/.test(r), "reply: a reminder day more than 60 days early gets a plain answer");
+
+// Multiple assignees, including older single-owner rows and Discord-created tasks.
+run(`savePerson_(A,{name:'Multi One',department:'Events',discordId:'666666666666666661'});
+  savePerson_(A,{name:'Multi Two',department:'Internal',discordId:'666666666666666662'}); __discord('bot');`);
+const multi = run(`saveTask_(S,{title:'Shared preparation',owners:[' multi one ','Multi Two','MULTI ONE'],due:ymdAdd_(edmParts_(Date.now()).ymd,1)}).task`);
+ok(SAME(multi.owners, ["Multi One", "Multi Two"]) && multi.owner === "Multi One", "multiple assignees use canonical names and duplicates are removed");
+let multiPost = run(`__fetches.filter(function(f){return f.body && /^📌/.test(f.body.content);}).pop().body`);
+ok(SAME(multiPost.allowed_mentions.users, ["666666666666666661", "666666666666666662"]) && multiPost.content.includes("<@666666666666666661>, <@666666666666666662>"), "a shared task post tags every assignee and no roles");
+ok(SAME(run(`saveTask_(S,{id:'${multi.id}',title:'Updated shared task'}).task.owners`), multi.owners), "a partial edit preserves every assignee");
+run(`__fetches=[]; remindTasksOnDiscord_(S)`);
+multiPost = run(`__fetches.filter(function(f){return f.body && /Updated shared task/.test(f.body.content);}).pop().body`);
+ok(multiPost.allowed_mentions.users.includes("666666666666666661") && multiPost.allowed_mentions.users.includes("666666666666666662"), "the manual Discord reminder tags both people");
+run(`var multiRaw = taskFresh_('${multi.id}'); multiRaw.remind=[{n:0,unit:'days',at:'09:00'}]; multiRaw.remindSent=[];
+  var multiDue = taskReminderAt_(multiRaw.due,multiRaw.remind[0]);`);
+const multiReminder = run(`withLock_(function(){return takeDueReminders_(multiDue+1000);}).filter(function(p){return p.taskId==='${multi.id}';})[0]`);
+ok(multiReminder && SAME(multiReminder.userIds, ["666666666666666661", "666666666666666662"]), "scheduled reminders also tag everyone assigned");
+ok(SAME(run(`saveTask_(S,{id:'${multi.id}',owners:['Multi Two']}).task.owners`), ["Multi Two"]) && SAME(run(`taskOwnerDiscordIds_(taskFresh_('${multi.id}'))`), ["666666666666666662"]), "removing an assignee removes their Discord mention too");
+ok(run(`saveTask_(S,{id:'${multi.id}',owners:[]}).task.owner`) === "" && run(`taskAssignees_(taskFresh_('${multi.id}')).length`) === 0, "all assignees can be cleared");
+ok(fn(`saveTask_(S,{title:'Invalid people',owners:'Multi One'})`).err === "BAD_REQUEST" && fn(`saveTask_(S,{title:'Invalid people',owners:[{name:'Multi One',discordId:'123'}]})`).err === "BAD_REQUEST", "the API refuses malformed assignees and browser-supplied Discord IDs");
+ok(SAME(run(`taskView_({owner:'Legacy Name'},[]).owners`), ["Legacy Name"]), "old single-owner tasks still display their assignee without a migration");
+const multiParsed = run(`parseTaskMessage_('<@'+BOT+'> prepare together for <@666666666666666661> and <@666666666666666662> by friday',new Date(),readRows_('Team'),BOT)`);
+ok(multiParsed.assignees.length === 2 && multiParsed.title === "Prepare together", "the bot accepts multiple person mentions as assignees");
+const multiFromDiscord = run(`withLock_(function(){return applyDiscordMessages_({botId:BOT,firstRun:false,messages:[__msg(9001,{content:'<@'+BOT+'> shared Discord task for <@666666666666666661> and <@666666666666666662>',mentions:[{id:BOT},{id:'666666666666666661',username:'one'},{id:'666666666666666662',username:'two'}]})]});})`);
+ok(multiFromDiscord.created === 1 && SAME(multiFromDiscord.posts[0].userIds,["666666666666666661","666666666666666662"]) && run(`taskView_(readRows_('Tasks').filter(function(t){return t.title==='Shared Discord task';})[0],[]).owners.length`) === 2, "Discord-created shared tasks keep both people and confirm both mentions");
 
 // Routes exist
 ["listTasks", "saveTask", "setTaskStatus", "addTaskUpdate", "removeTask", "remindTasksOnDiscord"].forEach((a) => {

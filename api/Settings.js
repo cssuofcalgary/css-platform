@@ -142,7 +142,7 @@ function saveSettings_(session, token, input) {
   const reply = { ok: true, changed: changed, message: notes, membershipFee: updates.MEMBERSHIP_FEE !== undefined ? Number(updates.MEMBERSHIP_FEE) : config.membershipFee };
   if (newPasswords) {
     signOutEveryone_();
-    reply.token = startSession_(session.name, session.role);   // the admin stays signed in
+    reply.token = startSession_(session.name, session.role, session.personId ? { id: session.personId, authVersion: session.personVersion } : null);   // the admin stays signed in, linked to their account
     reply.signedOutEveryone = true;
   }
   return reply;
@@ -182,7 +182,7 @@ function currentEpoch_() {
 function signOutAll_(session) {
   signOutEveryone_();
   log_(session.name, "sessions.clear", "", {});
-  return { ok: true, token: startSession_(session.name, session.role) };
+  return { ok: true, token: startSession_(session.name, session.role, session.personId ? { id: session.personId, authVersion: session.personVersion } : null) };
 }
 
 // ---- Health check ------------------------------------------------------------

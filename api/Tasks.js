@@ -137,6 +137,40 @@ function taskOwnerDiscordId_(task) {
   return /^\d{17,20}$/.test(saved) ? saved : teamDiscordId_(taskTeamByName_(task.owner));
 }
 
+/** Older tasks have just owner/ownerDiscordId; keep reading those without a migration. */
+function taskAssignees_(task) {
+  const saved = taskList_(task.assignees);
+  return saved.length ? saved : task.owner ? [{ name: task.owner, discordId: task.ownerDiscordId || "" }] : [];
+}
+
+function taskAssigneeDiscordId_(person) {
+  return /^\d{17,20}$/.test(String(person.discordId || "")) ? String(person.discordId) : teamDiscordId_(taskTeamByName_(person.name));
+}
+
+function taskOwnerDiscordIds_(task) {
+  return taskAssignees_(task).map(taskAssigneeDiscordId_).filter(function (id, i, ids) { return id && ids.indexOf(id) === i; });
+}
+
+function taskDiscordWho_(task) {
+  return taskAssignees_(task).map(function (p) { return discordWho_(p.name, taskAssigneeDiscordId_(p)); }).join(", ") || discordWho_("", "");
+}
+
+/** Resolve portal names under the save lock; never accept Discord IDs from the browser. */
+function taskResolveAssignees_(names, previous, session, department) {
+  const seen = {}, old = taskAssignees_(previous || {});
+  return names.map(function (name) { return memberText_(name, 60); }).filter(function (name) {
+    const key = teamNameKey_(name);
+    if (!key || seen["n:" + key]) return false;
+    seen["n:" + key] = true;
+    return true;
+  }).map(function (name) {
+    const person = taskTeamByName_(name);
+    const saved = old.filter(function (p) { return teamNameKey_(p.name) === teamNameKey_(name); })[0];
+    if (!person) taskAddOwner_(session, name, department);
+    return { name: person ? String(person.name).trim() : name, discordId: teamDiscordId_(person) || (saved ? String(saved.discordId || "") : "") };
+  });
+}
+
 /** Admin: replaces the team list. Rows left out are deleted from the Team tab (tasks keep the person's name). */
 function saveTeam_(session, list) {
   if (!Array.isArray(list)) throw new ApiError_("BAD_REQUEST", "Send the team list.");
@@ -192,7 +226,7 @@ function taskUpdateView_(u) {
 function taskView_(t, updates) {
   const next = taskNextReminder_(t, Date.now());
   return {
-    id: t.id, title: t.title, department: t.department || "General", owner: t.owner || "", status: TASK_STATUSES.indexOf(t.status) !== -1 ? t.status : "todo",
+    id: t.id, title: t.title, department: t.department || "General", owner: t.owner || "", owners: taskAssignees_(t).map(function (p) { return p.name; }), status: TASK_STATUSES.indexOf(t.status) !== -1 ? t.status : "todo",
     due: t.due || "", notes: String(t.notes || "").replace(/^'/, ""), link: t.link || "",
     remind: taskReminderItems_(t), reminders: taskRemindersView_(t), nextReminder: next ? taskStamp_(next) : "",
     createdBy: t.createdBy, createdAt: t.createdAt, updatedBy: t.updatedBy || "", updatedAt: t.updatedAt || "", doneAt: t.doneAt || "",
@@ -281,7 +315,7 @@ function taskNewRow_(f) {
   const now = (f.now || new Date()).toISOString();
   const row = {
     id: newId_("TK"), title: memberText_(f.title, 140), department: f.department || "General", owner: memberText_(f.owner, 60),
-    ownerDiscordId: /^\d{17,20}$/.test(String(f.ownerDiscordId || "")) ? String(f.ownerDiscordId) : "", status: f.status || "todo",
+    ownerDiscordId: /^\d{17,20}$/.test(String(f.ownerDiscordId || "")) ? String(f.ownerDiscordId) : "", assignees: f.assignees || [], status: f.status || "todo",
     due: f.due || "", notes: f.notes || "", link: f.link || "", remind: f.remind || [], remindSent: [], discordRefs: [],
     createdBy: f.by, createdAt: now, updatedBy: f.by, updatedAt: now, doneAt: f.status === "done" ? now : "",
     discordMessageId: f.discordMessageId || "", removedAt: "", removedBy: ""
@@ -322,7 +356,12 @@ function saveTask_(session, input) {
     if (!title || raw.length > 140) throw new ApiError_("BAD_REQUEST", "Write what needs doing (up to 140 characters).");
     clean.title = title;
   }
-  if (!editing || has("owner")) clean.owner = memberText_(input.owner, 60);
+  const assigning = !editing || has("owners") || has("owner");
+  if (has("owners") && (!Array.isArray(input.owners) || input.owners.length > 200 || input.owners.some(function (n) { return typeof n !== "string"; }))) {
+    throw new ApiError_("BAD_REQUEST", "Choose the people assigned to this task.");
+  }
+  const names = has("owners") ? input.owners : [String(input.owner || "")];
+  if (assigning) clean.owner = memberText_(names[0], 60);
   if (!editing || has("due")) clean.due = taskCleanDue_(input.due);
   if (!editing) clean.status = has("status") && input.status !== "" ? taskCleanStatus_(input.status) : "todo";
   if (!editing || has("notes")) clean.notes = noteText_(String(input.notes || "").slice(0, 2000));
@@ -334,10 +373,10 @@ function saveTask_(session, input) {
     const task = withLock_(function () {   // the lock keeps NEXT_TASK_REMINDER (and the People list) right when two changes happen at once
       delete DB_.rows["Team"];
       const owner = taskTeamByName_(clean.owner);
-      if (owner) clean.owner = String(owner.name).trim();   // the People list's spelling
       clean.department = department || (owner && TASK_DEPARTMENTS.indexOf(owner.department) !== -1 ? owner.department : "General");
-      clean.ownerDiscordId = teamDiscordId_(owner);
-      if (clean.owner && !owner) taskAddOwner_(session, clean.owner, clean.department);
+      clean.assignees = taskResolveAssignees_(names, null, session, clean.department);
+      clean.owner = clean.assignees.length ? clean.assignees[0].name : "";
+      clean.ownerDiscordId = clean.assignees.length ? clean.assignees[0].discordId : "";
       const row = taskNewRow_(Object.assign({ by: memberText_(session.name, 80) }, clean));
       insertRow_("Tasks", row);
       refreshNextReminder_();
@@ -345,7 +384,7 @@ function saveTask_(session, input) {
     });
     log_(session.name, "task.created", task.id, { title: task.title, owner: task.owner, due: task.due });
     // Discord, after the save and outside any lock.
-    const post = discordSend_(discordTaskMessage_(task, task.ownerDiscordId), [task.ownerDiscordId]);
+    const post = discordSend_(discordTaskMessage_(task, task.ownerDiscordId), taskOwnerDiscordIds_(task));
     if (post.ok && post.id) {
       try { withLock_(function () { updateRow_("Tasks", task.id, { discordMessageId: post.id }); }); task.discordMessageId = post.id; }
       catch (err) { console.error("Posted to Discord but couldn't save its id: " + discordSafeError_(err)); }
@@ -357,13 +396,12 @@ function saveTask_(session, input) {
     const task = taskFresh_(input.id);
     const changes = Object.assign({}, clean);
     delete DB_.rows["Team"];
-    const owner = taskTeamByName_(has("owner") ? clean.owner : task.owner);
-    if (has("owner") && owner) changes.owner = String(owner.name).trim();   // the People list's spelling
+    const owner = taskTeamByName_(assigning ? clean.owner : task.owner);
     changes.department = department || (input.department === undefined && task.department) || (owner && TASK_DEPARTMENTS.indexOf(owner.department) !== -1 ? owner.department : "General");
-    if (has("owner")) {   // the Team list's Discord ID; the same person as before keeps the one saved (e.g. from Discord)
-      const samePerson = teamNameKey_(clean.owner) === teamNameKey_(task.owner);
-      changes.ownerDiscordId = teamDiscordId_(owner) || (samePerson ? String(task.ownerDiscordId || "") : "");
-      if (clean.owner && !owner) taskAddOwner_(session, clean.owner, changes.department);
+    if (assigning) {
+      changes.assignees = taskResolveAssignees_(names, task, session, changes.department);
+      changes.owner = changes.assignees.length ? changes.assignees[0].name : "";
+      changes.ownerDiscordId = changes.assignees.length ? changes.assignees[0].discordId : "";
     }
     changes.updatedBy = session.name;
     changes.updatedAt = new Date().toISOString();
@@ -435,17 +473,16 @@ function remindTasksOnDiscord_(session) {
     return t.status === "blocked" || (t.due && t.due <= soon);
   }).sort(function (a, b) { return (a.due || "9999").localeCompare(b.due || "9999"); });
   if (!list.length) return { ok: true, posted: false, count: 0 };
-  const ids = [];   // ids[i] = the Discord id of line i's owner ("" if none)
+  const ids = [];   // Only assigned people may be pinged.
   const lines = list.map(function (t) {
-    const ownerId = taskOwnerDiscordId_(t);
-    ids.push(ownerId);
+    taskOwnerDiscordIds_(t).forEach(function (id) { ids.push(id); });
     let when = "no due date";
     if (t.due && t.due < today) {
       const days = Math.round((edmAt_(today, 12, 0) - edmAt_(t.due, 12, 0)) / 86400000);
       when = "overdue " + days + "d";
     } else if (t.due === today) when = "due today";
     else if (t.due) when = "due " + taskDayText_(t.due);
-    return "• **" + discordEscape_(t.title) + "** — " + discordWho_(t.owner, ownerId) + " · " + when + (t.status === "blocked" ? " · ⛔ blocked" : "");
+    return "• **" + discordEscape_(t.title) + "** — " + taskDiscordWho_(t) + " · " + when + (t.status === "blocked" ? " · ⛔ blocked" : "");
   });
   let content = "⏰ **Task check-in** — reply to each task's own message with how it's going.";
   let shown = 0;

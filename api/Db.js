@@ -30,14 +30,14 @@ const TABLES = {
   Requests: ["id", "action", "who", "status", "plan", "reply", "createdAt", "doneAt"],
   // Exec tasks (Tasks.js). remind, remindSent and discordRefs are lists; removed tasks are kept, marked removedAt.
   Tasks: ["id", "title", "department", "owner", "status", "due", "notes", "link", "createdBy", "createdAt", "updatedBy", "updatedAt",
-          "doneAt", "discordMessageId", "removedAt", "removedBy", "remind", "remindSent", "discordRefs", "ownerDiscordId"],
+          "doneAt", "discordMessageId", "removedAt", "removedBy", "remind", "remindSent", "discordRefs", "ownerDiscordId", "assignees"],
   TaskUpdates: ["id", "taskId", "text", "by", "source", "status", "createdAt", "discordMessageId"],
   Team: ["id", "name", "department", "discordId", "active", "sort", "passwordHash", "passwordSetAt", "authVersion"],
   Log: ["time", "who", "action", "target", "details"]
 };
 
 /** Columns holding lists/objects; stored as JSON text. */
-const JSON_COLUMNS = { ticketTypes: true, questions: true, answers: true, summary: true, returns: true, ticketIds: true, plan: true, reply: true, remind: true, remindSent: true, discordRefs: true };
+const JSON_COLUMNS = { ticketTypes: true, questions: true, answers: true, summary: true, returns: true, ticketIds: true, plan: true, reply: true, remind: true, remindSent: true, discordRefs: true, assignees: true };
 
 /**
  * Remembered for the rest of this one request only (each request starts fresh),

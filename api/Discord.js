@@ -139,9 +139,9 @@ function discordBotRoles_(setup, botId) {
   } catch (err) { return null; }
 }
 
-/** The message for a brand-new task made in the portal, @mentioning only its owner. */
+/** The message for a brand-new task made in the portal, @mentioning its assignees. */
 function discordTaskMessage_(task, ownerDiscordId) {
-  return "📌 **" + discordEscape_(task.title) + "** — " + discordWho_(task.owner, ownerDiscordId) +
+  return "📌 **" + discordEscape_(task.title) + "** — " + taskDiscordWho_(task) +
     " · due " + taskDayText_(task.due, "no due date") + " · " + (task.department || "General") +
     "\nReply to this message with how it's going. Say **done** when it's finished.";
 }
@@ -406,7 +406,14 @@ function applyDiscordMessages_(pull) {
       : ownerId === String(author.id) ? authorName
       : memberText_(mentioned ? (mentioned.global_name || mentioned.username) : "", 80);
     const ownerDiscordId = ownerRow ? teamDiscordId_(ownerRow) : (/^\d{17,20}$/.test(ownerId) ? ownerId : "");
+    const assignees = (parsed.assignees.length ? parsed.assignees : [{ name: ownerName, discordId: ownerDiscordId }]).map(function (p) {
+      const row = p.discordId ? member(p.discordId) : taskTeamByName_(p.name);
+      const mention = (msg.mentions || []).filter(function (u) { return String(u.id) === p.discordId; })[0];
+      return { name: row ? row.name : p.name || (p.discordId === String(author.id) ? authorName : memberText_(mention ? (mention.global_name || mention.username) : "", 60)) || p.discordId,
+        discordId: row ? teamDiscordId_(row) : p.discordId };
+    });
     const task = taskNewRow_({ title: parsed.title, owner: ownerName, ownerDiscordId: ownerDiscordId, due: parsed.due, remind: parsed.remind,
+      assignees: assignees,
       department: ownerRow && TASK_DEPARTMENTS.indexOf(ownerRow.department) !== -1 ? ownerRow.department : "General",
       by: authorName + " (Discord)", discordMessageId: id, now: when });
     insertRow_("Tasks", task);
@@ -416,8 +423,8 @@ function applyDiscordMessages_(pull) {
     log_(authorName + " (Discord)", "task.created", task.id, { title: task.title, owner: task.owner, source: "discord" });
     const coming = discordComingReminders_(task);
     const dropped = tbDroppedText_(parsed.remindDropped);
-    out.posts.push({ replyTo: id, taskId: task.id, userIds: [ownerDiscordId], content: "✅ Got it: **" + discordEscape_(task.title) + "** · " +
-      discordWho_(task.owner, ownerDiscordId) + " · due " + taskDayText_(task.due, "no due date") + " · " +
+    out.posts.push({ replyTo: id, taskId: task.id, userIds: taskOwnerDiscordIds_(task), content: "✅ Got it: **" + discordEscape_(task.title) + "** · " +
+      taskDiscordWho_(task) + " · due " + taskDayText_(task.due, "no due date") + " · " +
       (parsed.remindNeedsDue ? "reminders need a due date (add one in the Tasks tab)"
         : coming.length ? (coming.length > 1 ? "reminders " : "reminder ") + coming.join("; ")
         : parsed.remind.length ? "the reminder time has already passed"
