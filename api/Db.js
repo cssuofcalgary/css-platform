@@ -21,6 +21,8 @@ const TABLES = {
   Feedback: ["id", "eventId", "memberId", "name", "rating", "comment", "createdAt", "updatedAt"],
   Partners: ["id", "name", "offer", "address", "active", "sort", "createdAt", "createdBy", "updatedAt", "updatedBy"],
   MemberNotes: ["id", "memberId", "year", "text", "createdBy", "createdAt", "removedAt", "removedBy"],
+  // Exec comments on a payment (PaymentNotes.js), linked by order ID. Removed ones are kept, marked removedAt.
+  PaymentNotes: ["id", "orderId", "eventId", "text", "by", "createdAt", "removedAt", "removedBy"],
   Redemptions: ["id", "time", "receivedAt", "memberId", "memberName", "partnerId", "partnerName", "offer"],
   Waitlist: ["id", "eventId", "name", "email", "ucid", "memberId", "ticketTypeId", "ticketType", "answers", "status",
              "createdAt", "offeredAt", "offeredBy", "orderId", "orderCode", "notes", "offerEmail", "note"],

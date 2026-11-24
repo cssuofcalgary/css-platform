@@ -105,6 +105,7 @@ Lists (`ticketTypes`, `questions`, `answers`, `summary`) are stored as JSON text
 | Waitlist | id, eventId, name, email, ucid, memberId, ticketTypeId, ticketType, answers, status (`waiting`/`offered`/`removed`), createdAt, offeredAt, offeredBy, orderId, orderCode, notes |
 | Partners | id, name, offer, address, active, sort, createdAt, createdBy, updatedAt, updatedBy. (`active` can come back as `true` or `TRUE`: read it with `isOn_`) |
 | MemberNotes | id, memberId, year, text (up to 500 characters), createdBy, createdAt. Exec-only; linked by member ID and membership year, never by row number. No new columns in the Membership sheet. Keep these IDs and the year when migrating members into platform storage. |
+| PaymentNotes | id, orderId, eventId, text (up to 1000 characters), by, createdAt, removedAt, removedBy. Exec comments on a payment, linked by order ID. Removing one only fills removedAt/removedBy (added in API 0.23.0). |
 | Redemptions | id, time, receivedAt, memberId, memberName, partnerId, partnerName, offer |
 
 Also added in Oct 2026: Orders `cancelRequestedAt`, `cancelRequestedBy` (a ticket page "cancel" request; shown to Finance while the order is `awaiting`), Events `waitlist` (TRUE/FALSE), and a ticket's `emailedAt` can read `claim:<time>` while an email is being sent (a claim older than 10 minutes counts as unsent). **New columns only appear after `API_VERSION` (api/Config.js) changes**, because column names are cached per version.
@@ -139,6 +140,9 @@ Also added in Oct 2026: Orders `cancelRequestedAt`, `cancelRequestedBy` (a ticke
 | `getMember` `{memberId}` | yes | One member |
 | `listMemberNotes` `{memberId}` | yes (exec) | Shared notes for that member ID and membership year, newest first, with author and time. Notes stay out of public member replies. |
 | `addMemberNote` `{memberId, text}` | yes (exec) | Adds a note of up to 500 characters to the platform's MemberNotes tab. Author comes from the session; time comes from the server. |
+| `listPaymentNotes` `{orderId}` | yes (exec) | Comments on that payment, newest first (`notes`: id, text, by, createdAt), plus `noteCount` and `latestNote`. `listOrders` also gives each order `noteCount` and `latestNote` {text (cut to 120 characters, one line), by, createdAt}. |
+| `addPaymentNote` `{orderId, text, clientId?, eventId?}` | yes (exec) | Adds a comment of up to 1000 characters (refuses empty ones, and an unknown order with NOT_FOUND). Author from the session. `clientId` (PN…) stops a retry adding it twice. Replies with `note`, `noteCount`, `latestNote`. |
+| `removePaymentNote` `{id}` | yes (exec) | The writer or an admin marks a comment removed (kept in the sheet). Replies with `orderId`, `noteCount`, `latestNote`. |
 | `resendMemberPass` `{memberId}` | yes (exec) | Emails the pass and saves Mail Status `Sent` after success, then returns the updated member. Re-reads the row by member ID before writing, and clears the member cache. A failed send leaves Mail Status unchanged. |
 | `listEvents` | yes | All events incl. drafts + `counts[eventId] = {awaiting, paid, checkedIn}` |
 | `saveEvent` `{event}` | yes | Create (no id) or update (with id). The slug (public link) never changes after creation |

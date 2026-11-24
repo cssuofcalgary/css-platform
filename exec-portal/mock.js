@@ -252,6 +252,43 @@ const MockApi = (() => {
     return { ok: false, error: "UNKNOWN_ACTION" };
   }
 
+  // Comments on a payment. The demo has no payments list, so only the comment actions themselves are here.
+  const payNotes = [];
+  function paymentNoteReply(req) {
+    const me = sessionNames[req.token] || "Demo";
+    const isAdmin = String(req.token || "").startsWith("demo-admin");
+    const view = (n) => ({ id: n.id, orderId: n.orderId, text: n.text, by: n.by, createdAt: n.createdAt });
+    const showing = (orderId) => payNotes.filter((n) => n.orderId === orderId && !n.removedAt).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    const summary = (orderId) => {
+      const last = showing(orderId)[0];
+      const flat = last ? last.text.replace(/\s+/g, " ").trim() : "";
+      return { noteCount: showing(orderId).length, latestNote: last ? { text: flat.length > 120 ? flat.slice(0, 119).trim() + "…" : flat, by: last.by, createdAt: last.createdAt } : null };
+    };
+    switch (req.action) {
+      case "listPaymentNotes":
+        if (!req.orderId) return { ok: false, error: "BAD_REQUEST", message: "Which payment?" };
+        return { ok: true, notes: showing(req.orderId).map(view), ...summary(req.orderId) };
+      case "addPaymentNote": {
+        const text = String(req.text ?? "").trim();
+        if (!text || text.length > 1000) return { ok: false, error: "BAD_REQUEST", message: "Write a comment of up to 1000 characters." };
+        if (!req.orderId) return { ok: false, error: "NOT_FOUND", message: "That payment isn't there any more." };
+        const again = req.clientId && payNotes.find((n) => n.id === req.clientId);
+        if (again) return { ok: true, repeated: true, note: view(again), ...summary(again.orderId) };
+        const note = { id: req.clientId || "pn" + (++taskSeq), orderId: req.orderId, text, by: me, createdAt: new Date().toISOString(), removedAt: "" };
+        payNotes.push(note);
+        return { ok: true, note: view(note), ...summary(note.orderId) };
+      }
+      case "removePaymentNote": {
+        const note = payNotes.find((n) => n.id === (req.id || req.noteId) && !n.removedAt);
+        if (!note) return { ok: false, error: "NOT_FOUND", message: "That comment is no longer there." };
+        if (!isAdmin && note.by !== me) return { ok: false, error: "ADMIN_ONLY", message: `Only ${note.by} or an admin can remove this comment.` };
+        note.removedAt = new Date().toISOString();
+        return { ok: true, orderId: note.orderId, ...summary(note.orderId) };
+      }
+    }
+    return { ok: false, error: "UNKNOWN_ACTION" };
+  }
+
   async function handle(req) {
     await loadLogic();
     await new Promise((r) => setTimeout(r, 250));   // feel like a real network call
@@ -339,6 +376,9 @@ const MockApi = (() => {
       case "previewPeopleImport": case "importPeople": case "resetPersonPassword":
         if (!sessions.has(req.token)) return { ok: false, error: "NOT_LOGGED_IN" };
         return taskReply(req);
+      case "listPaymentNotes": case "addPaymentNote": case "removePaymentNote":
+        if (!sessions.has(req.token)) return { ok: false, error: "NOT_LOGGED_IN" };
+        return paymentNoteReply(req);
       default:
         return { ok: false, error: "UNKNOWN_ACTION" };
     }

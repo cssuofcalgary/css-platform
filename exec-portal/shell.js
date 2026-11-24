@@ -99,3 +99,37 @@ function updateEditorStep() {
 }
 window.addEventListener("scroll", updateEditorStep, { passive: true });
 window.addEventListener("resize", updateEditorStep);
+
+// ---- Sidebar groups: Partners sits under Members, Payments under Events. The arrow opens or closes a group (remembered on
+// this device). A closed group shows its children's count on the parent, and opens by itself when one of its tabs is opened.
+const NAV_CLOSED_KEY = "css_nav_closed";
+function navClosedGroups() {
+  try { const list = JSON.parse(localStorage.getItem(NAV_CLOSED_KEY) || "[]"); return Array.isArray(list) ? list : []; } catch (e) { return []; }
+}
+function syncNavGroupPill(group) {
+  const pill = group.querySelector(".nav-group-pill");
+  const total = [...group.querySelectorAll(".nav-children .nav-pill:not([hidden])")].reduce((n, p) => n + (Number(p.textContent) || 0), 0);
+  pill.hidden = !(group.classList.contains("closed") && total);
+  pill.textContent = total ? String(total) : "";
+}
+function setNavGroupOpen(group, open, remember) {
+  group.classList.toggle("closed", !open);
+  group.querySelector(".nav-toggle").setAttribute("aria-expanded", String(open));
+  syncNavGroupPill(group);
+  if (!remember) return;
+  const closed = navClosedGroups().filter((g) => g !== group.dataset.group);
+  if (!open) closed.push(group.dataset.group);
+  try { localStorage.setItem(NAV_CLOSED_KEY, JSON.stringify(closed)); } catch (e) { /* not remembered: fine */ }
+}
+document.querySelectorAll(".nav-group").forEach((group) => {
+  const toggle = group.querySelector(".nav-toggle");
+  const names = [...group.querySelectorAll(".nav-children .tab span[data-t]")].map((s) => T[s.dataset.t] || "").join(", ");
+  toggle.setAttribute("aria-label", T.navShowHide(names));
+  toggle.title = toggle.getAttribute("aria-label");
+  setNavGroupOpen(group, !navClosedGroups().includes(group.dataset.group), false);
+  toggle.addEventListener("click", () => setNavGroupOpen(group, group.classList.contains("closed"), true));
+  new MutationObserver(() => {
+    if (group.classList.contains("closed") && group.querySelector(".nav-children .tab.active")) setNavGroupOpen(group, true, false);
+    syncNavGroupPill(group);
+  }).observe(group.querySelector(".nav-children"), { subtree: true, attributes: true, childList: true, characterData: true });
+});

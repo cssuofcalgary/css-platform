@@ -75,8 +75,13 @@ function listOrders_(eventId, opts) {
 
   const offset = Math.max(0, parseInt(opts.offset, 10) || 0);
   const limit = Math.min(ORDERS_PAGE_MAX, Math.max(1, parseInt(opts.limit, 10) || ORDERS_PAGE));
+  // Exec comments (PaymentNotes.js): one read for the whole page. A problem there never stops the payments list opening.
+  let comments = {};
+  try { comments = paymentNoteSummaries_(); } catch (err) { console.error("Payment comments: " + (err && err.message || err)); rememberError_("paymentNotes", err); }
   const page = shown.slice(offset, offset + limit).map(function (o) {
+    const said = comments[o.id] || { noteCount: 0, latestNote: null };
     return {
+      noteCount: said.noteCount, latestNote: said.latestNote,
       id: o.id, code: o.code, payerName: o.payerName, payerEmail: o.payerEmail,
       etransferName: o.etransferName, total: Number(o.total) || 0, status: o.status,
       received: receivedOf_(o), stillDue: o.status === "awaiting" ? Math.round(Math.max(0, (Number(o.total) || 0) - receivedOf_(o)) * 100) / 100 : 0,

@@ -165,6 +165,17 @@ function route_(req) {
     case "removeMemberNote":
       return removeMemberNote_(requireSession_(req.token), req.noteId);
 
+    // Comments on a payment (PaymentNotes.js)
+    case "listPaymentNotes":
+      requireSession_(req.token);
+      return listPaymentNotes_(req.orderId);
+
+    case "addPaymentNote":
+      return addPaymentNote_(requireSession_(req.token), req.orderId, req.text, req.clientId, req.eventId);
+
+    case "removePaymentNote":
+      return removePaymentNote_(requireSession_(req.token), req.id || req.noteId);
+
     case "getMember": {
       requireSession_(req.token);
       const member = findMemberById_(loadMembers_(), req.memberId);

@@ -121,6 +121,18 @@ body.nav-open::after { content: ""; position: fixed; inset: 0; background: rgba(
 .tab:hover { background: var(--sunken); color: var(--text); }
 .tab.active { background: var(--gold-soft); color: var(--accent-ink); border: 0; }
 .tab.active::before { content: ""; position: absolute; left: -12px; top: 8px; bottom: 8px; width: 3px; border-radius: 0 3px 3px 0; background: var(--gold); }
+/* sidebar groups: Partners under Members, Payments under Events */
+.nav-group { display: flex; flex-direction: column; gap: 2px; }
+.nav-parent { display: flex; align-items: center; gap: 2px; }
+.nav-parent .tab { flex: 1; min-width: 0; }
+.nav-toggle { flex: none; width: 28px; height: 28px; display: grid; place-items: center; padding: 0; border: 0; border-radius: var(--radius-sm); background: none; color: var(--muted); cursor: pointer; }
+.nav-toggle:hover { background: var(--sunken); color: var(--text); }
+.nav-toggle svg { width: 14px; height: 14px; transform: rotate(90deg); transition: transform .15s; }
+.nav-group.closed .nav-toggle svg { transform: none; }
+.nav-children { display: flex; flex-direction: column; gap: 2px; }
+.nav-group.closed .nav-children { display: none; }
+.tab.sub { padding-left: 38px; font-size: 13.5px; }
+.tab.sub svg { width: 16px; height: 16px; }
 .nav-label { font-size: 10.5px; letter-spacing: 1.4px; text-transform: uppercase; color: var(--muted); padding: 16px 10px 6px; font-weight: 500; }
 .nav-pill { margin-left: auto; font-size: 11px; background: var(--accent); color: var(--accent-text); border-radius: 99px; padding: 0 7px; line-height: 18px; font-weight: 600; }
 .nav-live { margin-left: auto; width: 7px; height: 7px; border-radius: 50%; background: var(--good-text); animation: ping 2s infinite; }

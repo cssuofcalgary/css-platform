@@ -99,6 +99,7 @@ function orderCard(o) {
         ${o.needsRepair ? `<span class="flag">⚠ ${escapeHtml(T.needsRepair)}</span>` : ""}
         ${o.cancelRequestedAt ? `<span class="flag">${escapeHtml(T.cancelRequestedNote(o.cancelRequestedBy || o.payerName, shortTime(o.cancelRequestedAt)))}</span>` : ""}
       </div>
+      <div class="o-notes">${payNoteRow(o)}</div>
       <ul class="order-tickets o-tickets">${o.tickets.map((t) => `
         <li>${escapeHtml(t.name)} · ${escapeHtml(t.ticketType)} ${money(t.price)}
           ${t.ucid ? ` · UCID ${escapeHtml(t.ucid)}` : ""}${t.memberId ? ` · ${escapeHtml(t.memberId)}` : ""}
@@ -168,6 +169,7 @@ async function onOrdersClick(event) {
   if (act === "recordrefund") return openRefundDialog(order);
   if (act === "histrefund") return markAlreadyReturned(order);
   if (act === "putback") return putTicketBack(order, button.dataset.ticket);
+  if (act === "notes") return openPayNotes(order);
 
   if (button.dataset.act === "repair") {
     button.disabled = true;
@@ -248,7 +250,146 @@ function shortTime(iso) {
   return isNaN(d) ? iso : d.toLocaleString("en-CA", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 }
 
+// ---- Comments on a payment: a speech bubble on the card, and a window listing them newest first ----
+// `request` goes up each time the window opens or closes, so a late reply for another payment is ignored.
+const payNoteState = { orderId: "", notes: [], request: 0, pendingKey: "", pendingId: "" };
+
+/** The comment line on a payment card: the bubble with the count, then the newest comment on one line. */
+function payNoteRow(o) {
+  const count = Number(o.noteCount) || 0;
+  const last = count ? o.latestNote : null;
+  const day = last ? new Date(last.createdAt) : null;
+  const when = day && !isNaN(day) ? day.toLocaleDateString("en-CA", { month: "short", day: "numeric" }) : "";
+  return `<button type="button" class="pnote-row${count ? " has" : ""}" data-act="notes"${last ? ` title="${escapeHtml(T.payNoteTip(last.text, last.by, shortTime(last.createdAt)))}"` : ""}>
+    <span class="pnote-chip"><svg aria-hidden="true"><use href="#i-chat"/></svg>${count ? `<span>${count}</span>` : ""}</span>
+    ${last ? `<span class="pnote-last">${escapeHtml(last.text)}</span><span class="pnote-who">${escapeHtml(T.payNoteLine(last.by, when))}</span>`
+      : `<span class="pnote-add">${escapeHtml(count ? T.payNotesCount(count) : T.payNoteAddShort)}</span>`}
+  </button>`;
+}
+
+/** After adding or removing: the card's bubble and newest comment change in place (no reload of the list). */
+function payNoteUpdateCard(orderId, reply) {
+  const order = payState.data && payState.data.orders.find((o) => o.id === orderId);
+  if (!order) return;
+  order.noteCount = Number(reply.noteCount) || 0;
+  order.latestNote = reply.latestNote || null;
+  const card = [...document.querySelectorAll("#orders .order")].find((c) => c.dataset.order === orderId);
+  const row = card && card.querySelector(".pnote-row");
+  if (row) row.outerHTML = payNoteRow(order);
+}
+
+function payNoteSignedOut(reply) {
+  if (reply.error !== "NOT_LOGGED_IN") return false;
+  $("pay-notes-dialog").close();
+  signOutLocally();
+  showLogin(errorText(reply));
+  return true;
+}
+
+async function openPayNotes(order) {
+  const request = ++payNoteState.request;
+  payNoteState.orderId = order.id;
+  payNoteState.notes = [];
+  $("pn-title").textContent = T.payNotesTitle(order.code);
+  $("pn-text").value = "";
+  $("pn-text").placeholder = T.payNoteAddLabel;
+  $("pn-text").disabled = false;
+  $("pn-post").disabled = false;
+  $("pn-post").textContent = T.payNotePost;
+  $("pn-error").hidden = true;
+  $("pn-list").innerHTML = "";
+  $("pn-status").textContent = T.pendingLoading;
+  $("pay-notes-dialog").showModal();
+  $("pn-text").focus();
+  const reply = await api("listPaymentNotes", { orderId: order.id }, { quiet: true });
+  if (request !== payNoteState.request) return;
+  if (!reply.ok) {
+    if (payNoteSignedOut(reply)) return;
+    $("pn-status").textContent = errorText(reply);
+    return;
+  }
+  payNoteState.notes = reply.notes;
+  renderPayNotes();
+  payNoteUpdateCard(order.id, reply);   // someone else may have commented since the list loaded
+}
+
+function renderPayNotes() {
+  const notes = payNoteState.notes;
+  $("pn-status").textContent = notes.length ? "" : T.payNotesNone;
+  const mine = (n) => state.role === "admin" || n.by === String(state.name || "").trim();
+  $("pn-list").innerHTML = notes.map((n) => `<li class="pnote">
+    <div class="pnote-h"><b>${escapeHtml(n.by)}</b><span class="muted">${escapeHtml(shortTime(n.createdAt))}</span>
+      ${mine(n) ? `<button type="button" class="icon-btn pnote-x" data-pnote-remove="${escapeHtml(n.id)}" title="${escapeHtml(T.payNoteRemove)}" aria-label="${escapeHtml(T.payNoteRemove)}"><svg><use href="#i-x"/></svg></button>` : ""}</div>
+    <p>${escapeHtml(n.text)}</p>
+  </li>`).join("");
+}
+
+async function postPayNote(event) {
+  event.preventDefault();
+  const orderId = payNoteState.orderId;
+  const text = $("pn-text").value.trim();
+  if (!orderId || $("pn-post").disabled) return;
+  if (!text) return $("pn-text").focus();
+  // The same comment pressed again (after a dropped connection) keeps its name, so the server adds it only once.
+  const key = orderId + "\n" + text;
+  if (payNoteState.pendingKey !== key) {
+    payNoteState.pendingKey = key;
+    payNoteState.pendingId = "PN" + newRequestId().replace(/[^A-Za-z0-9]/g, "").slice(0, 20);
+  }
+  const request = payNoteState.request;
+  $("pn-post").disabled = true;
+  $("pn-text").disabled = true;
+  $("pn-post").textContent = T.payNotePosting;
+  $("pn-error").hidden = true;
+  const reply = await api("addPaymentNote", { orderId, eventId: payState.eventId, text, clientId: payNoteState.pendingId });
+  if (reply.ok) { payNoteState.pendingKey = ""; payNoteUpdateCard(orderId, reply); }
+  if (request !== payNoteState.request) return;   // the window was closed meanwhile
+  $("pn-post").disabled = false;
+  $("pn-text").disabled = false;
+  $("pn-post").textContent = T.payNotePost;
+  if (!reply.ok) {
+    if (payNoteSignedOut(reply)) return;
+    $("pn-error").textContent = errorText(reply);
+    $("pn-error").hidden = false;
+    return $("pn-text").focus();
+  }
+  $("pn-text").value = "";
+  if (!payNoteState.notes.some((n) => n.id === reply.note.id)) payNoteState.notes.unshift(reply.note);
+  renderPayNotes();
+  $("pn-text").focus();
+}
+
+async function removePayNote(event) {
+  const button = event.target.closest("[data-pnote-remove]");
+  if (!button || button.disabled) return;
+  const id = button.dataset.pnoteRemove;
+  const orderId = payNoteState.orderId;
+  const request = payNoteState.request;
+  if (!(await askConfirm(T.payNoteRemoveConfirm, T.payNoteRemoveYes))) return;
+  button.disabled = true;
+  const reply = await api("removePaymentNote", { id });
+  if (!reply.ok) {
+    if (payNoteSignedOut(reply)) return;
+    button.disabled = false;
+    return showToast(errorText(reply));
+  }
+  payNoteUpdateCard(reply.orderId || orderId, reply);
+  if (request === payNoteState.request) {
+    payNoteState.notes = payNoteState.notes.filter((n) => n.id !== id);
+    renderPayNotes();
+  }
+  showToast(T.payNoteRemoved, "success");
+}
+
 // ---- Wire up ----------------------------------------------------------------
+
+$("pn-form").addEventListener("submit", postPayNote);
+$("pn-text").addEventListener("keydown", (e) => {   // Enter posts; Shift+Enter starts a new line
+  if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); $("pn-form").requestSubmit(); }
+});
+$("pn-list").addEventListener("click", removePayNote);
+$("pn-close").addEventListener("click", () => $("pay-notes-dialog").close());
+$("pay-notes-dialog").addEventListener("close", () => { payNoteState.request++; });
 
 $("pay-event").addEventListener("change", () => { payState.eventId = $("pay-event").value; loadOrders(); });
 $("pay-search").addEventListener("input", () => {
