@@ -40,6 +40,8 @@ If the pass email can't be sent (the daily email limit), the person is still mar
 Every sign-up, add and Mark paid is written to the **Activity** tab (admin) with your name.
 
 ## Events tab: make an event
+
+**Practice event:** in Events, press **Practice event** to create a closed event with fake attendees and a printable QR sheet. The sheet says what each scan should show. Practice emails are off. When finished, use **Remove practice event** in that sheet; it removes only the practice data. An archived practice event can also be removed there before creating another.
 1. **+ New event.**
 2. Fill in:
    - **Name, date, start/end time, location, description.** A blank line in the description starts a new paragraph.

@@ -32,7 +32,7 @@ function applyTransfer_(session, req) {
   const rid = cleanRequestId_(req.requestId);
   const op = "applyTransfer:" + (rid || newId_("OP"));   // marks the orders this press changes (see applyWrites_)
 
-  const outcome = withLock_(function () {
+  const outcome = withIntakeAndScriptLock_(function () {
     // The same press again (the answer got lost, or it stopped halfway): never add the money a second time.
     const saved = savedRequest_("applyTransfer", rid);
     if (saved && saved.status === "done") return { repeat: saved.reply };
@@ -82,24 +82,21 @@ function applyTransfer_(session, req) {
       return carryOutTransfer_(session, plan);
     }
 
-    // ---- Cancelled orders come back first (the room rules apply), then everything is treated as an unpaid order
+    // Plan closed-order restores without writing anything: amount choices, capacity and duplicates can still reject this press.
+    const restores = {};
+    const restoreWrites = [];
     if (closed.length) {
       if (late !== "restore") throw new ApiError_("BAD_REQUEST", closed.map(function (o) { return o.code; }).join(", ") + " was cancelled. Choose to put it back and confirm it, or to refund this payment.");
-      if (!force) {   // check the room for everything first, so nothing is half done
-        Object.keys(events).forEach(function (eid) {
-          const ev = events[eid];
-          if (!ev.capacity) return;
-          const adding = orders.filter(function (o) { return o.eventId === eid && o.status !== "awaiting"; }).reduce(function (sum, o) {
-            return sum + readRows_("Tickets").filter(function (t) { return t.orderId === o.id && t.status === o.status; }).length;
-          }, 0);
-          const taken = readRows_("Tickets").filter(function (t) { return t.eventId === eid && (t.status === "paid" || t.status === "awaiting"); }).length;
-          const limit = ev.capacityRule === "all" ? ev.capacity : Math.floor(ev.capacity * 1.25);
-          if (taken + adding > limit) throw new ApiError_("OVER_CAPACITY", "Putting the cancelled order back would take " + ev.name + " over its limit of " + limit + " paid and waiting tickets.");
-        });
-      }
-      closed.forEach(function (o) { restoreLocked_(session, o, force); });
-      delete DB_.rows["Orders"]; delete DB_.rows["Tickets"];
-      orders = ids.map(function (id) { return readRows_("Orders").filter(function (o) { return o.id === id; })[0]; });
+      closed.forEach(function (o) {
+        const plan = planRestoreOrder_(session, o, force);
+        restores[o.id] = plan;
+        Array.prototype.push.apply(restoreWrites, plan.writes);
+      });
+      Object.keys(events).forEach(function (eid) {
+        const returning = closed.filter(function (o) { return o.eventId === eid; }).reduce(function (list, o) { return list.concat(restores[o.id].returning); }, []);
+        if (returning.length) assertRestoredTickets_(events[eid], returning, force);
+      });
+      orders = orders.map(function (o) { return restores[o.id] ? Object.assign({}, o, restores[o.id].change) : o; });
     }
 
     // ---- Is there room to confirm all of these? Checked up front: nothing about payment is written until it passes.
@@ -108,7 +105,7 @@ function applyTransfer_(session, req) {
         const ev = events[eid];
         if (!ev.capacity || ev.capacityRule !== "paid") return;
         const coming = orders.filter(function (o) { return o.eventId === eid; }).reduce(function (sum, o) {
-          return sum + readRows_("Tickets").filter(function (t) { return t.orderId === o.id && t.status === "awaiting"; }).length;
+          return sum + (restores[o.id] ? restores[o.id].returning.length : readRows_("Tickets").filter(function (t) { return t.orderId === o.id && t.status === "awaiting"; }).length);
         }, 0);
         const taken = spotsTaken_(ev);
         if (taken + coming > ev.capacity) throw new ApiError_("OVER_CAPACITY", "This would make " + (taken + coming) + " paid tickets for " + ev.name + ", over its capacity of " + ev.capacity + ".");
@@ -116,7 +113,15 @@ function applyTransfer_(session, req) {
     }
 
     // ---- Compare what arrived with what is due
-    const due = orders.map(function (o) { return Math.max(0, cents_(o.total) - cents_(receivedOf_(o))); });
+    const due = orders.map(function (o) {
+      let committed = refundCommittedCents_(o.id);
+      if (restores[o.id]) restores[o.id].writes.forEach(function (w) {
+        if (w.table !== "Refunds" || w.set.status !== "waived") return;
+        const rec = readRows_("Refunds").filter(function (r) { return r.id === w.id; })[0];
+        committed -= cents_(refundView_(rec).remaining);
+      });
+      return Math.max(0, cents_(o.total) - Math.max(0, cents_(receivedOf_(o)) - committed));
+    });
     const sumDue = due.reduce(function (a, b) { return a + b; }, 0);
     const diff = amountC - sumDue;
     if (diff > 0 && !over) throw new ApiError_("BAD_REQUEST", "That is " + usd_(dollars_(diff)) + " more than " + (orders.length === 1 ? "the order" : "these orders") + " need. Choose to refund the extra or keep it.");
@@ -127,19 +132,20 @@ function applyTransfer_(session, req) {
     const others = function (o) { return orders.filter(function (x) { return x !== o; }).map(function (x) { return x.code; }); };
     const paidOrders = [];
     const results = [];
-    const writes = [];
+    const writes = restoreWrites.slice();
     orders.forEach(function (o, i) {
       const covered = alloc[i] >= due[i];
       const markPaid = covered || (diff < 0 && short === "accept");
       const extra = i === 0 && diff > 0 ? rem : 0;
-      const change = {
+      const change = Object.assign({}, restores[o.id] ? restores[o.id].change : {}, {
         received: String(dollars_(cents_(receivedOf_(o)) + alloc[i] + extra)),
         notes: [o.notes, "payment " + usd_(dollars_(alloc[i] + extra)) + nameNote + (others(o).length ? ", together with " + others(o).join(", ") : "") +
           (diff < 0 && short === "accept" && !covered ? ", accepted as paid in full (" + usd_(dollars_(due[i] - alloc[i])) + " short)" : "") +
           (extra && over === "keep" ? ", extra " + usd_(dollars_(extra)) + " kept" : "") + " (recorded by " + session.name + ")"].filter(Boolean).join(" | ")
-      };
+      });
       if (sender && o.etransferName !== sender) change.etransferName = sender;
-      writes.push({ table: "Orders", id: o.id, set: change, was: { received: o.received == null ? "" : o.received, status: o.status } });
+      const original = readRows_("Orders").filter(function (row) { return row.id === o.id; })[0];
+      writes.push({ table: "Orders", id: o.id, set: change, was: { received: original.received == null ? "" : original.received, status: original.status, total: original.total } });
       results.push({ orderId: o.id, code: o.code, paid: markPaid, stillDue: markPaid ? 0 : dollars_(due[i] - alloc[i]) });
       if (markPaid) paidOrders.push(o);
     });
@@ -157,6 +163,7 @@ function applyTransfer_(session, req) {
     }
     const plan = {
       op: op, writes: writes, paidIds: paidOrders.map(function (o) { return o.id; }), force: force,
+      restoredTicketIds: restoreWrites.filter(function (w) { return w.table === "Tickets"; }).map(function (w) { return w.id; }),
       log: ["order.payment", orders.map(function (o) { return o.code; }).join(","), {
         amount: dollars_(amountC), due: dollars_(sumDue), sender: sender, short: diff < 0 ? short : "", over: diff > 0 ? over : "", paid: paidOrders.length
       }],
@@ -192,13 +199,28 @@ function applyTransfer_(session, req) {
  * If an order changed since the plan was made (and not by this press), nothing more is written and `review` holds the "check it" reply.
  */
 function carryOutTransfer_(session, plan) {
+  if (plan.restoredTicketIds && plan.restoredTicketIds.length) {
+    const all = readRows_("Tickets");
+    const events = {};
+    plan.restoredTicketIds.forEach(function (id) {
+      const ticket = all.filter(function (t) { return t.id === id; })[0];
+      if (!ticket) throw new ApiError_("NOT_FOUND", "A ticket being restored no longer exists.");
+      (events[ticket.eventId] = events[ticket.eventId] || []).push(Object.assign({}, ticket, { status: plan.paidIds.indexOf(ticket.orderId) !== -1 ? "paid" : "awaiting" }));
+    });
+    Object.keys(events).forEach(function (eventId) {
+      const event = findEvent_(function (e) { return e.id === eventId; });
+      if (!event) throw new ApiError_("NOT_FOUND", "Event not found.");
+      assertNotArchived_(event);
+      assertRestoredTickets_(event, events[eventId], plan.force);
+    });
+  }
   const result = applyWrites_(plan.writes, plan.op);
   if (result.conflicts.length) {   // someone changed an order since: record nothing more, no refund, no "paid"; Finance checks
     log_(session.name, "payment.needsReview", plan.log[1], { conflicts: result.conflicts, planned: plan.log[2] });
     return { review: needsReviewReply_(result.conflicts, result.done) };
   }
   let confirmed = 0;
-  plan.paidIds.forEach(function (id) { confirmed += markPaidLocked_(session, id, plan.force).confirmed || 0; });
+  plan.paidIds.forEach(function (id) { confirmed += markPaidLocked_(session, id, plan.force, true).confirmed || 0; });
   log_(session.name, plan.log[0], plan.log[1], plan.log[2]);
   return Object.assign({}, plan.outcome, { paidIds: plan.paidIds, confirmed: confirmed });
 }
@@ -231,7 +253,7 @@ function findTransfer_(req) {
   const scored = pool.map(function (o) {
     const reasons = [];
     let score = 0;
-    const dueC = Math.max(0, cents_(o.total) - cents_(receivedOf_(o)));
+    const dueC = Math.max(0, cents_(o.total) - availableReceivedCents_(o));
     if (code && String(o.code).toUpperCase().replace(/[^A-Z0-9]/g, "") === code) { score += 100; reasons.push("Code matches"); }
     if (amountC && (amountC === dueC || amountC === cents_(o.total))) { score += 40; reasons.push("Amount matches"); }
     if (nameTok.length) {

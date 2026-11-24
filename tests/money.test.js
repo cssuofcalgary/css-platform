@@ -37,12 +37,12 @@ ok(r.refund && r.refund.owed === 8 && run('refundsOf("G1")[0].status') === "owed
 let lst = run('listOrders_("EV1", { filter: "all" })');
 let card = lst.orders[0];
 ok(card.refund.state === "owed" && card.refund.remaining === 8 && lst.counts.refundsOwed === 1 && lst.money.refundsOwed === 8, "the order list shows 'refund owed $8' and counts it");
-ok(lst.money.received === 24 && lst.paidTickets === 3, "money received and paid tickets are now the net 24 / 3");
+ok(lst.money.received === 32 && lst.paidTickets === 3, "money received keeps the actual $32; the separate refund and three paid tickets explain what remains");
 
 // the same ticket can't be invalidated twice
 ok(fn('invalidateTickets_(S, { orderId: "G1", ticketIds: ["TKTG1B"] })').message.indexOf("already cancelled") !== -1, "an already-invalidated ticket is refused");
 // a refund bigger than what arrived is refused
-ok(/Only \$32/.test(fn('invalidateTickets_(S, { orderId: "G1", ticketIds: ["TKTG1C"], refundAmount: 99 })').message || "x"), "can't give back more than was received");
+ok(/Only \$24/.test(fn('invalidateTickets_(S, { orderId: "G1", ticketIds: ["TKTG1C"], refundAmount: 99 })').message || "x"), "can't refund money already reserved for an earlier refund");
 // keep a fee: refund less than the price
 r = run(`invalidateTickets_(S, { orderId: "G1", ticketIds: ["TKTG1C"], refundAmount: 6, reason: "$2 fee kept" })`);
 ok(r.refund.owed === 6 && run("refundsOf('G1').length") === 2, "a partial refund (keeping a $2 fee) writes down $6");

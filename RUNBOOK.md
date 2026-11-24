@@ -4,7 +4,7 @@ Written so a non-developer can follow it. Everything is in the CSS Google accoun
 Links and IDs are in `README.md` section 2.
 
 ## The pages don't load at all
-The pages are hosted by GitHub Pages from https://github.com/cssuofcalgary/css-platform. Check repo **Settings → Pages** still says "Deploy from a branch: main / (root)". A bad push can break a page: on GitHub, open the repo's **commits**, find the last good one, and revert the newer one (or ask anyone who knows git).
+The pages are hosted on **Vercel** from https://github.com/cssuofcalgary/css-platform (`events.ucalgarycss.ca` serves `public/`, `exec.ucalgarycss.ca` serves `exec-portal/`) and https://github.com/cssuofcalgary/member-portal (`member.ucalgarycss.ca`). Check Vercel's deployment dashboard if a site fails to update, or revert the bad commit on GitHub `main`.
 
 ## First: is the back end alive?
 Open the **web app URL** (README section 2) in a browser.
@@ -116,7 +116,7 @@ Open the Door tab → **Scan log**. The entry shows what the scanner read and ho
 | Someone got the same ticket email twice | Should not happen any more (each ticket is claimed before sending). An older email from before Oct 2 can explain it | Check Activity; if it keeps happening, check that the deploy is @49 or newer |
 | Tickets say "waiting" and never send | A send was interrupted. A claimed ticket becomes sendable again after 10 minutes | Press **Send now** again |
 | Partner list or the redemption log is empty / "Off" for everyone | The `Partners` tab is missing or its `active` column was typed by hand | The starter list is only inserted once. Edit the partners in Members → Partner deals and switch them On |
-| A member sees the old partner list | Their phone has no pass key (they opened the pass without the emailed link) | Nothing is broken. Resend their pass link (member page → Resend membership pass), or they sign in with UCID + last name once |
+| A member's old pass bookmark asks them to recover their pass | Old links without a private key (`?k=…`) no longer use the retired legacy API | Have them enter their UCID + last name on the screen to open their pass right away, or resend their pass link from their member page |
 | Waitlist "Offer a spot" says no spot is free | Capacity minus paid tickets minus offers still waiting for payment is zero | Cancel an unpaid offer, or confirm to offer anyway |
 | New columns or tabs do not appear | Column names are cached per `API_VERSION` | Change `API_VERSION` in `api/Config.js`, `clasp push`, deploy |
 | You need to undo an accidental "Close registration" | | Events → the event → **Reopen** |

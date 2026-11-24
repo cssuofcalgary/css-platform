@@ -1,11 +1,9 @@
 /**
- * CSS Platform API — storage.
+ * CSS Platform API — Membership sheet storage.
  *
- * The ONLY file that knows the data lives in Google Sheets. Swap this file to
- * change where data is stored; nothing else has to change.
- * v0.1 only reads. The project has full Sheets permission (Gordon's call, so
- * later versions can write without a new permission step), so staying
- * read-only is up to this code: nothing in v0.1 writes to a sheet.
+ * Reads the selected yearly Membership spreadsheet (with a 5-minute cache and a 6-hour
+ * fallback copy if Google hiccups), and provides the fresh-read helpers used under locks
+ * when Membership.js adds a sign-up or updates payment/mail status. Platform Data tabs live in Db.js.
  */
 
 /** `fresh` is for a deliberate membership recheck: an older copy must not undo a payment correction. */

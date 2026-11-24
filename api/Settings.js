@@ -132,6 +132,10 @@ function saveSettings_(session, token, input) {
   withLock_(function () {
     props.setProperties(updates);
     if (clearDoor) props.deleteProperty("SCANNER_PASSWORD");
+    if (door || clearDoor) {
+      props.setProperty("DOOR_SESSION_EPOCH", Utilities.getUuid().slice(0, 8));
+      CacheService.getScriptCache().remove("failed_shared_door");
+    }
     if (updates.MEMBERSHIP_SHEET_ID || updates.MEMBERSHIP_TAB) {
       const cache = CacheService.getScriptCache();
       ["members_count", "members_old_count"].forEach(function (k) { cache.remove(k); });   // force a fresh read
@@ -178,6 +182,10 @@ function currentEpoch_() {
   return PropertiesService.getScriptProperties().getProperty("SESSION_EPOCH") || "0";
 }
 
+function currentDoorEpoch_() {
+  return PropertiesService.getScriptProperties().getProperty("DOOR_SESSION_EPOCH") || "0";
+}
+
 /** "Sign everyone out" button: admin only. The admin gets a fresh session so they aren't kicked too. */
 function signOutAll_(session) {
   signOutEveryone_();
@@ -212,7 +220,7 @@ function healthCheck_(session) {
     name: "Membership year", ok: selectedYear === expectedYear, warning: true,
     detail: selectedYear === expectedYear ? selectedYear : "Settings uses " + selectedYear + "; today's date suggests " + expectedYear + ". Check the membership year and selected sheet in Settings → Membership."
   });
-  run("Weekly backup (data + membership)", backupStatus_);
+  run("Weekly backup (data, membership + archives)", backupStatus_);
   run("Archive", archiveStatus_);
   // A warning, not a failure of the system: the door sign-in works without a password, so anyone with the scanner link can sign in
   // as a volunteer while entry is open. Shown here; it does not trigger the nightly alert email.

@@ -40,18 +40,21 @@ function listOrders_(eventId, opts) {
   const sortingIds = {};
   all.forEach(function (o) {
     const total = Number(o.total) || 0;
+    money.received += receivedOf_(o);
     const views = refunds[o.id] || [];
     const owedBack = views.reduce(function (sum, v) { return sum + v.remaining; }, 0);
     if (owedBack > 0) { counts.refundsOwed++; money.refundsOwed += owedBack; sortingIds[o.id] = true; }
     if (o.status === "awaiting") {
-      counts.awaiting++; money.awaiting += Math.max(0, total - receivedOf_(o)); if (reminderDue_(o)) counts.overdue++; if (o.cancelRequestedAt) counts.cancelRequests++;
+      counts.awaiting++; money.awaiting += Math.max(0, total - dollars_(availableReceivedCents_(o))); if (reminderDue_(o)) counts.overdue++; if (o.cancelRequestedAt) counts.cancelRequests++;
       if (receivedOf_(o) > 0) sortingIds[o.id] = true;   // part-paid: waiting for the rest
     }
-    else if (o.status === "paid") { counts.paid++; money.received += total; if ((byOrder[o.id] || []).some(function (t) { return t.status === "awaiting"; })) counts.needsRepair++; }
+    else if (o.status === "paid") { counts.paid++; if ((byOrder[o.id] || []).some(function (t) { return t.status === "awaiting"; })) counts.needsRepair++; }
     else counts.closed++;
   });
   counts.needsSorting = Object.keys(sortingIds).length;
   money.refundsOwed = Math.round(money.refundsOwed * 100) / 100;
+  money.received = Math.round(money.received * 100) / 100;
+  money.awaiting = Math.round(money.awaiting * 100) / 100;
 
   const filter = ["awaiting", "overdue", "cancelreq", "sorting", "paid", "closed", "all"].indexOf(opts.filter) !== -1 ? opts.filter : "awaiting";
   const q = String(opts.q || "").trim().toLowerCase();
@@ -84,7 +87,7 @@ function listOrders_(eventId, opts) {
       noteCount: said.noteCount, latestNote: said.latestNote,
       id: o.id, code: o.code, payerName: o.payerName, payerEmail: o.payerEmail,
       etransferName: o.etransferName, total: Number(o.total) || 0, status: o.status,
-      received: receivedOf_(o), stillDue: o.status === "awaiting" ? Math.round(Math.max(0, (Number(o.total) || 0) - receivedOf_(o)) * 100) / 100 : 0,
+      received: receivedOf_(o), stillDue: o.status === "awaiting" ? dollars_(Math.max(0, cents_(o.total) - availableReceivedCents_(o))) : 0,
       refund: { state: refundState_(o, refunds[o.id] || []), records: refunds[o.id] || [], remaining: Math.round((refunds[o.id] || []).reduce(function (sum, v) { return sum + v.remaining; }, 0) * 100) / 100 },
       createdAt: o.createdAt, paidAt: o.paidAt, paidBy: o.paidBy, notes: o.notes, remindedAt: o.remindedAt || "",
       cancelRequestedAt: o.status === "awaiting" ? (o.cancelRequestedAt || "") : "", cancelRequestedBy: o.cancelRequestedBy || "",
@@ -175,7 +178,7 @@ function markOrderPaid_(session, orderId, force, siteUrl, requestId) {
 }
 
 /** The part of "mark paid" that changes data. Call it while holding the lock. */
-function markPaidLocked_(session, orderId, force) {
+function markPaidLocked_(session, orderId, force, preserveReceived) {
   const order = readRows_("Orders").filter(function (o) { return o.id === orderId; })[0];
   if (!order) throw new ApiError_("NOT_FOUND", "Order not found.");
   if (order.status === "paid") {
@@ -198,7 +201,10 @@ function markPaidLocked_(session, orderId, force) {
   }
 
   const now = new Date().toISOString();
-  updateRow_("Orders", order.id, { status: "paid", paidAt: now, paidBy: session.name }, order._row);
+  const change = { status: "paid", paidAt: now, paidBy: session.name };
+  // Mark paid confirms the rest arrived. Transfers pass their actual amount separately, including an accepted shortfall.
+  if (!preserveReceived) change.received = String(dollars_(Math.max(cents_(receivedOf_(order)), cents_(order.total) + refundCommittedCents_(order.id))));
+  updateRow_("Orders", order.id, change, order._row);
   syncDisabledPayment_(Object.assign({}, order, { status: "paid" }));
   tickets.forEach(function (t) { updateRow_("Tickets", t.id, { status: "paid" }, t._row); });
   log_(session.name, "order.paid", order.code, { total: order.total, tickets: tickets.length, overCapacity: !!force });
@@ -303,7 +309,8 @@ function sendReminders_(session, eventId, dryRun) {
  * registration: refused when the event has no room, unless Finance confirms (`force`). Nothing is emailed.
  */
 function restoreOrder_(session, orderId, force) {
-  return withLock_(function () {
+  return withIntakeAndScriptLock_(function () {
+    delete DB_.rows["Orders"]; delete DB_.rows["Tickets"]; delete DB_.rows["Refunds"]; delete DB_.rows["Events"];
     const order = readRows_("Orders").filter(function (o) { return o.id === orderId; })[0];
     if (!order) throw new ApiError_("NOT_FOUND", "Order not found.");
     return restoreLocked_(session, order, force);
@@ -311,46 +318,63 @@ function restoreOrder_(session, orderId, force) {
 }
 
 /** The part of "restore" that changes data. Call it while holding the lock. */
-function restoreLocked_(session, order, force) {
-  {
+function planRestoreOrder_(session, order, force) {
     if (order.status !== "cancelled" && order.status !== "refunded") throw new ApiError_("BAD_REQUEST", "Only a cancelled or refunded order can be restored. This one is " + order.status + ".");
     const event = findEvent_(function (e) { return e.id === order.eventId; });
     if (!event) throw new ApiError_("NOT_FOUND", "Event not found.");
     assertNotArchived_(event);
-    const tickets = readRows_("Tickets").filter(function (t) { return t.orderId === order.id && t.status === order.status; });
-    if (!tickets.length) throw new ApiError_("BAD_REQUEST", "This order has no cancelled tickets to restore.");
+    const refunds = readRows_("Refunds").filter(function (r) { return r.orderId === order.id; });
+    const tickets = readRows_("Tickets").filter(function (t) {
+      if (t.orderId !== order.id || t.status !== order.status) return false;
+      return !refunds.some(function (r) { return ((r.ticketIds || []).indexOf(t.id) !== -1 || (r.kind === "history" && !(r.ticketIds || []).length)) && (r.status === "returned" || refundView_(r).returned > 0); });
+    });
+    if (!tickets.length) throw new ApiError_("BAD_REQUEST", "No tickets can be restored. Tickets whose refunds were returned need a new registration.");
 
-    if (event.capacity && !force) {
-      let paid = 0, awaiting = 0;
-      readRows_("Tickets").forEach(function (t) {
-        if (t.eventId !== event.id) return;
-        if (t.status === "paid") paid++; else if (t.status === "awaiting") awaiting++;
-      });
-      const limit = event.capacityRule === "all" ? event.capacity : Math.floor(event.capacity * 1.25);
-      if (paid + awaiting + tickets.length > limit) {
-        throw new ApiError_("OVER_CAPACITY", "Restoring this would make " + (paid + awaiting + tickets.length) + " paid and waiting tickets, over the limit of " + limit + ".");
-      }
-    }
-
-    // A refund that is still owed and has not been touched means the money was never returned: putting the order back
-    // is an undo, so it goes back to PAID and that refund is cancelled. Once any money went back, the order is unpaid again.
-    const open = readRows_("Refunds").filter(function (r) { return r.orderId === order.id && r.status === "owed"; });
+    // An untouched ticket refund can be undone back to PAID. Tickets tied to any returned money were excluded above.
+    const ticketIds = tickets.map(function (t) { return t.id; });
+    const open = refunds.filter(function (r) { return r.status === "owed" && (r.ticketIds || []).length && r.ticketIds.every(function (id) { return ticketIds.indexOf(id) !== -1; }); });
     const returnedSome = open.some(function (r) { return refundView_(r).returned > 0; });
     const undoPaid = order.status === "refunded" && open.length > 0 && !returnedSome;
 
     const was = order.status;
     const back = undoPaid ? "paid" : "awaiting";
-    updateRow_("Orders", order.id, {
+    const returning = tickets.map(function (t) { return Object.assign({}, t, { status: back }); });
+    assertRestoredTickets_(event, returning, force);
+    const total = readRows_("Tickets").filter(function (t) { return t.orderId === order.id && (retainedTicket_(t) || ticketIds.indexOf(t.id) !== -1); })
+      .reduce(function (sum, t) { return sum + cents_(t.price); }, 0);
+    const change = {
+      total: dollars_(total), received: String(receivedOf_(order)),
       status: back, remindedAt: "", cancelRequestedAt: "", cancelRequestedBy: "",
       notes: [order.notes, "restored from " + was + " by " + session.name + (undoPaid ? " (the money was never returned, so it is paid again)" : "")].filter(Boolean).join(" | ")
-    }, order._row);
-    tickets.forEach(function (t) { updateRow_("Tickets", t.id, { status: back }, t._row); });
+    };
+    const writes = tickets.map(function (t) { return { table: "Tickets", id: t.id, set: { status: back }, was: { status: t.status } }; });
     if (undoPaid) {
-      open.forEach(function (r) { updateRow_("Refunds", r.id, { status: "waived", reason: [r.reason, "order restored by " + session.name].filter(Boolean).join(" | "), closedAt: new Date().toISOString() }, r._row); });
+      open.forEach(function (r) { writes.push({ table: "Refunds", id: r.id, set: { status: "waived", reason: [r.reason, "order restored by " + session.name].filter(Boolean).join(" | "), closedAt: new Date().toISOString() }, was: { status: r.status } }); });
     }
-    log_(session.name, "order.restored", order.code, { was: was, tickets: tickets.length, overLimit: !!force, paidAgain: undoPaid });
-    return { ok: true, status: back, restored: tickets.length };
+    return { event: event, returning: returning, change: change, writes: writes, was: was, back: back, undoPaid: undoPaid };
+}
+
+/** Capacity and identity checks apply to every route that brings a closed ticket back. Force only overrides room limits. */
+function assertRestoredTickets_(event, returning, force) {
+  const ids = returning.map(function (t) { return t.id; });
+  const others = readRows_("Tickets").filter(function (t) { return ids.indexOf(t.id) === -1; });
+  assertNoDuplicateRegistration_(returning, event.id, others);
+  if (!event.capacity || force) return;
+  const paid = others.filter(function (t) { return t.eventId === event.id && t.status === "paid"; }).length;
+  const awaiting = others.filter(function (t) { return t.eventId === event.id && t.status === "awaiting"; }).length;
+  const addedPaid = returning.filter(function (t) { return t.status === "paid"; }).length;
+  const limit = event.capacityRule === "all" ? event.capacity : Math.floor(event.capacity * 1.25);
+  if (paid + awaiting + returning.length > limit || (event.capacityRule !== "all" && (paid + addedPaid > event.capacity || (paid >= event.capacity && returning.some(function (t) { return t.status === "awaiting"; }))))) {
+    throw new ApiError_("OVER_CAPACITY", "There isn't enough room to restore these tickets. Check the event capacity first.");
   }
+}
+
+function restoreLocked_(session, order, force) {
+    const plan = planRestoreOrder_(session, order, force);
+    updateRow_("Orders", order.id, plan.change, order._row);
+    plan.writes.forEach(function (w) { updateRow_(w.table, w.id, w.set); });
+    log_(session.name, "order.restored", order.code, { was: plan.was, tickets: plan.returning.length, overLimit: !!force, paidAgain: plan.undoPaid });
+    return { ok: true, status: plan.back, restored: plan.returning.length };
 }
 
 /** Sends ticket emails for paid tickets that haven't had one yet (one order, or all). */
@@ -377,20 +401,30 @@ function ticketUnsent_(t) {
  * `eventIds` = { event id: true }: only tickets of these events are sent and counted as waiting.
  */
 function sendPendingTicketEmails_(orderId, limit, again, eventIds) {
+  const events = {};
+  allEvents_().forEach(function (e) { events[e.id] = e; });
   const claimed = withLock_(function () {
     delete DB_.rows["Tickets"];   // decide on fresh data, inside the lock
-    let tickets = readRows_("Tickets").filter(function (t) {
+    const all = readRows_("Tickets");
+    const needsSend = function (t) { return !!t.email && !isTestAddress_(t.email) && events[t.eventId] && (again || eventMails_(events[t.eventId]).tickets); };
+    const reserved = all.filter(function (t) { return t.status === "paid" && freshClaim_(t) && needsSend(t); }).length;
+    let quota = Math.max(0, emailsLeftToday_() - reserved);
+    let tickets = all.filter(function (t) {
       if (t.status !== "paid" || (orderId && t.orderId !== orderId) || (eventIds && !eventIds[t.eventId])) return false;
       return again ? !freshClaim_(t) : ticketUnsent_(t);
     });
     if (limit > 0) tickets = tickets.slice(0, limit);   // oldest first: new rows go at the bottom of the sheet
+    tickets = tickets.filter(function (t) {
+      if (!needsSend(t)) return true; // test addresses, missing emails and events with ticket mail off use no quota
+      if (quota <= 0) return false;
+      quota--;
+      return true;
+    });
     const now = new Date().toISOString();
     tickets.forEach(function (t) { updateRow_("Tickets", t.id, { emailedAt: "claim:" + now }, t._row); });
     return tickets;
   });
 
-  const events = {};
-  allEvents_().forEach(function (e) { events[e.id] = e; });
   let sent = 0, notEmailed = 0;
   claimed.forEach(function (t) {
     const event = events[t.eventId];
@@ -402,6 +436,11 @@ function sendPendingTicketEmails_(orderId, limit, again, eventIds) {
     }
     if (isTestAddress_(t.email)) {
       updateRow_("Tickets", t.id, { emailedAt: "test address, not sent" }, t._row);
+      return;
+    }
+    if (!String(t.email || "").trim()) {
+      updateRow_("Tickets", t.id, { emailedAt: "no email address" }, t._row);
+      notEmailed++;
       return;
     }
     if (sendTicketEmail_(event, t)) {
@@ -463,6 +502,7 @@ function updateTicket_(session, ticketId, changes, siteUrl, orderChanges) {
     if (changes.email !== undefined) {
       const email = clean(changes.email, 121).toLowerCase();
       if (email !== ticket.email) {
+        if (!email && ticket.email && ticketPaymentStatus_(ticket, order) === "paid") throw new ApiError_("BAD_REQUEST", "A paid ticket's email can't be empty. Enter the corrected address instead.");
         const problem = email && emailProblem_(email);
         if (problem) throw new ApiError_("BAD_REQUEST", problem);
         next.email = email;
@@ -559,7 +599,7 @@ function updateTicket_(session, ticketId, changes, siteUrl, orderChanges) {
           orderNext.total = newTotal;
           if (adminOnly.indexOf("ticket type") === -1) adminOnly.push("ticket type");
           if (order.status === "paid") orderNext.received = String(received);
-          if (newTotal > oldTotal && cents_(newTotal) > cents_(received)) {
+          if (newTotal > oldTotal && cents_(newTotal) > availableReceivedCents_(order)) {
             if (order.status === "paid") {
               orderNext.status = "awaiting";
               orderNext.paidAt = "";
@@ -570,7 +610,7 @@ function updateTicket_(session, ticketId, changes, siteUrl, orderChanges) {
             if (next.disabledFrom === "awaiting" || next.status === "awaiting") next.emailedAt = "";
           }
         }
-        total.stillDue = (orderNext.status || order.status) === "awaiting" ? dollars_(Math.max(0, cents_(newTotal) - cents_(received))) : 0;
+        total.stillDue = (orderNext.status || order.status) === "awaiting" ? dollars_(Math.max(0, cents_(newTotal) - availableReceivedCents_(order))) : 0;
       }
     }
 
@@ -668,7 +708,7 @@ function getTicket_(secret) {
     site: siteInfo_(),
     etransferEmail: getConfig_().etransferEmail,
     orderTotal: Number(order.total) || 0,
-    orderReceived: order.status === "awaiting" ? receivedOf_(order) : 0,   // part-paid: the page says how much is still to send
+    orderReceived: order.status === "awaiting" ? dollars_(availableReceivedCents_(order)) : 0,   // refund money cannot also pay the outstanding ticket balance
     canGiveFeedback: ticket.status === "paid" && !!ticket.checkedInAt,
     feedback: feedbackOfTicket_(ticket),
     canRequestCancel: ticket.status === "awaiting" && order.status === "awaiting",

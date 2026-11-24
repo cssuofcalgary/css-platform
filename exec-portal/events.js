@@ -83,6 +83,7 @@ function onGlobalEventChange() {
   globalEventId = $("global-event").value;
   payState.eventId = globalEventId;
   doorState.eventId = globalEventId;
+  doorState.picked = true;
   if (!$("tab-payments").hidden) openPaymentsTab();
   if (!$("tab-door").hidden) openDoorTab();
 }

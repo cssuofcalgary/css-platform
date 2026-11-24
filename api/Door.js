@@ -7,12 +7,31 @@
  * in on the spot. The help-desk list shows who hasn't paid yet or needs a check.
  */
 
-/** Exec: open or close entry for an event. Scanners won't check anyone in while it's closed. */
+/** Exec: open or close entry for an event. Only one event has entry open at a time, so opening one closes any others. */
 function setEntryOpen_(session, eventId, open) {
   return withLock_(function () {
-    updateRow_("Events", eventId, { entryOpen: !!open, updatedBy: session.name, updatedAt: new Date().toISOString() });
+    delete DB_.rows["Events"];
+    const events = allEvents_();
+    const target = events.filter(function (e) { return e.id === eventId; })[0];
+    if (!target) throw new ApiError_("NOT_FOUND", "Event not found.");
+    if (open) {
+      assertNotArchived_(target);
+      if (target.status === "archived") throw new ApiError_("ARCHIVED", "This event is archived. Restore it first if you need to change it.");
+      if (target.status === "draft") throw new ApiError_("BAD_REQUEST", "Publish this event before opening entry.");
+    }
+    const now = new Date().toISOString();
+    const closedEvents = [];
+    if (open) {
+      events.forEach(function (other) {
+        if (other.id === eventId || !other.entryOpen || other.archivedAt || other.status === "archived") return;
+        updateRow_("Events", other.id, { entryOpen: false, updatedBy: session.name, updatedAt: now });
+        log_(session.name, "entry.close", other.id, {});
+        closedEvents.push({ id: other.id, name: other.name });
+      });
+    }
+    updateRow_("Events", eventId, { entryOpen: !!open, updatedBy: session.name, updatedAt: now });
     log_(session.name, open ? "entry.open" : "entry.close", eventId, {});
-    return { ok: true, entryOpen: !!open };
+    return { ok: true, entryOpen: !!open, closedEvents: closedEvents };
   });
 }
 
@@ -40,7 +59,7 @@ const SCAN_LOG_SECONDS = 12 * 3600;
 let SCAN_NOTE_ = "";   // a line scanCode_ can leave for the log (for example how a member lookup went)
 
 function scanLogRaw_(code, key) {
-  const raw = String(code || "").replace(/s+/g, " ").trim();
+  const raw = String(code || "").replace(/\s+/g, " ").trim().replace(/([?&](?:k|key|token|secret)=)[^&#\s]+/gi, "$1…");
   if (key && key.kind === "secret") return "ticket link/secret " + String(key.value).slice(0, 6) + "…";
   return raw.length > 70 ? raw.slice(0, 70) + "…" : raw;
 }
@@ -49,7 +68,7 @@ function noteScanLog_(session, eventId, code, atDesk, result) {
   if (!result) return;
   const key = ticketKey_(code);
   const entry = {
-    atMs: Date.now(), by: session.name, via: atDesk ? "desk" : (session.role === "door" || REQ_SCANNER_ ? "scanner" : "desk screen"),
+    atMs: Date.now(), by: session.name, sid: session.sid || "", via: atDesk ? "desk" : (session.role === "door" || REQ_SCANNER_ ? "scanner" : "desk screen"),
     raw: scanLogRaw_(code, key), kind: key ? key.kind : "unreadable", value: key && key.kind !== "secret" ? String(key.value || "").slice(0, 40) : "",
     color: result.color, message: String(result.message || "").slice(0, 200),
     who: result.person ? result.person.name : "", personId: result.person ? result.person.id : "", note: SCAN_NOTE_
@@ -62,9 +81,19 @@ function noteScanLog_(session, eventId, code, atDesk, result) {
 }
 
 /** Help desk: the last scans for an event. */
-function scanLog_(eventId) {
+function scanLog_(eventId, session) {
+  if (session && session.role === "door") {
+    const event = findEvent_(function (e) { return e.id === eventId; });
+    if (!event || !event.entryOpen || event.status === "draft" || event.status === "archived") throw new ApiError_("DOOR_CLOSED", DOOR_CLOSED_TEXT);
+  }
   let list = [];
   try { list = JSON.parse(CacheService.getScriptCache().get("scanlog_" + eventId) || "[]") || []; } catch (e) { list = []; }
+  if (session && session.role === "door") {
+    list = list.filter(function (entry) { return session.sid && entry.sid === session.sid; }).map(function (entry) {
+      return { atMs: entry.atMs, by: entry.by, via: entry.via, raw: entry.raw, kind: entry.kind, value: entry.value,
+        color: entry.color, message: entry.color === "green" ? "Checked in." : "Go to the help desk.", who: entry.who, personId: entry.personId };
+    });
+  }
   return { ok: true, serverNow: Date.now(), log: list };
 }
 
@@ -252,7 +281,17 @@ function walkIn_(session, eventId, input) {
       ticketType: type.name, price: price, answers: answers, flag: flag, status: "paid",
       checkedInAt: now, checkedInBy: session.name, createdAt: now, emailedAt: "walk-in, no email"
     };
-    insertRow_("Tickets", ticket);
+    try {
+      insertRow_("Tickets", ticket);
+    } catch (err) {
+      // A write may succeed before Google reports a timeout. Check before cancelling the order.
+      dropTableCache_("Tickets");
+      const savedTicket = readRows_("Tickets").some(function (row) { return row.id === ticket.id; });
+      if (!savedTicket) {
+        updateRow_("Orders", order.id, { status: "cancelled", total: 0, received: "0", paidAt: "", notes: "Walk-in failed before its ticket was saved. Add the walk-in again." });
+        throw err;
+      }
+    }
     log_(session.name, "walkin", order.code, { name: name, type: type.name, total: order.total, method: method });
     return { ok: true, result: scanResult_("green", "Walk-in added and checked in (" + (price > 0 ? moneyText_(order.total) + " " + method : moneyText_(0)) + ")." + (flag ? " Note: " + flag : ""), personView_(ticket)).result };
   });
@@ -353,21 +392,16 @@ function entryOpenEvents_() {
 function loginDoor_(password, name) {
   const who = String(name || "").trim().slice(0, 60);
   if (!who) throw new ApiError_("NAME_NEEDED", "Type your name.");
-  const cache = CacheService.getScriptCache();
-  const userKey = loginFailKey_(who);
-  const failed = parseInt(cache.get(userKey) || "0", 10);
-  if (failed >= MAX_FAILED_LOGINS) throw new ApiError_("TOO_MANY_TRIES", "Too many wrong passwords. Try again in 10 minutes.");
-
   const required = String(PropertiesService.getScriptProperties().getProperty("SCANNER_PASSWORD") || "");
+  const attempt = execLoginAttempt_(who, required ? "door" : "");
   if (required) {
     const typed = String(password || "");
     if (!typed) throw new ApiError_("DOOR_PASSWORD_NEEDED", "Ask an exec for the door password.");
     if (typed !== required) {
-      cache.put(userKey, String(failed + 1), 600);
-      throw new ApiError_("WRONG_PASSWORD", "Wrong password.");
+      return execWrongPassword_(attempt);
     }
   }
-  cache.remove(userKey);
+  clearExecLoginAttempt_(attempt);
   if (!entryOpenEvents_().length) throw new ApiError_("DOOR_CLOSED", DOOR_CLOSED_TEXT);
   warmCaches_(true);
   return { ok: true, token: startSession_(who, "door"), name: who, role: "door" };

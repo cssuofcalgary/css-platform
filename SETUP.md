@@ -1,26 +1,27 @@
 # CSS Platform: Fresh setup from scratch (about 15 minutes)
 
-> Already set up (Sept 2026). Only needed to rebuild the back end in a new Google account or project. See README.md for how everything fits together.
+> Already set up (Sept 2026). Only needed to rebuild the back end in a new Google account or project. See `README.md` for how everything fits together.
 
-What you're setting up: a **new, separate** Google Apps Script back end. v0.1 only **reads** the Membership sheet, and none of its code writes anything.
+What you're setting up: the **CSS Platform API** Google Apps Script back end (reads and writes the Platform Data spreadsheet and the selected Membership spreadsheet, stores event images and backups in Drive, and sends transactional emails).
 
 ## Folder
 | Folder | What |
 |---|---|
-| `api/` | The back end. These 4 files + `appsscript.json` get pasted into Google Apps Script |
-| `exec-portal/` | The Exec Portal page (sign in → search → member page) |
+| `api/` | The back end (`appsscript.json` + all `api/*.js` files, pushed with `clasp push`) |
+| `exec-portal/` | The Exec Portal and volunteer scanner (`exec.ucalgarycss.ca`) |
+| `public/` | The public events and ticket site (`events.ucalgarycss.ca`) |
 
 ## 1. Create the project (CSS Google account)
 1. Sign in to **script.google.com** with the **CSS Google account**.
 2. **New project**. Click "Untitled project" at the top and rename it **CSS Platform API**.
 3. Click the **gear** (Project Settings) on the left and tick **"Show 'appsscript.json' manifest file in editor"**.
 
-## 2. Paste the code
-Back in the **Editor** (`< >` on the left):
-1. Click `appsscript.json`, delete everything, and paste in the contents of `api/appsscript.json`.
-2. Click `Code.gs`, delete everything, and paste in `api/Api.js`. Rename the file to **Api** (⋮ → Rename).
-3. Click **+ → Script** to make a file for every other `.js` file in `api/` (**Config, Members, Store, Db, Events**…), same names, and paste each one in.
-4. Press **Ctrl + S**.
+## 2. Upload the code
+Inside `api/` (with `@google/clasp` installed and logged into the CSS Google account), update `scriptId` in `api/.clasp.json` to your new project's Script ID and run:
+```bash
+clasp push -f
+```
+*(Or paste `api/appsscript.json` and each `api/*.js` file into matching script files in the Apps Script editor and press **Ctrl + S**.)*
 
 ## 3. Settings (Script Properties)
 Gear (Project Settings) → scroll to **Script Properties** → **Add script property**:

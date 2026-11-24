@@ -216,7 +216,7 @@ function personRowHtml(p) {
   const dept = String(p.department || "");
   const depts = PEOPLE_DEPTS();
   return `<div class="people-row" data-id="${escapeHtml(p.id || "")}">
-    <input class="people-name" maxlength="60"autocomplete="off" autocapitalize="words" aria-label="${escapeHtml(T.teamName)}" value="${escapeHtml(p.name || "")}">
+    <input class="people-name" maxlength="60" autocomplete="off" autocapitalize="words" aria-label="${escapeHtml(T.teamName)}" value="${escapeHtml(p.name || "")}">
     <select class="people-dept" aria-label="${escapeHtml(T.teamDept)}"><option value="">${escapeHtml(T.peopleNoDept)}</option>${depts.map((d) => `<option${d === dept ? " selected" : ""}>${escapeHtml(d)}</option>`).join("")}</select>
     <input class="people-discord" inputmode="numeric" maxlength="20" autocomplete="off" aria-label="${escapeHtml(T.teamDiscord)}" placeholder="${escapeHtml(T.teamDiscord)}" value="${escapeHtml(p.discordId || "")}">
     <input type="checkbox" class="toggle people-active" aria-label="${escapeHtml(T.teamActive)}"${peopleActive(p.active) ? " checked" : ""}>

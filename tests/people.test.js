@@ -42,7 +42,7 @@ ok(attempt(`personalLogin_('club-test','Unlisted')`).error === "PERSON_NOT_LISTE
 run(`teamAddOnSignIn_('Unlisted'); taskAddOwner_({name:'TEST Exec'}, 'Unlisted Task Owner', 'Events');`);
 ok(run("!taskTeamByName_('Unlisted') && !taskTeamByName_('Unlisted Task Owner')"), "automatic sign-in and task-owner additions also respect the lock");
 ok(route("importPeople", { text: "New Listed,Finance" }).added === 1, "admins can deliberately bulk-add people while locked");
-ok(attempt(`route_({action:'login',password:'settings-test',name:'Emergency Admin'})`).error === "WRONG_PASSWORD", "the settings password cannot sign in or bypass a locked roster");
+ok(attempt(`route_({action:'login',password:'settings-test',name:'Emergency Admin'})`).error === "PERSON_NOT_LISTED", "a locked roster rejects an unlisted name before checking any password");
 ok(attempt(`route_({action:'unlockSettings',password:'settings-test'})`).error === "NOT_LOGGED_IN", "settings cannot unlock before signing in");
 ok(attempt(`personalLogin_('wrong','Kevin B')`).error === "WRONG_PASSWORD", "first-time setup requires the club password");
 const setup = run(`personalLogin_('club-test','kevin b')`);
@@ -95,6 +95,7 @@ ok(attempt(`requireSession_('${newPerson.token}')`).error === "NOT_LOGGED_IN", "
 for (let i = 0; i < 30; i++) attempt(`personalLogin_('bad','Locked Test')`);
 ok(attempt(`personalLogin_('club-test','Locked Test')`).error === "TOO_MANY_TRIES", "too many wrong attempts temporarily block that name");
 ok(run(`personalLogin_('private-pass-2','Kevin B').ok`), "another person's failed attempts do not block a working account");
+run(`CacheService.getScriptCache().remove('failed_shared_club')`); // next independent setup tests start after the shared-password pause
 ok(run("__held") === false, "all locks are released");
 
 // Personal passwords have no minimum or maximum character count. No long-password truncation.

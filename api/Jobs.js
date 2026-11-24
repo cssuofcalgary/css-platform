@@ -5,7 +5,7 @@
  * add its own without an extra permission that broke the web app once):
  *   nightlyJob  every night around 3 am: checks that everything is healthy and emails the CSS Gmail
  *               only if something is wrong. On Sundays it also backs up the Platform Data sheet and the
- *               Membership sheet (keeps the last 4 of each; older ones go to the Drive bin).
+ *               Membership sheet and yearly archives (keeps the last 4 of each; older ones go to the Drive bin).
  *   hourlyJob   every hour: closes entry for events that ended a few hours ago, so a forgotten
  *               "Entry open" switch can't stay on.
  * Both write to the Log as "system". Nothing here emails members.
@@ -66,7 +66,7 @@ function nightlyJob(forceBackup) {
 }
 
 /**
- * Copies the Platform Data sheet and the Membership sheet into the backup folder, and bins the oldest
+ * Copies the Platform Data sheet, Membership sheet and yearly archives into the backup folder, and bins the oldest
  * copies of each beyond BACKUPS_KEPT. The data sheet is copied first; if the Membership copy fails
  * (e.g. the script can't open that file), the failure is reported but the data backup stays.
  */
@@ -75,19 +75,28 @@ function backupNow_() {
   const today = Utilities.formatDate(new Date(), "America/Edmonton", "yyyy-MM-dd");
 
   const data = copyAndPrune_(dataSpreadsheet_().getId(), folder, "CSS Backup ", today);
-  let membership = null, membershipError = "";
+  let membership = null;
+  const copies = [data.name], errors = [];
   try {
     membership = copyAndPrune_(getConfig_().membershipSheetId, folder, "CSS Membership Backup ", today);
+    copies.push(membership.name);
   } catch (err) {
-    membershipError = String(err && err.message || err);
+    errors.push("Membership: " + String(err && err.message || err));
   }
-
-  if (membershipError) {
-    rememberBackup_(false, data.name + " saved, but the Membership backup failed: " + membershipError);
-    throw new Error("Platform Data was backed up, but the Membership sheet was not: " + membershipError);
+  const archives = archiveIds_();
+  Object.keys(archives).sort().forEach(function (year) {
+    try {
+      copies.push(copyAndPrune_(archives[year], folder, "CSS Archive Backup " + year + " ", today).name);
+    } catch (err) {
+      errors.push("Archive " + year + ": " + String(err && err.message || err));
+    }
+  });
+  if (errors.length) {
+    rememberBackup_(false, copies.join(" + ") + " saved; backup failed for " + errors.join("; "));
+    throw new Error("Some sheets were backed up, but these backups failed: " + errors.join("; "));
   }
-  rememberBackup_(true, data.name + " + " + membership.name + " (" + data.kept + " kept each)");
-  return { name: data.name + " + " + membership.name, kept: data.kept };
+  rememberBackup_(true, copies.join(" + ") + " (" + data.kept + " kept each)");
+  return { name: copies.join(" + "), kept: data.kept };
 }
 
 /** One copy per day per sheet (running twice replaces that day's copy); older copies with the same prefix beyond BACKUPS_KEPT go to the Drive bin. */
@@ -178,7 +187,14 @@ function hourlyJob() {
 /** The moment an event is over, in the club's time zone. A missing end time falls back to the start time, then to the end of the day. */
 function eventEndsAt_(event) {
   const time = event.endTime || event.startTime || "23:59";
-  const d = Utilities.parseDate(String(event.date) + " " + String(time).slice(0, 5), "America/Edmonton", "yyyy-MM-dd HH:mm");
+  let date = String(event.date);
+  if (event.endTime && event.startTime && String(event.endTime).slice(0, 5) < String(event.startTime).slice(0, 5)) {
+    // Advance the calendar date first, then parse in Edmonton (a DST night needn't be 24 hours).
+    const next = new Date(date + "T12:00:00Z");
+    next.setUTCDate(next.getUTCDate() + 1);
+    date = next.toISOString().slice(0, 10);
+  }
+  const d = Utilities.parseDate(date + " " + String(time).slice(0, 5), "America/Edmonton", "yyyy-MM-dd HH:mm");
   return d.getTime();
 }
 

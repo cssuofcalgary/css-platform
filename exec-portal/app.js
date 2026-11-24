@@ -1,4 +1,4 @@
-// CSS Exec Portal v0.1 — sign in, search members, view a member. Read-only.
+// CSS Exec Portal — API client, sign-in, session state, member search and profile.
 
 // ?mode=scanner explicitly opens the stripped-down door scanner.
 const PARAMS = new URLSearchParams(location.search);
@@ -26,7 +26,7 @@ const RETRY_PAUSE_MS = 1200;
 // "still working" the longer it waits). Door scans, searches-as-you-type and the keep-alive stay quiet, and so does the
 // scanner phone page. Jobs that work through a list show "almost there" instead.
 const QUIET_ACTIONS = ["signInNames", "ping", "scan", "doorList", "deskAlerts", "searchMembers", "getMember", "emailStatus", "listRecentEmails"];
-const EMAIL_ACTIONS = ["markOrderPaid", "markOrdersPaid", "sendPendingEmails", "resendTickets", "addOrder", "sendReminders", "editTicket", "offerWaitlist", "mailAll"];   // after these the email indicator is refreshed
+const EMAIL_ACTIONS = ["markOrderPaid", "markOrdersPaid", "sendPendingEmails", "resendTickets", "addOrder", "sendReminders", "updateTicket", "offerWaitlistSpot", "emailAttendees", "applyTransfer", "markMemberPaid", "resendMemberPass", "addMember", "updateMember"];   // after these the email indicator is refreshed
 const BATCH_ACTIONS = ["sendPendingEmails", "markOrdersPaid", "sendReminders"];
 const PANDA_DELAY_MS = 700;
 let pandaBusyCount = 0, pandaBusyTimer = null, pandaBatch = false;
@@ -169,6 +169,7 @@ let peopleNames = [];
 let peopleNamesAsked = false;
 let peopleNamesLoading = false;
 let peopleNamesFailed = false;
+let peopleNamesGeneration = 0;
 let signInMatches = [], signInActive = -1;
 let signInNamesDismissed = false;
 async function loadPeopleNames() {
@@ -177,18 +178,20 @@ async function loadPeopleNames() {
   peopleNamesLoading = true;
   peopleNamesFailed = false;
   renderSignInNames();
+  const generation = peopleNamesGeneration;
   try {
     const reply = await api("signInNames");
+    if (generation !== peopleNamesGeneration) return;
     if (!reply.ok || !Array.isArray(reply.names)) throw new Error("Names unavailable");
     const names = reply.names.filter((n) => typeof n === "string" && n.trim()).map((n) => n.trim().replace(/\s+/g, " "));
     const seen = new Set();
     peopleNames = names.filter((n) => { const key = n.toLowerCase(); if (seen.has(key)) return false; seen.add(key); return true; });
   } catch (e) {
+    if (generation !== peopleNamesGeneration) return;
     peopleNamesAsked = false;
     peopleNamesFailed = true;
   } finally {
-    peopleNamesLoading = false;
-    renderSignInNames();
+    if (generation === peopleNamesGeneration) { peopleNamesLoading = false; renderSignInNames(); }
   }
 }
 
@@ -325,6 +328,14 @@ async function onLogout() {
 }
 
 function signOutLocally() {
+  if (typeof stopCamera === "function") stopCamera();
+  if (typeof doorState !== "undefined") clearInterval(doorState.refreshTimer);
+  if (typeof deskAlertState !== "undefined") clearInterval(deskAlertState.timer);
+  peopleNamesGeneration++;
+  peopleNames = [];
+  peopleNamesAsked = false;
+  peopleNamesLoading = false;
+  peopleNamesFailed = false;
   state.token = "";
   state.name = "";
   sessionStorage.removeItem("css_token");
@@ -341,7 +352,7 @@ function showApp() {
   $("app-view").hidden = false;
   $("who-name").textContent = state.name;
   $("admin-badge").hidden = state.role !== "admin";
-  if (state.role === "door") $("full-portal-link").hidden = true;   // door volunteers only scan
+  $("full-portal-link").hidden = state.role === "door" || !SCANNER_MODE;
   $("settings-tab-button").hidden = state.role !== "admin";
   $("activity-tab-button").hidden = state.role !== "admin";
   $("admin-nav-label").hidden = state.role !== "admin";

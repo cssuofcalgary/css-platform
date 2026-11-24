@@ -4,9 +4,11 @@
 const $ = (id) => document.getElementById(id);
 
 async function api(action, details = {}, timeoutMs = 30000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const res = await fetch(API_URL, {
-      signal: AbortSignal.timeout(timeoutMs),   // never stay on "Loading…" forever
+      signal: controller.signal,
       method: "POST",
       headers: { "Content-Type": "text/plain;charset=utf-8" },
       body: JSON.stringify({ action, ...details })
@@ -16,7 +18,7 @@ async function api(action, details = {}, timeoutMs = 30000) {
     return data;
   } catch (err) {
     return { ok: false, error: "NETWORK" };
-  }
+  } finally { clearTimeout(timer); }
 }
 
 /** Contact email + Instagram come from the Exec Portal's Settings (config.js is only the fallback). */

@@ -18,6 +18,7 @@ const ACTIVITY_GROUPS = {
   settings: ["settings.save", "membership.form", "sessions.clear", "health.check", "session.kick", "people.imported", "person.passwordSet", "person.passwordReset"],
   emails: ["email.sent", "email.failed"]
 };
+ACTIVITY_GROUPS.events.push("practice.create", "practice.remove");
 // Members: notes, IDs and cards count with payments (the money-and-people side of the club).
 ACTIVITY_GROUPS.payments.push("member.note", "member.noteRemoved", "member.assignId", "member.resendPass", "payment.needsReview", "refund.needsReview", "payment.reviewed", "waitlist.resend", "waitlist.offer", "waitlist.remove", "payment.note", "payment.noteRemoved", "ticket.flagCleared");
 
@@ -138,6 +139,8 @@ function activitySummary_(r, events) {
     case "waitlist.resend": return "resent the waitlist offer for " + r.target + (d.emailed ? "" : " (email failed)");
     case "waitlist.offer": return "offered a waitlist spot to " + (d.name || "someone") + " (" + r.target + ")";
     case "waitlist.remove": return "removed " + (d.name || "someone") + " from the waitlist";
+    case "practice.create": return "created the practice event (" + (d.people || 0) + " fake attendees)";
+    case "practice.remove": return "removed the practice event";
     case "task.created": return "added the task \"" + (d.title || "") + "\"" + (d.owner ? " for " + d.owner : "") + (d.source === "discord" ? " on Discord" : "");
     case "task.updated":
       if (d.updateId) return "added an update to the task \"" + (d.title || "") + "\"" + (d.status ? " and set it to " + taskStatusWord_(d.status) : "");

@@ -3,7 +3,7 @@
 // 3 seconds) the last copy this phone saw is used. It never touches the API (that is another address), so tickets,
 // scans and the sheet are never answered from here.
 
-const CACHE = "css-ticket-shell-v1";
+const CACHE = "css-ticket-shell-v2";
 const SHELL = [
   "ticket.html", "ticket.js", "strings.js", "config.js", "panda.js", "public.css",
   "assets/top_panda.png", "assets/bottom_panda.png", "assets/css-logo.png"
@@ -16,7 +16,7 @@ self.addEventListener("install", (event) => {
 });
 
 self.addEventListener("activate", (event) => {
-  event.waitUntil(caches.keys().then((names) => Promise.all(names.filter((n) => n !== CACHE).map((n) => caches.delete(n)))).then(() => self.clients.claim()));
+  event.waitUntil(caches.keys().then((names) => Promise.all(names.filter((n) => n.startsWith("css-ticket-shell-") && n !== CACHE).map((n) => caches.delete(n)))).then(() => self.clients.claim()));
 });
 
 function networkFirst(request, cacheKey) {

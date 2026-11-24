@@ -1,6 +1,6 @@
 // CSS Exec Portal — Door tab: scan tickets, walk-ins, help-desk lists.
 
-const doorState = { eventId: "", data: null, matches: [], scanner: null, lastCode: "", lastAt: 0, busy: false, refreshTimer: null };
+const doorState = { eventId: "", data: null, matches: [], scanner: null, cameraGeneration: 0, lastCode: "", lastAt: 0, busy: false, refreshTimer: null };
 
 async function openDoorTab() {
   if (!eventsState.loaded) await loadEvents();
@@ -246,12 +246,19 @@ function personRow(t, showPay) {
 async function toggleCamera() {
   if (doorState.scanner) return stopCamera();
   $("camera").hidden = false;
+  const generation = ++doorState.cameraGeneration;
   try {
-    doorState.scanner = new Html5Qrcode("camera");
-    await doorState.scanner.start({ facingMode: "environment" }, { fps: 10, qrbox: { width: 240, height: 240 } }, onCode, () => {});
+    const scanner = new Html5Qrcode("camera");
+    doorState.scanner = scanner;
+    await scanner.start({ facingMode: "environment" }, { fps: 10, qrbox: { width: 240, height: 240 } }, onCode, () => {});
+    if (generation !== doorState.cameraGeneration || !state.token || $("tab-door").hidden) {
+      try { await scanner.stop(); } catch (e) { /* start was cancelled */ }
+      return;
+    }
     $("camera-toggle").hidden = true;   // no stop button: the camera runs until you leave the Door tab
     showIdle(T.readyToScan);
   } catch (err) {
+    if (generation !== doorState.cameraGeneration) return;
     doorState.scanner = null;
     $("camera").hidden = true;
     showResult({ color: "red", message: T.cameraError });
@@ -259,8 +266,11 @@ async function toggleCamera() {
 }
 
 async function stopCamera() {
-  try { await doorState.scanner.stop(); } catch (e) { /* already stopped */ }
+  doorState.cameraGeneration++;
+  const scanner = doorState.scanner;
   doorState.scanner = null;
+  try { if (scanner) await scanner.stop(); } catch (e) { /* already stopped, or still starting: toggleCamera stops it after start */ }
+  if (doorState.scanner) return; // a new camera was started while the old one stopped
   $("camera").hidden = true;
   $("camera").innerHTML = "";
   $("camera-toggle").textContent = T.startCamera;
@@ -457,7 +467,7 @@ async function onDoorListClick(ev) {
     if (!(await askConfirm(T.confirmPaid(money(t.orderTotal), t.orderCode, t.etransferName || t.payerName)))) return;
     pay.disabled = true;
     const siteUrl = new URL(PUBLIC_SITE_URL, location.href).href;
-    let reply = await api("markOrderPaid", { orderId: pay.dataset.pay, siteUrl, force: true });   // door: always let paying people in
+    let reply = await apiOnce("markOrderPaid", { orderId: pay.dataset.pay, siteUrl, force: true });   // door: always let paying people in
     if (!reply.ok) { pay.disabled = false; return showResult({ color: "red", message: errorText(reply) }); }
     await loadDoor();
     onManualSubmit(new Event("submit"));
@@ -549,25 +559,16 @@ async function toggleEntry() {
   if (!open && !(await askConfirm(T.confirmCloseEntry))) return;
   $("entry-toggle").disabled = true;
 
-  // Only one event takes check-ins at a time: turning entry on closes any other event that still has its doors open.
-  if (open) {
-    const fresh = await api("listEvents");   // a fresh look, in case another exec opened a different event
-    if (fresh.ok) { eventsState.events = fresh.events; eventsState.counts = fresh.counts || {}; }
-    const others = eventsState.events.filter((e) => e.entryOpen && e.id !== doorState.eventId && e.status !== "archived");
-    if (others.length) {
-      const names = others.map((e) => e.name).join(" and ");
-      for (const other of others) {
-        const closed = await api("setEntryOpen", { eventId: other.id, open: false });
-        if (!closed.ok) { $("entry-toggle").disabled = false; return showResult({ color: "red", message: errorText(closed) }); }
-        other.entryOpen = false;
-      }
-      showToast(T.doorsSwitched(names));
-    }
-  }
-
+  // Only one event takes check-ins at a time: the server closes any other open event under the same lock.
   const reply = await api("setEntryOpen", { eventId: doorState.eventId, open });
   $("entry-toggle").disabled = false;
   if (!reply.ok) return showResult({ color: "red", message: errorText(reply) });
+  const closed = Array.isArray(reply.closedEvents) ? reply.closedEvents : [];
+  if (closed.length) {
+    const closedIds = new Set(closed.map((e) => e.id));
+    eventsState.events.forEach((e) => { if (closedIds.has(e.id)) e.entryOpen = false; });
+    showToast(T.doorsSwitched(closed.map((e) => e.name).join(" and ")));
+  }
   doorState.data.event.entryOpen = open;
   const mine = eventsState.events.find((e) => e.id === doorState.eventId);
   if (mine) mine.entryOpen = open;   // so the Events tab shows the right DOORS OPEN pill

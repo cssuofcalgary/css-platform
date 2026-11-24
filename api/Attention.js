@@ -16,7 +16,7 @@ const REVIEW_DAYS = 60;   // a "check this order" older than this is assumed sor
 function attentionList_() {
   const items = [];
   const events = {};
-  allEvents_().forEach(function (e) { if (!e.archivedAt && e.status !== "archived" && e.status !== "draft") events[e.id] = e; });
+  allEvents_().forEach(function (e) { if (!e.archivedAt && e.status !== "archived" && e.status !== "draft" && !isPracticeEvent_(e)) events[e.id] = e; });
   const orders = {};
   readRows_("Orders").forEach(function (o) { orders[o.id] = o; });
   const eventName = function (id) { return events[id] ? events[id].name : ""; };

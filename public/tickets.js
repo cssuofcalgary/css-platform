@@ -5,9 +5,11 @@ const $ = (id) => document.getElementById(id);
 const MEMBER_SITE = "https://member.ucalgarycss.ca/";
 
 async function api(action, details = {}) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 30000);
   try {
     const res = await fetch(API_URL, {
-      signal: AbortSignal.timeout(30000),
+      signal: controller.signal,
       method: "POST",
       headers: { "Content-Type": "text/plain;charset=utf-8" },
       body: JSON.stringify({ action, ...details })
@@ -17,7 +19,7 @@ async function api(action, details = {}) {
     return data;
   } catch (err) {
     return { ok: false, error: "NETWORK" };
-  }
+  } finally { clearTimeout(timer); }
 }
 
 function applySite(site) {

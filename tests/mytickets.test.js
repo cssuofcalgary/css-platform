@@ -133,7 +133,7 @@ run(`TBL.Events[0].status = "published"`);
     if (saved) store.CSS_MY_TICKETS_LINK = JSON.stringify(saved);
     const el = (id) => els[id] || (els[id] = { id, hidden: false, textContent: "", innerHTML: "", value: "", style: {}, dataset: {}, href: "", addEventListener() {} });
     const ctx = {
-      console, URLSearchParams, JSON, AbortSignal, setTimeout: () => 0,
+      console, URLSearchParams, JSON, AbortController, setTimeout: () => 0, clearTimeout() {},
       localStorage: { getItem: (k) => (k in store ? store[k] : null), setItem: (k, v) => { store[k] = String(v); }, removeItem: (k) => { delete store[k]; } },
       document: { getElementById: el, querySelectorAll: () => [] },
       location: { search: "", pathname: "/tickets.html", href: "" }, history: { replaceState() {} },

@@ -29,8 +29,8 @@ function eventSummary_(eventId, opts) {
   let received = 0, waiting = 0;
   Object.keys(orders).forEach(function (id) {
     const o = orders[id];
-    if (o.status === "paid") received += Number(o.total) || 0;
-    if (o.status === "awaiting") waiting += Number(o.total) || 0;
+    received += receivedOf_(o);
+    if (o.status === "awaiting") waiting += Math.max(0, (Number(o.total) || 0) - dollars_(availableReceivedCents_(o)));
   });
 
   // Per ticket type (the event's own types first, then any old names still on tickets)
@@ -121,7 +121,7 @@ function eventSummary_(eventId, opts) {
     },
     spotsTaken: taken,
     spotsLeft: event.capacity ? Math.max(event.capacity - taken, 0) : null,
-    money: { received: received, awaiting: waiting },
+    money: { received: dollars_(cents_(received)), awaiting: dollars_(cents_(waiting)) },
     byType: byType,
     questions: questions,
     feedback: feedbackSummary_(event.id),

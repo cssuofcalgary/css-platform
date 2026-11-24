@@ -19,7 +19,7 @@ const MockApi = (() => {
 
   let ready = null;
   function loadLogic() {
-    ready = ready || Promise.all(["Members.js", "People.js", "Bcrypt.js"].map((file) => new Promise((resolve, reject) => {
+    ready = ready || Promise.all(["Members.js", "People.js", "Bcrypt.js", "Practice.js"].map((file) => new Promise((resolve, reject) => {
       const s = document.createElement("script");
       s.src = "../api/" + file;
       s.onload = resolve;
@@ -34,6 +34,22 @@ const MockApi = (() => {
   const sessionPeople = {};
   const accountHashes = {}, accountVersions = {}, setupTokens = {};
   let peopleLocked = false;
+  let demoPractice = null;
+  function practiceReply(req) {
+    if (req.action === "removePracticeEvent") { demoPractice = null; return { ok: true, removed: true }; }
+    if (req.action === "createPracticeEvent" && !demoPractice) {
+      const event = { id: "DEMO-PRACTICE", name: PRACTICE_NAME, slug: "practice-not-real", date: new Date().toISOString().slice(0, 10), status: "closed", entryOpen: false,
+        ticketTypes: [], questions: [], summary: { practice: true }, mailRegistration: false, mailTickets: false, mailReminders: false };
+      const cards = PRACTICE_PEOPLE.map((person, i) => {
+        const link = new URL("ticket.html", new URL(PUBLIC_SITE_URL, location.href));
+        link.searchParams.set("t", "demo-practice-" + (i + 1));
+        return { n: i + 1, name: person.name, ticketType: { m: "Member", n: "Non-member", f: "Free" }[person.type], ticketId: "DEMO-" + (i + 1), expect: person.expect, note: person.note, link: link.href };
+      });
+      cards.push({ n: cards.length + 1, name: "Not a real ticket", ticketType: "", ticketId: "", expect: "RED", note: "A made-up code: should say the ticket wasn't found.", link: new URL("ticket.html?t=demo-missing", new URL(PUBLIC_SITE_URL, location.href)).href });
+      demoPractice = { ok: true, exists: true, archived: false, eventId: event.id, eventName: event.name, event, cards };
+    }
+    return demoPractice || { ok: true, exists: false };
+  }
   async function demoPasswordInput(password, salt) {
     const encoder = new TextEncoder();
     const key = await crypto.subtle.importKey("raw", encoder.encode(salt), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
@@ -349,6 +365,12 @@ const MockApi = (() => {
       case "logout":
         sessions.delete(req.token);
         return { ok: true };
+      case "practiceSheet": case "createPracticeEvent": case "removePracticeEvent":
+        if (!sessions.has(req.token)) return { ok: false, error: "NOT_LOGGED_IN" };
+        return practiceReply(req);
+      case "listEvents":
+        if (!sessions.has(req.token)) return { ok: false, error: "NOT_LOGGED_IN" };
+        return { ok: true, events: demoPractice ? [demoPractice.event] : [], counts: {} };
       case "getSettings":
         if (!sessions.has(req.token)) return { ok: false, error: "NOT_LOGGED_IN" };
         if (!String(req.token).startsWith("demo-admin-")) return { ok: false, error: "ADMIN_ONLY" };

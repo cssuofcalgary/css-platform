@@ -3,7 +3,7 @@
 The Chinese Students' Society's own event, ticket and membership platform: a mini Luma/Eventbrite built on free Google tools.
 **Execs:** you want `HANDBOOK.md`. **Something broke:** `RUNBOOK.md`.
 
-Status: **API 0.19.0** (the `API_VERSION` in `api/Config.js`; the Apps Script deployment label says the same). Events, registration, payments, door and the redesigned Exec Portal are live. Membership sign-up (`member.ucalgarycss.ca/create`), the Members tab's Pending list, Add member and Mark paid were added 2026-09-30. Roadmap and what is left: the vault note "CSS Platform - Roadmap".
+Status: **API 0.24.0** (the `API_VERSION` in `api/Config.js`; the Apps Script deployment label says the same). Events, registration, payments, door and the redesigned Exec Portal are live. Membership sign-up (`member.ucalgarycss.ca/create`), the Members tab's Pending list, Add member and Mark paid were added 2026-09-30. Roadmap and what is left: the vault note "CSS Platform - Roadmap".
 The old system (`../CSS Ticketing System/`) keeps running until this one is proven. Nothing here touches it.
 
 ---
@@ -22,7 +22,7 @@ The old system (`../CSS Ticketing System/`) keeps running until this one is prov
 - **Pages** are plain HTML/CSS/JS with no build step. Host them anywhere static (Vercel, GitHub Pages) or open them from disk.
 - Every page talks to **one** back end: an Apps Script web app. The page sends `POST` with a JSON body `{ action, token, ...details }` and gets JSON back: `{ ok: true, ... }` or `{ ok: false, error: "CODE", message }`.
 - **Storage:**
-  - **Membership sheet** (the existing one): only **read** so far, for member search and member-price checks.
+  - **Membership sheet** (selected in Settings → Membership): read for member search, pass cards and member-price checks, and written under lock when someone joins (`registerMember` / `addMember`) or an exec confirms payment / resends a pass (`markMemberPaid` / `updateMember` / `resendMemberPass`).
   - **"CSS Platform Data"**: a spreadsheet the back end created and owns. One tab per table (section 4).
   - **"CSS Platform/Event images"** Drive folder: uploaded event images, viewable by link.
 
@@ -56,6 +56,7 @@ The old system (`../CSS Ticketing System/`) keeps running until this one is prov
 | `api/Events.js` | Events: validation, save, publish/close, image upload, public event views |
 | `api/Orders.js` | Registration: one Order (payment code) + one Ticket per person, membership check (flags, never blocks), duplicate check, anti-spam |
 | `api/TestKit.js` | Stress-test kit, run **by hand from the Apps Script editor** (not reachable from the web): `buildStressTest()` makes two closed test events, 46 varied fake attendees (all @example.com) and emails a sheet of 50 QR codes with the expected result of each scan; `emailStressTestSheet()` re-sends it; `removeStressTest()` archives both events. Run `buildStressTest` once |
+| `api/Practice.js` | Event-day rehearsal (`Events → Practice event`): creates a closed `"PRACTICE (not real)"` event with 16 fake attendees (@example.com, emails off), builds a printable QR sheet with expected GREEN/ORANGE/RED results, and removes only the practice event's rows when done |
 | `api/MyTickets.js` | "Find my tickets / pass" lookups (email or UCID + last name) and the private-link tickets for the member portal |
 | `api/Payments.js` | Finance: list orders, mark paid (capacity check, `force` to override), refund/cancel (never deletes), resend tickets, send waiting emails (**each ticket is claimed under the lock before it is sent, so two people pressing Send now can't double-email**; optional `count`), cancel requests (`requestCancel_`, `dismissCancelRequest_`), search by `$25`. Public ticket lookup by secret. Remembers the public site address for email links (`PUBLIC_SITE_URL` property) |
 | `api/EmailTemplates.js` | The standard wording of each email (`EMAIL_KINDS`), fill-ins like `{name} {event} {code} {amount} {when} {where}`, saved custom wording, preview and test send. To add a new kind of email: add it to `EMAIL_KINDS` and write its `build…Email_` in `Mail.js` |
@@ -86,8 +87,7 @@ The API address (Apps Script) is the same from every site; nothing to change the
 
 ### Layout modes (exec-portal)
 - **Wide screens (960 px+):** sidebar navigation, a shared event picker in the top bar (Payments and Door follow it), a stat strip and a table-style order list on Payments. Pure CSS under `@media (min-width: 960px)` at the bottom of `styles.css`, plus `renderGlobalEvent()` in `events.js`.
-- **Scanner mode:** `exec-portal/?mode=scanner` (also reachable at `scanner/`, which just redirects there). Shows only the Door tab: camera, "inside" counter, name/ticket search, Undo. Hides walk-ins, the unpaid and flagged lists, entry open/close and every other tab, and never lets an unpaid or flagged person in ("Send to help desk"). Phones open the full portal on Tasks unless the scanner link is chosen. Personal sign-in keeps exec permissions; volunteer sign-in uses the separate door-only role and action allow-list.
-- When the site moves to Vercel with `exec.ucalgary.ca`, add a rewrite so `/scanner` opens `/exec-portal/?mode=scanner` (or keep the `scanner/` folder). A separate subdomain isn't needed.
+- **Scanner mode:** `exec-portal/?mode=scanner` (also reachable at `scanner/`, which redirects there on `exec.ucalgarycss.ca`). Shows only the Door tab: camera, "inside" counter, name/ticket search, Undo. Hides walk-ins, the unpaid and flagged lists, entry open/close and every other tab, and never lets an unpaid or flagged person in ("Send to help desk"). Phones open the full portal on Tasks unless the scanner link is chosen. Personal sign-in keeps exec permissions; volunteer sign-in uses the separate door-only role (`role: "door"`) and server-enforced action allow-list (`DOOR_ACTIONS`).
 
 ## 4. Data tables ("CSS Platform Data")
 Row 1 = column names. **Don't rename tabs or row-1 names.** Rows are matched by `id`, so sorting or filtering by hand is safe.
@@ -198,7 +198,8 @@ Also added in Oct 2026: Orders `cancelRequestedAt`, `cancelRequestedBy` (a ticke
 | `listRecentEmails` | yes (exec) | Recorded platform email attempts over the last rolling 24 hours: recipient, exact subject, time, and sent/failed status, newest first. Reads `email.sent` / `email.failed` entries from the existing Log table (last 5,000 rows; `partial` warns if older records may be missing). All platform send paths use `sendMail_`; logging failure never changes the send result. No email body or attachment is stored. History starts with this update; no Gmail access or new table is needed. |
 | `resendTickets` `{orderId, siteUrl}` | yes | Emails the paid tickets again |
 | `sendPendingEmails` | yes | Sends ticket emails that were held back by the daily limit |
-| `setEntryOpen` `{eventId, open}` | yes | Scanners only check people in while entry is open |
+| `setEntryOpen` `{eventId, open}` | yes | Opens or closes door entry; opening an event closes any other open event under the same lock and returns `closedEvents` |
+| `practiceSheet`, `createPracticeEvent`, `removePracticeEvent` | yes (exec) | Reads, creates or removes the closed `"PRACTICE (not real)"` rehearsal event and its printable QR cards without touching real events or sending email |
 | `scan` `{eventId, code, atDesk?}` | yes | Returns `{result: {color, message, person}}`. Colors: `green`, `orange` (already in / not paid / entry closed / **flagged: go to the help desk**), `red` (not found / wrong event / refunded / member card). Flagged tickets only check in with `atDesk: true` (help desk buttons) |
 | `walkIn` `{eventId, walkIn: {name, ucid?, memberId?, ticketTypeId, method: cash/etransfer}}` | yes | Creates a paid order + ticket, already checked in. Ignores capacity |
 | `doorList` `{eventId, q?}` | yes | Counts for the whole event + the small lists (not paid, flagged, last 10 check-ins); `q` returns up to 20 name/code matches in `matches`. The full guest list is not sent |
@@ -251,8 +252,7 @@ git add -A
 git commit -m "what changed"
 git push
 ```
-GitHub Pages updates the live site in about a minute. **When you change a `.js`/`.css` file, bump the `?v=` number** on its `<script>`/`<link>` line in the page's `.html` (e.g. `?v=0.2.1` → `?v=0.2.2`). Otherwise phones may keep the old copy for a while. No git? Edit the file directly on github.com (✏ icon) and commit. Text changes only need `strings.js`.
-**Moving to Vercel later:** import the GitHub repo in Vercel (no build step, output = root), add `events.` / `exec.` domains, then use "Resend tickets" if old links must change.
+Vercel redeploys `events.ucalgarycss.ca` (`public/`) and `exec.ucalgarycss.ca` (`exec-portal/`) automatically on every push to `main` in about a minute or two. **When you change a `.js`/`.css` file, bump the `?v=` number** on its `<script>`/`<link>` line in the page's `.html` (e.g. `?v=0.2.1` → `?v=0.2.2`). Otherwise browsers may keep the old copy. Text changes only need `strings.js`.
 
 **Local testing:** serve the folder (e.g. `python -m http.server 8765` inside `CSS Ticketing System V2/`) and open `http://localhost:8765/exec-portal/` or `/public/`. Empty `API_URL` in `exec-portal/config.js` = demo mode with made-up members (password `demo` / `demo-admin`).
 

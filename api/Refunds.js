@@ -28,6 +28,18 @@ function receivedOf_(order) {
   return order.status === "paid" ? Number(order.total) || 0 : 0;
 }
 
+/** Money already returned or reserved for another refund cannot pay for a second refund or a restored ticket. */
+function refundCommittedCents_(orderId) {
+  return readRows_("Refunds").filter(function (r) { return r.orderId === orderId; }).reduce(function (sum, r) {
+    const view = refundView_(r);
+    return sum + cents_(view.returned) + (r.status === "owed" ? cents_(view.remaining) : 0);
+  }, 0);
+}
+
+function availableReceivedCents_(order) {
+  return Math.max(0, cents_(receivedOf_(order)) - refundCommittedCents_(order.id));
+}
+
 /** One refund row as the screen needs it: how much is owed, how much came back, how much is left. */
 function refundView_(r) {
   const returns = Array.isArray(r.returns) ? r.returns : [];
@@ -79,7 +91,7 @@ function invalidateTickets_(session, req) {
     const saved = savedRequest_("invalidateTickets", rid);
     if (saved && saved.status === "done") return saved.reply;
     if (saved && saved.status === "started") return carryOutInvalidate_(session, rid, saved.plan);
-    delete DB_.rows["Orders"]; delete DB_.rows["Tickets"];
+    delete DB_.rows["Orders"]; delete DB_.rows["Tickets"]; delete DB_.rows["Refunds"];
     const order = readRows_("Orders").filter(function (o) { return o.id === req.orderId; })[0];
     if (!order) throw new ApiError_("NOT_FOUND", "Order not found.");
     if (order.status !== "paid" && order.status !== "awaiting") throw new ApiError_("BAD_REQUEST", "This order is already " + order.status + ".");
@@ -100,10 +112,12 @@ function invalidateTickets_(session, req) {
 
     // What is owed back: the price of the paid tickets stopped; a whole unpaid order that had part-payments owes those back.
     let suggested = priceOf(paidOnes);
-    if (order.status === "awaiting" && whole) suggested = cents_(receivedBefore);
+    const available = availableReceivedCents_(order);
+    if (order.status === "awaiting" && whole) suggested = available;
+    suggested = Math.min(suggested, available);
     const owedCents = wanted !== null ? cents_(wanted) : suggested;
-    if (owedCents > cents_(receivedBefore) + 1) {
-      throw new ApiError_("BAD_REQUEST", "Only " + usd_(receivedBefore) + " was received for this order, so you can't give back " + usd_(dollars_(owedCents)) + ".");
+    if (owedCents > available) {
+      throw new ApiError_("BAD_REQUEST", "Only " + usd_(dollars_(available)) + " is available to refund after earlier refunds, so you can't give back " + usd_(dollars_(owedCents)) + ".");
     }
 
     const now = new Date().toISOString();
@@ -267,7 +281,7 @@ function restoreTickets_(session, req) {
   const ids = [];
   ((req && req.ticketIds) || []).forEach(function (id) { id = String(id || ""); if (id && ids.indexOf(id) === -1) ids.push(id); });
   if (!ids.length) throw new ApiError_("BAD_REQUEST", "Pick at least one ticket.");
-  return withLock_(function () {
+  return withIntakeAndScriptLock_(function () {
     delete DB_.rows["Orders"]; delete DB_.rows["Tickets"]; delete DB_.rows["Refunds"]; delete DB_.rows["Events"];
     const order = readRows_("Orders").filter(function (o) { return o.id === req.orderId; })[0];
     if (!order) throw new ApiError_("NOT_FOUND", "Order not found.");
@@ -275,32 +289,34 @@ function restoreTickets_(session, req) {
     const mine = readRows_("Tickets").filter(function (t) { return t.orderId === order.id; });
     const chosen = ids.map(function (id) { return mine.filter(function (t) { return t.id === id; })[0]; });
     if (chosen.some(function (t) { return !t || (t.status !== "refunded" && t.status !== "cancelled"); })) throw new ApiError_("BAD_REQUEST", "Only cancelled or invalidated tickets can be put back.");
-    const refunds = readRows_("Refunds").filter(function (r) { return r.orderId === order.id && r.status !== "waived"; });
+    const refunds = readRows_("Refunds").filter(function (r) { return r.orderId === order.id; });
     chosen.forEach(function (t) {
-      const rec = refunds.filter(function (r) { return Array.isArray(r.ticketIds) && r.ticketIds.indexOf(t.id) !== -1; })[0];
-      if (rec && (refundView_(rec).returned > 0 || rec.status === "returned")) {
+      if (refunds.some(function (r) { return ((r.ticketIds || []).indexOf(t.id) !== -1 || (r.kind === "history" && !(r.ticketIds || []).length)) && (refundView_(r).returned > 0 || r.status === "returned"); })) {
         throw new ApiError_("BAD_REQUEST", t.name + "'s refund was already returned, so the ticket can't be put back. Register them again instead.");
       }
     });
     const event = findEvent_(function (e) { return e.id === order.eventId; });
     if (!event) throw new ApiError_("NOT_FOUND", "Event not found.");
     assertNotArchived_(event);
-    if (event.capacity && !req.force) {
-      const taken = readRows_("Tickets").filter(function (t) { return t.eventId === event.id && (t.status === "paid" || t.status === "awaiting"); }).length;
-      const limit = event.capacityRule === "all" ? event.capacity : Math.floor(event.capacity * 1.25);
-      if (taken + chosen.length > limit) throw new ApiError_("OVER_CAPACITY", "Putting these back would make " + (taken + chosen.length) + " paid and waiting tickets, over the limit of " + limit + ".");
-    }
+    const returning = chosen.map(function (t) { return Object.assign({}, t, { status: t.status === "refunded" ? "paid" : "awaiting" }); });
+    assertRestoredTickets_(event, returning, !!req.force);
 
     chosen.forEach(function (t) { updateRow_("Tickets", t.id, { status: t.status === "refunded" ? "paid" : "awaiting" }, t._row); });
     const orderTotal = readRows_("Tickets").filter(function (t) { return t.orderId === order.id && retainedTicket_(t); })
       .reduce(function (sum, t) { return sum + cents_(t.price); }, 0);
-    updateRow_("Orders", order.id, {
+    const change = {
       total: dollars_(orderTotal),
       notes: [order.notes, chosen.length + " ticket" + (chosen.length === 1 ? "" : "s") + " put back by " + session.name].filter(Boolean).join(" | ")
-    }, order._row);
+    };
+    if (order.status === "paid" && returning.some(function (t) { return t.status === "awaiting"; })) {
+      change.received = String(receivedOf_(order));
+      change.status = "awaiting";
+    }
+    updateRow_("Orders", order.id, change, order._row);
 
     // The refund that was owed for these tickets shrinks (or is cancelled when nothing is left in it).
     refunds.forEach(function (rec) {
+      if (rec.status !== "owed") return;
       const covered = (rec.ticketIds || []).filter(function (id) { return ids.indexOf(id) !== -1; });
       if (!covered.length) return;
       const left = (rec.ticketIds || []).filter(function (id) { return ids.indexOf(id) === -1; });
@@ -311,6 +327,6 @@ function restoreTickets_(session, req) {
       updateRow_("Refunds", rec.id, changes, rec._row);
     });
     log_(session.name, "tickets.restored", order.code, { tickets: chosen.length });
-    return { ok: true, restored: chosen.length, orderStatus: order.status };
+    return { ok: true, restored: chosen.length, orderStatus: change.status || order.status };
   });
 }

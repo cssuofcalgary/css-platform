@@ -216,7 +216,7 @@ async function loadOverviewActivity(mine) {
 
 /** Jumps to a tab, optionally with a particular event already picked. */
 function goToTab(tab, eventId) {
-  if (eventId) { globalEventId = eventId; payState.eventId = eventId; doorState.eventId = eventId; }
+  if (eventId) { globalEventId = eventId; payState.eventId = eventId; doorState.eventId = eventId; doorState.picked = true; }
   switchTab(tab);
   if (eventId && $("global-event").options.length) $("global-event").value = eventId;
 }

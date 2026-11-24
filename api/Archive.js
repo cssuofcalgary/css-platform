@@ -19,6 +19,11 @@ const LIVE_TICKETS_WARN = 3000;             // the shared table cache stops work
 
 /** "2026-10-05" -> "2026-27" (a school year runs September to August). */
 function archiveYear_(date) {
+  const text = String(date || "");
+  const parsed = new Date(text + "T12:00:00Z");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(text) || isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== text) {
+    throw new ApiError_("BAD_REQUEST", "Set a valid event date before archiving it.");
+  }
   const y = parseInt(String(date).slice(0, 4), 10);
   const m = parseInt(String(date).slice(5, 7), 10);
   const start = m >= 9 ? y : y - 1;
@@ -107,6 +112,9 @@ function deleteTabRows_(tab, ids) {
     let start = rows[i];
     let count = 1;
     while (i - 1 >= 0 && rows[i - 1] === start - 1) { start--; count++; i--; }
+    // Google Sheets requires at least one non-frozen row, even after moving every record out.
+    const maxRows = tab.sheet.getMaxRows();
+    if (start === 2 && count === maxRows - 1) tab.sheet.insertRowsAfter(maxRows, 1);
     tab.sheet.deleteRows(start, count);
     removed += count;
     i--;
@@ -176,6 +184,7 @@ function archiveEvent_(session, eventId, force) {
       if (!summary || !event.archivedAt) {
         const full = eventSummary_(eventId, { full: true });
         summary = { totals: full.totals, money: full.money, byType: full.byType, questions: full.questions, spotsTaken: full.spotsTaken };
+        if (event.summary && event.summary.practice === true) summary.practice = true;
       }
 
       // 3. Copy to the archive (only what isn't there yet), then check the copy
@@ -283,8 +292,9 @@ function deleteEvent_(session, eventId, confirmName, force) {
         });
       }
       // a half-archived leftover in the archive (crash earlier) goes too
-      const year = event.archiveYear || archiveYear_(event.date);
-      const leftover = archiveBook_(year, false);
+      let year = event.archiveYear || "";
+      if (!year && event.date) { try { year = archiveYear_(event.date); } catch (e) { /* an undated draft has no archive */ } }
+      const leftover = year ? archiveBook_(year, false) : null;
       if (leftover && !event.archivedAt) {
         ARCHIVE_TABLES.forEach(function (name) {
           const sheet = leftover.getSheetByName(name);

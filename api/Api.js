@@ -366,6 +366,16 @@ function route_(req) {
     case "resendWaitlistOffer":
       return resendWaitlistOffer_(requireSession_(req.token), req.entryId);
 
+    case "practiceSheet":
+      requireSession_(req.token);
+      return practiceSheet_();
+
+    case "createPracticeEvent":
+      return createPracticeEvent_(requireSession_(req.token));
+
+    case "removePracticeEvent":
+      return removePracticeEvent_(requireSession_(req.token));
+
     case "listTasks":
       return listTasks_(requireSession_(req.token));
 
@@ -433,8 +443,7 @@ function route_(req) {
     }
 
     case "scanLog": {
-      requireSession_(req.token);   // door volunteers too: it shows what their own scanner read
-      return scanLog_(req.eventId);
+      return scanLog_(req.eventId, requireSession_(req.token));
     }
 
     case "doorList":
@@ -494,6 +503,7 @@ function startSession_(name, role, person) {
   const token = Utilities.getUuid();
   CacheService.getScriptCache().put("session_" + token,
     JSON.stringify({ name: name, role: role, sid: Utilities.getUuid().replace(/-/g, "").slice(0, 12), since: new Date().toISOString(), epoch: currentEpoch_(),
+      ...(role === "door" ? { doorEpoch: currentDoorEpoch_() } : {}),
       ...(person ? { personId: person.id, personVersion: person.authVersion } : {}) }), SESSION_SECONDS);
   return token;
 }
@@ -505,7 +515,10 @@ function requireSession_(token) {
   if ((session.epoch || "0") !== currentEpoch_()) throw new ApiError_("NOT_LOGGED_IN", "Please log in again.");   // everyone was signed out
   checkExecAccountSession_(session);
   touchSession_(token, session);
-  if (session.role === "door") checkDoorSession_(ROUTE_ACTION_);
+  if (session.role === "door") {
+    if ((session.doorEpoch || "0") !== currentDoorEpoch_()) throw new ApiError_("NOT_LOGGED_IN", "The door password changed. Please sign in again.");
+    checkDoorSession_(ROUTE_ACTION_);
+  }
   renewSession_(token, session);
   return session;
 }

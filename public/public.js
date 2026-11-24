@@ -5,9 +5,11 @@ const $ = (id) => document.getElementById(id);
 
 async function api(action, details = {}) {
   if (new URLSearchParams(location.hash.slice(1)).has("preview")) return { ok: false, error: "PREVIEW" };
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 30000);
   try {
     const res = await fetch(API_URL, {
-      signal: AbortSignal.timeout(30000),   // never stay on "Loading…" forever
+      signal: controller.signal,
       method: "POST",
       headers: { "Content-Type": "text/plain;charset=utf-8" },
       body: JSON.stringify({ action, ...details })
@@ -17,7 +19,7 @@ async function api(action, details = {}) {
     return data;
   } catch (err) {
     return { ok: false, error: "NETWORK" };
-  }
+  } finally { clearTimeout(timer); }
 }
 
 /** Contact email + Instagram come from the Exec Portal's Settings (config.js is only the fallback). */
@@ -568,6 +570,15 @@ function escapeHtml(value) {
 }
 const escapeAttr = escapeHtml;
 
+function trustedPreviewOrigin(origin) {
+  if (origin === "https://exec.ucalgarycss.ca") return true;
+  try {
+    const editor = new URL(origin);
+    const local = ["localhost", "127.0.0.1", "[::1]"];
+    return local.includes(location.hostname) && local.includes(editor.hostname) && ["http:", "https:"].includes(editor.protocol);
+  } catch (e) { return false; }
+}
+
 // ---- Start --------------------------------------------------------------------
 
 function start() {
@@ -582,7 +593,7 @@ function start() {
     if (!editor) return showPandaError(T.error, null, true);
     // The editor can be on a different host. Only the opener and this one-use key may supply the preview.
     const receive = (message) => {
-      if (message.source !== editor || message.data?.previewKey !== previewKey || !message.data.event) return;
+      if (!trustedPreviewOrigin(message.origin) || message.source !== editor || message.data?.previewKey !== previewKey || !message.data.event) return;
       window.removeEventListener("message", receive);
       clearTimeout(timeout);
       window.opener = null;

@@ -7,7 +7,7 @@ TBL.Events = [{ id:"EV1", slug:"mj", name:"Mahjong", date:"2099-01-01", startTim
   status:"published", entryOpen:"FALSE", ticketTypes:[{id:"T2",name:"General",price:9}], questions:[], codePrefix:"MJ", archivedAt:"", summary:{} }];
 TBL.Orders = []; TBL.Tickets = [];
 function ord(id, status, notes) { insertRow_("Orders", { id:id, code:"MJ-"+id, eventId:"EV1", payerName:"P"+id, payerEmail:id+"@x.ca", total:9, status:status, createdAt:"2026-10-01T00:00:00Z", notes:notes||"", remindedAt:"x", cancelRequestedAt:"", cancelRequestedBy:"" }); }
-function tk(id, orderId, status) { insertRow_("Tickets", { id:id, secret:(id+"0000000000000000000000000000").slice(0,32).toLowerCase(), orderId:orderId, eventId:"EV1", name:"N"+id, email:"", ucid:"", memberId:"", ticketType:"General", price:9, answers:{}, flag:"", status:status, checkedInAt:"", createdAt:"2026-10-01T00:00:00Z", emailedAt:"" }); }
+function tk(id, orderId, status) { insertRow_("Tickets", { id:id, secret:(id+"0000000000000000000000000000").slice(0,32).toLowerCase(), orderId:orderId, eventId:"EV1", name:"N"+id, email:id.toLowerCase()+"@x.ca", ucid:"", memberId:"", ticketType:"General", price:9, answers:{}, flag:"", status:status, checkedInAt:"", createdAt:"2026-10-01T00:00:00Z", emailedAt:"" }); }
 function withLock_(fn) { return fn(); }
 function sendTicketEmail_() { return true; }
 function emailBrand_() { return { signerName: "A", signerRole: "B", buttonColor: "#000000" }; }

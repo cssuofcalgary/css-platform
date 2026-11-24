@@ -143,6 +143,17 @@ async function main() {
   type("kev");
   ok(!list.hidden && labels() === "TEST Kevin B", "typing again reopens matches after dismissing a pending search");
 
+  run("peopleNames=[]; peopleNamesAsked=false;");
+  type("ke");
+  run("signOutLocally();");
+  type("ke");
+  requests[6].resolve({ ok: true, names: ["TEST Old Kevin"] });
+  await settle();
+  ok(list.hidden && status.textContent === run("T.nameSearching"), "a signed-out session's delayed People response cannot replace the next search");
+  requests[7].resolve({ ok: true, names: ["TEST New Kevin"] });
+  await settle();
+  ok(labels() === "TEST New Kevin", "the next sign-in reloads People rather than reusing a stale roster");
+
   console.log(fails ? `\n${fails} FAILED` : "\nALL PASSED");
   process.exitCode = fails ? 1 : 0;
 }

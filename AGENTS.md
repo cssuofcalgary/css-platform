@@ -13,8 +13,8 @@ Future executives with **no technical background** run events through the dashbo
 - Plain wording, sensible defaults, and a clear way back from mistakes. Say what happens, what to do next, and what the person sees.
 - **No unsolicited UI subtext:** Never add explanatory paragraphs, subtitles, or helper text beneath section headings, labels, checkboxes, or other controls unless Gordon explicitly requests it; this applies across the entire system and to every subagent.
 - Don't add settings unless they solve a real problem. Routine operations must never need a code change.
-- **Manual over automation:** actions happen when someone presses a button, not on timers. Don't add automatic jobs or emails.
-  - One exception (Gordon's decision, 2026-11-23): the Discord task bot (`taskBotTick`) runs on a 1-minute timer so it can answer `@taskbot` messages and send the reminders people chose. Don't add other timers.
+- **Manual over automation:** business actions happen when someone presses a button, not on timers. Don't add automatic emails or new background jobs.
+  - Existing timers (do not add others): `nightlyJob` (health check, 30-day archive, and Sunday Drive backups of Platform Data, Membership and yearly archives) and `hourlyJob` (closes forgotten door entry 4 hours after an event ends) in `api/Jobs.js`, plus the 1-minute Discord task bot (`taskBotTick`, Gordon's decision, 2026-11-23) for `@taskbot` messages and chosen task reminders.
 - Registrations and payments must never be lost because an email failed.
 
 ## Layout
@@ -42,7 +42,7 @@ The **member portal** is a separate repo: `cssuofcalgary/member-portal`, in `..\
 ```
 node tests/<name>.test.js     # one suite
 ```
-Eighteen suites: `core`, `waitlist`, `partners`, `emailclaim`, `deskalert`, `payfix`, `registration`, `doorundo`, `hardening`, `emailsettings`, `money`, `mytickets`, `feedback`, `archivehold`, `membership`, `retry`, `questions`, `publicform`. Each prints PASS/FAIL and exits non-zero on failure. `tests/harness.js` loads every `api/*.js` file into one Node `vm` with fake Google services and in-memory tables (`TBL.Events`, `TBL.Orders`, `TBL.Tickets`, `TBL.Refunds` …). Tests often need small stubs (`table_`, `withLock_`, `throttle_`, `sendTicketEmail_`). Add a suite or extend one for any change to payments, emails, tickets or permissions, and test what the attendee sees, what the exec sees, how it is fixed, and what happens on failure.
+All suites in `tests/*.test.js` (see `tests/README.md` for the full list). Each prints PASS/FAIL and exits non-zero on failure. `tests/harness.js` loads every `api/*.js` file into one Node `vm` with fake Google services and in-memory tables (`TBL.Events`, `TBL.Orders`, `TBL.Tickets`, `TBL.Refunds` …). Tests often need small stubs (`table_`, `withLock_`, `throttle_`, `sendTicketEmail_`). Add a suite or extend one for any change to payments, emails, tickets or permissions, and test what the attendee sees, what the exec sees, how it is fixed, and what happens on failure.
 A pass does not prove real Google behaviour (concurrency, quotas, cache expiry). After a deploy check Settings → System health.
 
 ## Deploying (only after approval)

@@ -83,6 +83,8 @@ node tests/membershipform-ui.test.js
 `people.test.js` covers pasted rosters, admin permissions, the registration lock, personal-password setup and sign-in, authenticated Settings unlock, hashed storage, password resets, revoked sessions and deactivation. `execaccounts-ui.test.js` covers the first-time password screen, removal of device-saved name suggestions and phone Tasks/scanner landing pages. `signin-search-ui.test.js` covers the two-letter People search, keyboard and click selection, loading and retry, and keeping dismissed results closed.
 `tasks-ui.test.js` covers adding/removing multiple assignees, saving typed names, editing shared tasks, My tasks for each assignee and escaping names. `tasks.test.js` also checks shared-task Discord posts, bot creation, manual/scheduled reminders and older single-owner tasks.
 
+`audit-finance.test.js` checks returned and reserved refunds, safe restores, late-payment retries, actual receipts, verified membership identity and email quota. `ops-audit.test.js` checks overnight events, archives and backups, spreadsheet booleans, scan-log privacy, failed walk-ins and sign-in revocation. `audit-frontend.test.js` checks older Safari request timeouts, trusted event previews, email-counter refresh, camera shutdown, event navigation and Practice failure screens. `practice.test.js` checks batched fake-data creation, disabled emails, interrupted writes, archived practice events, permissions and removal without affecting real events.
+
 Each prints PASS/FAIL lines and exits with an error if anything fails. Run every suite before a deploy:
 
 ```bash

@@ -41,17 +41,25 @@ function verifyExecPassword_(password, stored) {
   return !library.truncates(password) && library.compareSync(password, String(stored || ""));
 }
 
-function execLoginAttempt_(name) {
+function execLoginAttempt_(name, sharedScope) {
   const cache = CacheService.getScriptCache();
   const key = loginFailKey_(name);
   const failed = parseInt(cache.get(key) || "0", 10);
-  if (failed >= MAX_FAILED_LOGINS) throw new ApiError_("TOO_MANY_TRIES", "Too many wrong passwords. Try again in 10 minutes.");
-  return { cache: cache, key: key, failed: failed };
+  const sharedKey = sharedScope ? "failed_shared_" + sharedScope : "";
+  const sharedFailed = sharedKey ? parseInt(cache.get(sharedKey) || "0", 10) : 0;
+  if (failed >= MAX_FAILED_LOGINS || sharedFailed >= MAX_FAILED_LOGINS) throw new ApiError_("TOO_MANY_TRIES", "Too many wrong passwords. Try again in 10 minutes.");
+  return { cache: cache, key: key, failed: failed, sharedKey: sharedKey, sharedFailed: sharedFailed };
 }
 
 function execWrongPassword_(attempt) {
   attempt.cache.put(attempt.key, String(attempt.failed + 1), 600);
+  if (attempt.sharedKey) attempt.cache.put(attempt.sharedKey, String(attempt.sharedFailed + 1), 600);
   throw new ApiError_("WRONG_PASSWORD", "That name and password don't match.");
+}
+
+function clearExecLoginAttempt_(attempt) {
+  attempt.cache.remove(attempt.key);
+  if (attempt.sharedKey) attempt.cache.remove(attempt.sharedKey);
 }
 
 /**
@@ -93,7 +101,9 @@ function personalLogin_(password, name) {
   if (!typed_) throw new ApiError_("NAME_NEEDED", "Pick your name.");
   const person = signInPerson_(typed_);
   const who = person ? String(person.name).trim() : typed_;
-  const attempt = execLoginAttempt_(who);
+  // A locked roster rejects unknown names before comparing the club password.
+  if (!person && peopleLocked_()) throw new ApiError_("PERSON_NOT_LISTED", "Your name isn't on the People list. Ask an admin to add you first.");
+  const attempt = execLoginAttempt_(who, person && person.passwordHash ? "" : "club");
   const typed = String(password || "");
   if (person && !isOn_(person.active)) return execWrongPassword_(attempt);
   if (person && person.passwordHash) {
@@ -105,15 +115,14 @@ function personalLogin_(password, name) {
       if (!fresh || !isOn_(fresh.active) || fresh.passwordHash !== expectedHash || fresh.authVersion !== expectedVersion) return execWrongPassword_(attempt);
       return execSignInReply_(fresh);
     });
-    attempt.cache.remove(attempt.key);
+    clearExecLoginAttempt_(attempt);
     return reply;
   }
   if (typed !== config.password) return execWrongPassword_(attempt);
-  if (!person && peopleLocked_()) throw new ApiError_("PERSON_NOT_LISTED", "Your name isn't on the People list. Ask an admin to add you first.");
   const setupToken = Utilities.getUuid();
   attempt.cache.put("exec_setup_" + setupToken, JSON.stringify({ name: person ? person.name : who,
-    personId: person ? person.id : "", authVersion: person ? String(person.authVersion || "") : "" }), EXEC_SETUP_SECONDS);
-  attempt.cache.remove(attempt.key);
+    personId: person ? person.id : "", authVersion: person ? String(person.authVersion || "") : "", epoch: currentEpoch_() }), EXEC_SETUP_SECONDS);
+  clearExecLoginAttempt_(attempt);
   return { ok: true, needsPasswordSetup: true, setupToken: setupToken, name: person ? person.name : who };
 }
 
@@ -123,11 +132,12 @@ function finishExecSetup_(setupToken, password) {
   const raw = setupToken && cache.get(key);
   if (!raw) throw new ApiError_("PASSWORD_SETUP_EXPIRED", "Sign in with the club password again to set your password.");
   const setup = JSON.parse(raw);
+  if (setup.epoch !== currentEpoch_()) throw new ApiError_("PASSWORD_SETUP_EXPIRED", "Sign in with the club password again.");
   const typed = typeof password === "string" ? password : "";
   if (!typed) throw new ApiError_("BAD_REQUEST", "Enter a password.");
   const hash = hashExecPassword_(typed);
   const reply = withLock_(function () {
-    if (!cache.get(key)) throw new ApiError_("PASSWORD_SETUP_EXPIRED", "Sign in with the club password again.");
+    if (!cache.get(key) || setup.epoch !== currentEpoch_()) throw new ApiError_("PASSWORD_SETUP_EXPIRED", "Sign in with the club password again.");
     delete DB_.rows["Team"];
     let person = taskTeamByName_(setup.name);
     if ((setup.personId && (!person || person.id !== setup.personId)) ||
@@ -155,10 +165,10 @@ function execSignInReply_(person) {
 
 /** The gear unlocks settings for the already authenticated person; it never signs someone in. */
 function unlockSettings_(session, password) {
-  const attempt = execLoginAttempt_("settings_" + (session.personId || session.name));
+  const attempt = execLoginAttempt_("settings_" + (session.personId || session.name), "settings");
   const expected = getConfig_().adminPassword;
   if (!expected || String(password || "") !== expected) return execWrongPassword_(attempt);
-  attempt.cache.remove(attempt.key);
+  clearExecLoginAttempt_(attempt);
   const person = session.personId ? { id: session.personId, authVersion: session.personVersion } : null;
   return { ok: true, token: startSession_(session.name, "admin", person), name: session.name, role: "admin", membershipFee: getConfig_().membershipFee };
 }
@@ -183,6 +193,7 @@ function resetPersonPassword_(session, id) {
     if (!person) throw new ApiError_("NOT_FOUND", "That person is no longer on the list.");
     updateRow_("Team", person.id, { passwordHash: "", passwordSetAt: "", authVersion: Utilities.getUuid() }, person._row);
     CacheService.getScriptCache().remove(loginFailKey_(person.name));
+    CacheService.getScriptCache().remove("failed_shared_club");
     delete DB_.rows["Team"];
     log_(session.name, "person.passwordReset", person.id, { name: person.name });
     return { ok: true, team: taskTeam_() };

@@ -174,8 +174,8 @@ function verifiedMemberFromKey_(creds, members) {
 /** A verified member's details come from the Membership sheet (the page's copy is only a preview). */
 function fillFromMember_(raw, member) {
   const p = Object.assign({}, raw || {});
-  if (!String(p.name || "").trim()) p.name = member.name;
-  if (!String(p.email || "").trim()) p.email = member.email;
+  p.name = member.name;
+  p.email = member.email;
   p.memberId = member.memberId;
   p.ucid = member.ucid;
   return p;
@@ -426,7 +426,7 @@ function membershipFlag_(person, members, verified) {
 /** Do two names plausibly belong to one person? They share a word (nicknames, middle names and word order don't matter). */
 function namesRelated_(a, b) {
   const x = normalizeName_(a), y = normalizeName_(b);
-  if (!x || !y) return true;   // nothing to compare: don't flag on a blank
+  if (!x || !y) return false;   // punctuation or a blank is not evidence that the names match
   if (x === y || x.indexOf(y) !== -1 || y.indexOf(x) !== -1) return true;
   const words = function (t) { return t.split(" ").filter(function (w) { return w.length >= 2; }); };
   const wy = words(y);
