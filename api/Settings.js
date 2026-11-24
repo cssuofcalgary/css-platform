@@ -33,7 +33,11 @@ function getSettings_(token) {
       execPasswordSet: !!config.password,
       adminPasswordSet: !!config.adminPassword,
       doorPasswordSet: !!props.getProperty("SCANNER_PASSWORD"),
-      publicSiteUrl: props.getProperty("PUBLIC_SITE_URL") || ""
+      publicSiteUrl: props.getProperty("PUBLIC_SITE_URL") || "",
+      squareConfigured: cardEnabled_(),   // card payments: whether they are on, never the token itself
+      squareEnvironment: squareConfig_().environment,
+      squareLocationId: squareConfig_().locationId,   // not a secret: it only names the shop
+      squareTokenSet: !!squareConfig_().token
     },
     activeSessions: activeSessions_(token)   // who is online right now (no tokens)
   };
@@ -127,11 +131,36 @@ function saveSettings_(session, token, input) {
   const clearDoor = input.clearDoorPassword === true && !door;
   if (clearDoor) changed.push("door password removed");
 
+  // Card payments (Square). The access token is never sent back; blank = keep the saved one. New keys are tested with Square first.
+  const clearSquare = input.clearSquare === true;
+  if (clearSquare) {
+    if (squareConfig_().token || squareConfig_().locationId) changed.push("card payments turned off");
+  } else if (input.squareAccessToken !== undefined || input.squareLocationId !== undefined || input.squareEnvironment !== undefined) {
+    const now = squareConfig_();
+    const token = input.squareAccessToken ? String(input.squareAccessToken).trim() : now.token;
+    const location = input.squareLocationId !== undefined ? text(input.squareLocationId, 64) : now.locationId;
+    const env = input.squareEnvironment !== undefined ? String(input.squareEnvironment) : now.environment;
+    if (env !== "sandbox" && env !== "production") throw new ApiError_("BAD_REQUEST", "Choose real payments or Square's test mode.");
+    if (input.squareAccessToken && !/^[A-Za-z0-9_\-]{20,300}$/.test(token)) throw new ApiError_("BAD_REQUEST", "That access token doesn't look right. Copy it again from Square's Developer Dashboard.");
+    if (location && !/^[A-Za-z0-9_\-]{4,64}$/.test(location)) throw new ApiError_("BAD_REQUEST", "That location ID doesn't look right. Copy it again from Square.");
+    const squareChanged = token !== now.token || location !== now.locationId || env !== now.environment;
+    if (squareChanged) {
+      if (!token || !location) throw new ApiError_("BAD_REQUEST", "Card payments need both the access token and the location ID.");
+      testSquareKeys_(token, location, env);   // throws a plain-English error if Square says no
+      updates.SQUARE_ACCESS_TOKEN = token;
+      updates.SQUARE_LOCATION_ID = location;
+      updates.SQUARE_ENV = env === "sandbox" ? "sandbox" : "";
+      changed.push("card payments (Square)");
+      notes = env === "sandbox" ? "Card payments are on in Square's test mode." : "Card payments are on.";
+    }
+  }
+
   if (!changed.length) return { ok: true, changed: [], message: "Nothing to change." };
 
   withLock_(function () {
     props.setProperties(updates);
     if (clearDoor) props.deleteProperty("SCANNER_PASSWORD");
+    if (clearSquare) ["SQUARE_ACCESS_TOKEN", "SQUARE_LOCATION_ID", "SQUARE_ENV"].forEach(function (k) { props.deleteProperty(k); });
     if (door || clearDoor) {
       props.setProperty("DOOR_SESSION_EPOCH", Utilities.getUuid().slice(0, 8));
       CacheService.getScriptCache().remove("failed_shared_door");
@@ -150,6 +179,30 @@ function saveSettings_(session, token, input) {
     reply.signedOutEveryone = true;
   }
   return reply;
+}
+
+/** Asks Square whether this token can see this location (and that it takes Canadian dollars), so wrong keys are caught before saving. */
+function testSquareKeys_(token, locationId, env) {
+  const base = env === "sandbox" ? "https://connect.squareupsandbox.com" : "https://connect.squareup.com";
+  let res;
+  try {
+    res = UrlFetchApp.fetch(base + "/v2/locations/" + encodeURIComponent(locationId), {
+      method: "get", headers: { Authorization: "Bearer " + token, "Square-Version": SQUARE_API_VERSION }, muteHttpExceptions: true
+    });
+  } catch (err) {
+    throw new ApiError_("BAD_REQUEST", "Couldn't reach Square to check the keys. Nothing was saved. Try again in a moment.");
+  }
+  const code = res.getResponseCode();
+  let data = {};
+  try { data = JSON.parse(res.getContentText() || "{}") || {}; } catch (e) { data = {}; }
+  const where = env === "sandbox" ? "Square's test mode (sandbox)" : "real payments (production)";
+  if (code === 401 || code === 403) throw new ApiError_("BAD_REQUEST", "Square didn't accept that access token for " + where + ". Nothing was saved.");
+  if (code === 404) throw new ApiError_("BAD_REQUEST", "Square has no location with that ID for this access token. Nothing was saved.");
+  if (code < 200 || code >= 300) throw new ApiError_("BAD_REQUEST", "Square couldn't check the keys right now. Nothing was saved. Try again in a moment.");
+  const loc = data.location || {};
+  if (loc.currency && loc.currency !== "CAD") throw new ApiError_("BAD_REQUEST", "That Square location takes " + loc.currency + ", not Canadian dollars. Nothing was saved.");
+  if (loc.status && loc.status !== "ACTIVE") throw new ApiError_("BAD_REQUEST", "That Square location isn't active. Nothing was saved.");
+  return true;
 }
 
 /** Reads a Membership sheet the same way the portal does, so a wrong link is caught before saving. */
@@ -229,6 +282,14 @@ function healthCheck_(session) {
     name: "Door password", ok: doorPassword, warning: true,
     detail: doorPassword ? "Set" : "Not set: anyone with the scanner link can sign in as a door volunteer while entry is open. Set one in Settings → Security."
   });
+  // Card payments are optional: shown only when they are set up (no call to Square, and never the token).
+  const square = squareConfig_();
+  if (square.enabled) {
+    checks.push({
+      name: "Card payments (Square)", ok: true,
+      detail: square.environment === "sandbox" ? "On, in Square's test mode (no real money)." : "On. People can pay by card or e-transfer."
+    });
+  }
   run("Email allowance", function () {
     const left = MailApp.getRemainingDailyQuota();
     if (left < 15) throw new Error("Only " + left + " emails left today.");

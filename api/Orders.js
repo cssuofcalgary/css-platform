@@ -231,6 +231,7 @@ function registrationReply_(order, tickets, etransferEmail, event) {
     order: { code: order.code, total: Number(order.total) || 0, status: order.status },
     needsReview: needsReview,
     etransferEmail: etransferEmail,
+    cardEnabled: cardEnabled_(),   // the ticket page may offer "Pay by card" (Square.js)
     tickets: tickets.map(function (t) {
       return { name: t.name, ticketType: t.ticketType, price: Number(t.price) || 0, flag: t.flag, page: needsReview ? "" : "ticket.html?t=" + t.secret };
     })

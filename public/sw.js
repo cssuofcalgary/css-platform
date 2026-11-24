@@ -3,7 +3,7 @@
 // 3 seconds) the last copy this phone saw is used. It never touches the API (that is another address), so tickets,
 // scans and the sheet are never answered from here.
 
-const CACHE = "css-ticket-shell-v2";
+const CACHE = "css-ticket-shell-v3";
 const SHELL = [
   "ticket.html", "ticket.js", "strings.js", "config.js", "panda.js", "public.css",
   "assets/top_panda.png", "assets/bottom_panda.png", "assets/css-logo.png"

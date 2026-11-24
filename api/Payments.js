@@ -691,10 +691,16 @@ function clearTicketFlag_(session, ticketId, reason) {
 function getTicket_(secret) {
   const key = String(secret || "").trim();
   if (key.length < 20) throw new ApiError_("NOT_FOUND", "Ticket not found.");
-  const ticket = readRows_("Tickets").filter(function (t) { return t.secret === key; })[0];
+  let ticket = readRows_("Tickets").filter(function (t) { return t.secret === key; })[0];
   if (!ticket) throw new ApiError_("NOT_FOUND", "Ticket not found.");
   const event = findEvent_(function (e) { return e.id === ticket.eventId; }) || {};
-  const order = readRows_("Orders").filter(function (o) { return o.id === ticket.orderId; })[0] || {};
+  let order = readRows_("Orders").filter(function (o) { return o.id === ticket.orderId; })[0] || {};
+  // Paid by card but never came back to this page? Ask Square (at most every 15 s; never fails the page), then read again.
+  if (reconcileSquareOrderIfPending_(order)) {
+    delete DB_.rows["Tickets"]; delete DB_.rows["Orders"];
+    ticket = readRows_("Tickets").filter(function (t) { return t.secret === key; })[0] || ticket;
+    order = readRows_("Orders").filter(function (o) { return o.id === ticket.orderId; })[0] || order;
+  }
   return {
     ok: true,
     ticket: {
@@ -707,6 +713,7 @@ function getTicket_(secret) {
     },
     site: siteInfo_(),
     etransferEmail: getConfig_().etransferEmail,
+    cardEnabled: cardEnabled_(),   // the page may offer "Pay by card" (Square.js)
     orderTotal: Number(order.total) || 0,
     orderReceived: order.status === "awaiting" ? dollars_(availableReceivedCents_(order)) : 0,   // refund money cannot also pay the outstanding ticket balance
     canGiveFeedback: ticket.status === "paid" && !!ticket.checkedInAt,

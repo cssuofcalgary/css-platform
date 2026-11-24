@@ -20,6 +20,7 @@ const STRINGS = {
     closed: "Registration is closed",
     spotsLeft: (n) => n === 1 ? "1 spot left" : `${n} spots left`,
     payNote: "Pay by Interac e-transfer. Your spot is confirmed once payment is received.",
+    payNoteCard: "Pay by card or Interac e-transfer. Your spot is confirmed once payment is received.",
     closesAt: (when) => `Registration closes ${when.replace(/\.$/, "")}.`,
     contact: "Questions? Email",
     instagram: "Instagram",
@@ -77,6 +78,11 @@ const STRINGS = {
     statusLink: "Check payment status",
     statusHeading: "Payment status",
     statusWaiting: "Waiting for payment",
+    payByCard: "Pay by card (instant tickets)",
+    payByEtransfer: "Pay by Interac e-transfer",
+    cardOpening: "Opening card payment…",
+    cardFailed: "We couldn't open card payment. Please try again, or pay by e-transfer.",
+    cardNotCompleted: "Payment not completed yet — you can try card again or pay by e-transfer.",
 
     // My tickets (guests stay on this site)
     myTicketsTitle: "My tickets",

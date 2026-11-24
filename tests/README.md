@@ -39,6 +39,7 @@ These run the API code (`api/*.js`) in Node with a fake Google (in-memory tables
 | `publicform.test.js` | the event site sign-up form offline: which questions show, what blocks Register, the "Choose tickets" total, the kept form, the ticket page's Find my tickets button |
 | `attention.test.js` | the Needs attention list, membership/payment issues and manual actions without automatic changes |
 | `eventedit.test.js` | event drafts and previews, editable fields and ticket order |
+| `square.test.js` | card payments through Square (fake Square, no network): the payment page amount and capacity check, confirming and repeating, already paid by e-transfer, event full while paying, backing out, the ticket page and door scan finishing a payment after a closed tab, the webhook relay's signature check, odd card payments for Finance, Square not set up |
 | `members.test.js` | member lists, filters, counts, member ID creation and signup QR links |
 
 ```
@@ -78,6 +79,7 @@ node tests/eventnotes.test.js
 node tests/announcements-ui.test.js
 node tests/membershipform.test.js
 node tests/membershipform-ui.test.js
+node tests/square.test.js
 ```
 
 `people.test.js` covers pasted rosters, admin permissions, the registration lock, personal-password setup and sign-in, authenticated Settings unlock, hashed storage, password resets, revoked sessions and deactivation. `execaccounts-ui.test.js` covers the first-time password screen, removal of device-saved name suggestions and phone Tasks/scanner landing pages. `signin-search-ui.test.js` covers the two-letter People search, keyboard and click selection, loading and retry, and keeping dismissed results closed.

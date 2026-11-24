@@ -20,6 +20,7 @@ const ACTIVITY_GROUPS = {
 };
 ACTIVITY_GROUPS.events.push("practice.create", "practice.remove");
 // Members: notes, IDs and cards count with payments (the money-and-people side of the club).
+ACTIVITY_GROUPS.payments.push("order.paid.card", "order.card.review");   // card payments through Square (Square.js)
 ACTIVITY_GROUPS.payments.push("member.note", "member.noteRemoved", "member.assignId", "member.resendPass", "payment.needsReview", "refund.needsReview", "payment.reviewed", "waitlist.resend", "waitlist.offer", "waitlist.remove", "payment.note", "payment.noteRemoved", "ticket.flagCleared");
 
 function activityGroup_(action) {
@@ -76,6 +77,8 @@ function activitySummary_(r, events) {
     case "order.paid": return "marked " + r.target + " paid (" + money(d.total) + ", " + d.tickets + " ticket" + (d.tickets === 1 ? "" : "s") + ")" + (d.overCapacity ? ", over capacity" : "");
     case "order.refunded": return (d.whole === false ? "invalidated " + d.tickets + " ticket" + (d.tickets === 1 ? "" : "s") + " of " : "refunded ") + r.target + " (" + money(d.total) + ")" + (d.owed ? ", " + money(d.owed) + " to return" : "") + (d.reason ? ": " + d.reason : "");
     case "order.cancelled": return (d.whole === false ? "cancelled " + d.tickets + " ticket" + (d.tickets === 1 ? "" : "s") + " of " : "cancelled ") + r.target + (d.reason ? ": " + d.reason : "");
+    case "order.paid.card": return "a card payment" + (d.amount ? " of " + usd_(d.amount) : "") + " through Square paid " + r.target + " (" + d.tickets + " ticket" + (d.tickets === 1 ? "" : "s") + ")";
+    case "order.card.review": return "a card payment" + (d.amount ? " of " + usd_(d.amount) : "") + " through Square for " + r.target + " needs checking: " + (d.why || "");
     case "order.payment": return "recorded a payment of " + money(d.amount) + (d.sender ? " from " + d.sender : "") + " for " + r.target + (d.short ? " (short " + money(d.due - d.amount) + ", " + (d.short === "wait" ? "waiting for the rest" : "accepted as paid") + ")" : "") + (d.over ? " (" + money(d.amount - d.due) + " extra, " + (d.over === "refund" ? "to return" : "kept") + ")" : "");
     case "payment.refund": return "a payment of " + money(d.amount) + " for " + r.target + " is to be returned (" + d.why + ")";
     case "refund.returned": return "recorded " + money(d.amount) + " returned for " + r.target + (d.method && d.method !== "unknown" ? " by " + d.method : "") + (d.remaining ? ", " + money(d.remaining) + " still owed" : "");

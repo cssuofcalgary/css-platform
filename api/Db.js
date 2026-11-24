@@ -14,7 +14,11 @@ const TABLES = {
            "registrationCloses", "archivedAt", "archiveYear", "summary", "waitlist",
            "mailRegistration", "mailTickets", "mailReminders", "announcement"],
   Orders: ["id", "code", "eventId", "payerName", "payerEmail", "etransferName", "total", "status",
-           "createdAt", "paidAt", "paidBy", "notes", "remindedAt", "cancelRequestedAt", "cancelRequestedBy", "requestId", "received", "lastWrite"],   // lastWrite stays LAST: see applyWrites_
+           "createdAt", "paidAt", "paidBy", "notes", "remindedAt", "cancelRequestedAt", "cancelRequestedBy", "requestId", "received",
+           // Card payments (Square.js). On a sheet made before these existed they are added to the RIGHT of lastWrite instead, so
+           // never put them in an applyWrites_ `set` (lastWrite must be written after that press's own columns): Square.js writes them with updateRow_.
+           "squareOrderId", "squarePaymentId",
+           "lastWrite"],   // lastWrite stays last on new sheets: see applyWrites_
   Tickets: ["id", "secret", "orderId", "eventId", "name", "email", "ucid", "memberId", "ticketType",
             "price", "answers", "flag", "status", "checkedInAt", "checkedInBy", "createdAt", "emailedAt", "note", "disabledFrom"],
   Emails: ["id", "subject", "title", "subtitle", "intro", "closing", "updatedBy", "updatedAt"],
@@ -486,8 +490,9 @@ function finishRequest_(action, rid, who, reply) {
  * payment whose order step can't be finished. The ids are returned in `conflicts` for Finance to check by hand.
  * Returns { conflicts: [ids], done: [ids already written by an earlier try] }.
  *
- * lastWrite is the last Orders column, so updateRow_ writes it after the money columns: if a write stops halfway, the order
+ * lastWrite comes after every money column a plan can set, so updateRow_ writes it after them: if a write stops halfway, the order
  * never claims a change it didn't get (the repeat then sees a mismatch and asks for a check instead of guessing).
+ * (squareOrderId / squarePaymentId may sit to the right of lastWrite on older sheets, so plans must never set them.)
  */
 function applyWrites_(writes, op) {
   const rows = {}, todo = [], done = [], conflicts = [];

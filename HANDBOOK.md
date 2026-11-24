@@ -69,6 +69,7 @@ Each person can leave an optional **Note/comment**. These comments appear with t
 2. They fill in their name, email, UCID (required unless they give a member code), ticket type and your extra questions. They can **add friends** and pay for everyone at once.
 3. Picking a **Member** ticket asks for their member ID or UCID. We check it automatically. If it isn't found, they can still register, but they're **flagged** so the help desk checks at the door.
 4. They see (and get emailed) **exactly how much to send**, **where** (css.uofcalgary@gmail.com), and a **payment code** like MGN-4821 to put in the e-transfer message.
+   - **If card payments are on:** they also get a **Pay by card (instant tickets)** button (debit, credit, Apple Pay, Google Pay through Square). Paying by card confirms their tickets straight away, with no Finance step. If they back out or the card is declined, their registration stays and they can try again or e-transfer instead. The ticket page shows the same button until they've paid.
 5. Their spot is confirmed once Finance marks the payment received (Payments tab, below). Then **each person gets their own ticket by email**: a QR code plus a link to their ticket page.
 
 The Events list shows how many people have **paid** and how many are **awaiting payment** for each event.
@@ -84,6 +85,7 @@ The Events list shows how many people have **paid** and how many are **awaiting 
    - **Mark several paid:** tick the boxes next to orders (or **Select all shown**), check the amounts in the pop-up, and confirm once. Orders that would go over capacity are skipped and listed.
    - **+ Add paid registration:** someone paid (e-transfer or cash) without registering online. Enter their name, email, ticket type; they're added as paid and emailed their ticket. For a group, add each person separately.
 5. ⚠ yellow notes = something to check at the door (membership not found, duplicate email).
+6. **Card payments** show as paid by **Square (Card)** on their own; nothing to do. CSS pays Square's fee, so the money in Square is a little less than the ticket total. If a card payment arrives for an order that was cancelled, already paid, or is short, it is written on the order's notes and shown under **Needs attention** ("A card payment for … needs checking"). Look it up in Square, sort it out (refund in Square, or mark paid), then press **Done**.
 
 **Money is three separate steps, because the system never moves money itself:**
 1. **Cancel registration…** (an unpaid order): nothing was paid, so nothing is owed back.
@@ -195,6 +197,7 @@ A plain list of what happened, newest first: "Kevin marked TNM-4408 paid · 6:02
 
 Settings has six sections down the left. Pick one to open it:
 - **General:** the e-transfer email, the contact email and the Instagram link shown on the public pages.
+- **Card payments (Square):** paste the **Location ID** and **Access token** from Square's Developer Dashboard, pick **Real payments** or **Test mode**, and press **Check with Square and save**. Wrong keys are refused and nothing changes. The token is never shown again; leave its box blank to keep it. **Turn off card payments** puts everyone back on e-transfer only.
 - **Membership:** the membership fee, and the Membership sheet. Each year, paste the new sheet's link and press **Test and save**. It reads the sheet first and tells you how many members it found, so a wrong link can't break anything.
 - **Security:** the exec password, the admin password and the optional door password, each on its own row. Press **Change**, type the new one twice, save. Everyone else is signed out and needs the new password. Never write a password in a document or chat.
 - **Emails:** change the wording of each email (see "Changing the words in emails" below).
@@ -223,7 +226,7 @@ A member who opened their pass from their emailed link has a key on that device,
 A ticket belongs to the person attending, not the person who paid, so a ticket someone else bought shows up when they used the member's email. A ticket that only carries a member's UCID or ID next to a different name is **not** added; the member is told there is one and asked to contact us. Cancelled tickets stay visible as "Cancelled" so nobody wonders where theirs went. **Missing a ticket?** at the bottom explains all of this and links to a search with another email or UCID.
 
 ## Registering from the member portal
-Members can register for events from their pass page (**Upcoming events**): their name, email and UCID are filled in, and they can add friends. It is the same registration as the events site, so a member can also just use the Instagram link. A free event gives tickets straight away; a paid one shows the e-transfer details and "waiting for payment", and the ticket works once Finance marks it paid.
+Members can register for events from their pass page (**Upcoming events**): their name, email and UCID are filled in, and they can add friends. It is the same registration as the events site, so a member can also just use the Instagram link. A free event gives tickets straight away; a paid one shows the e-transfer details and "waiting for payment" (plus **Pay by card (instant tickets)** when card payments are on), and the ticket works once Finance marks it paid or the card payment goes through.
 If someone types a member ID that isn't theirs (the name doesn't match, or the ID and UCID belong to different people) the ticket gets a flag. A free member ticket then waits on the Payments list until an exec checks it, and a paid one is flagged for the help desk.
 
 ## Fixing mistakes on Payments

@@ -6,6 +6,9 @@ const src = fs.readdirSync(dir).filter((f) => f.endsWith(".js")).map((f) => fs.r
 const sent = [];
 const store = {};          // props
 const cache = {};
+// No network in tests. A suite scripts replies with fetchStub.handler = (url, opts) => ({ code, body }) (or { throws: "..." });
+// every call is recorded in fetchStub.calls. Without a handler a fetch throws.
+const fetchStub = { calls: [], handler: null };
 const ctx = {
   console,
   Utilities: {
@@ -21,6 +24,15 @@ const ctx = {
   CacheService: { getScriptCache: () => ({ get: (k) => cache[k] ?? null, put: (k, v) => { cache[k] = v; }, remove: (k) => { delete cache[k]; }, removeAll: () => {}, getAll: (ks) => Object.fromEntries(ks.map((k) => [k, cache[k]])), putAll: (o) => Object.assign(cache, o) }) },
   PropertiesService: { getScriptProperties: () => ({ getProperty: (k) => store[k] ?? null, setProperty: (k, v) => { store[k] = v; }, setProperties: (o) => { Object.assign(store, o); }, deleteProperty: (k) => { delete store[k]; } }) },
   MailApp: { sendEmail: (m) => sent.push(m), getRemainingDailyQuota: () => 90 },
+  UrlFetchApp: {
+    fetch: (url, opts) => {
+      fetchStub.calls.push({ url: String(url), opts: opts || {} });
+      if (!fetchStub.handler) throw new Error("no network in tests");
+      const r = fetchStub.handler(String(url), opts || {}) || {};
+      if (r.throws) throw new Error(r.throws);
+      return { getResponseCode: () => r.code || 200, getContentText: () => (typeof r.body === "string" ? r.body : JSON.stringify(r.body || {})) };
+    }
+  },
   SpreadsheetApp: {}, DriveApp: {}, ContentService: { createTextOutput: () => ({ setMimeType() { return this; } }), MimeType: {} }
 };
 vm.createContext(ctx);
@@ -42,4 +54,4 @@ function emailBrand_() { return { signerName: "A", signerRole: "B", buttonColor:
 function ticketLink_(t) { return "https://events/t?t=" + t.secret; }
 `, ctx);
 
-module.exports = { ctx, sent, run: (code) => vm.runInContext(code, ctx) };
+module.exports = { ctx, sent, fetchStub, store, cache, run: (code) => vm.runInContext(code, ctx) };

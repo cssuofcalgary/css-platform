@@ -24,6 +24,7 @@ async function openSettingsTab() {
   $("set-door-clear").hidden = !s.doorPasswordSet;
   $("set-door-pw").value = "";
   $("set-site").textContent = s.publicSiteUrl ? T.setSiteUrl(s.publicSiteUrl) : "";
+  showCardSettings(s);
   if (typeof openEmailsCard === "function") openEmailsCard();
 }
 
@@ -56,6 +57,46 @@ $("set-general-form").addEventListener("submit", (e) => {
   e.preventDefault();
   saveSettings({ etransferEmail: $("set-etransfer").value, contactEmail: $("set-contact").value, instagramUrl: $("set-instagram").value },
     "set-general-result", $("set-general-save"));
+});
+
+// ---- Card payments (Square): the token is never shown; a blank box keeps the saved one ----
+
+function showCardSettings(s) {
+  $("set-card-note").textContent = !s.squareConfigured ? T.setCardNoteOff : s.squareEnvironment === "sandbox" ? T.setCardNoteTest : T.setCardNoteOn;
+  $("set-card-env").value = s.squareEnvironment === "sandbox" ? "sandbox" : "production";
+  $("set-card-location").value = s.squareLocationId || "";
+  $("set-card-token").value = "";
+  $("set-card-token").placeholder = s.squareTokenSet ? T.setCardTokenSaved : "";
+  $("set-card-token").dataset.saved = s.squareTokenSet ? "1" : "";
+  $("set-card-off").hidden = !s.squareConfigured && !s.squareTokenSet && !s.squareLocationId;
+}
+
+$("set-card-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const result = $("set-card-result");
+  if (!$("set-card-token").value.trim() && !$("set-card-token").dataset.saved) {
+    result.className = "error small";
+    result.textContent = T.setCardNeedToken;
+    return;
+  }
+  const fields = { squareEnvironment: $("set-card-env").value, squareLocationId: $("set-card-location").value.trim() };
+  if ($("set-card-token").value.trim()) fields.squareAccessToken = $("set-card-token").value.trim();
+  if (await saveSettings(fields, "set-card-result", $("set-card-save"))) {
+    const msg = result.textContent;
+    await openSettingsTab();
+    result.className = "good-text small";
+    result.textContent = msg;
+  }
+});
+
+$("set-card-off").addEventListener("click", async () => {
+  if (!(await askConfirm(T.setCardOffConfirm))) return;
+  if (await saveSettings({ clearSquare: true }, "set-card-result", $("set-card-off"))) {
+    const msg = $("set-card-result").textContent;
+    await openSettingsTab();
+    $("set-card-result").className = "good-text small";
+    $("set-card-result").textContent = msg;
+  }
 });
 
 $("set-membership-form").addEventListener("submit", (e) => {

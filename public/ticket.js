@@ -36,7 +36,16 @@ async function start() {
 
   if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});   // lets this page itself open without signal
 
-  const secret = new URLSearchParams(location.search).get("t") || "";
+  const params = new URLSearchParams(location.search);
+  const secret = params.get("t") || "";
+  if (params.get("card") === "1") {
+    // Back from Square. Take card=1 out of the address first: the QR code holds this page's address.
+    params.delete("card");
+    const query = params.toString();
+    try { history.replaceState(null, "", location.pathname + (query ? "?" + query : "") + location.hash); } catch (e) { /* the page still works */ }
+    const check = await api("confirmCardPayment", { secret });
+    if (check.ok && check.paid === false && !check.alreadyPaid) cardNotice = T.cardNotCompleted;
+  }
   const cached = readCache(secret);
   // With a saved copy, wait only a moment for the network: in a dead zone the copy appears instead of a spinner.
   const pending = api("getTicket", { secret }, cached ? 12000 : 30000);
@@ -56,6 +65,7 @@ const CACHE_PREFIX = "css_ticket_";
 const CACHE_KEEP = 8;
 let retryTimer = null;
 let retryRunning = false;
+let cardNotice = "";   // set when someone came back from Square without paying
 
 function readCache(secret) {
   try {
@@ -128,11 +138,13 @@ function render(data, meta = { state: "live" }) {
     disabled: { stamp: T.stampDisabled, cls: "void", note: T.ticketDisabled }
   }[status] || { stamp: "", cls: "", note: "" };
   const showQr = ticket.status === "paid";
+  const payByCardShown = status === "awaiting" && !!data.cardEnabled && meta.state === "live";   // needs a connection: never on the saved copy
   $("page").className = "card " + look.cls;   // coloured top edge matches the status
 
   $("page").innerHTML = `
     <article class="ticket">
       ${banner}
+      ${status === "awaiting" && cardNotice ? `<p class="flag-note">${escapeHtml(cardNotice)}</p>` : ""}
       <div class="ticket-event">${escapeHtml(event.name)}</div>
       <p class="ticket-when">${escapeHtml(formatDate(event.date))}${timeRange(event) ? "<br>" + escapeHtml(timeRange(event)) : ""}${event.location ? `<br>${escapeHtml(event.location)}` : ""}</p>
       <div id="qr" class="qr" aria-label="${T.qrLabel}"></div>
@@ -141,6 +153,8 @@ function render(data, meta = { state: "live" }) {
       <hr class="perforation">
       ${look.stamp ? `<div class="stamp ${look.cls}">${look.stamp}</div>` : ""}
       ${look.note ? `<p class="ticket-state">${escapeHtml(look.note)}</p>` : ""}
+      ${payByCardShown ? `<button type="button" class="btn pay-card-button" id="pay-card">${T.payByCard}</button>
+      <p class="form-error" id="card-error" role="alert" hidden></p>` : ""}
       ${showQr && !ticket.checkedIn ? `<p class="muted small">${T.showAtDoor}</p>` : ""}
       ${canGiveFeedback ? `
       <hr class="perforation">
@@ -180,6 +194,7 @@ function render(data, meta = { state: "live" }) {
     data.feedback = reply.feedback;
     $("fb-note").textContent = T.feedbackSaved;
   });
+  if (payByCardShown) $("pay-card").addEventListener("click", payByCard);
   if ($("cancel-ask")) $("cancel-ask").addEventListener("click", () => askCancel(false));
   if ($("cancel-undo")) $("cancel-undo").addEventListener("click", () => askCancel(true));
 
@@ -203,6 +218,40 @@ function render(data, meta = { state: "live" }) {
   } else if (meta.state === "live" && meta.secret) {
     writeCache(meta.secret, data, "");
   }
+}
+
+// ---- Card payment (same as the event pages) ---------------------------------------
+
+/** Only Square's own checkout pages: anything else in the reply is ignored. */
+function squareCheckoutUrl(value) {
+  try {
+    const url = new URL(String(value || ""));
+    const host = url.hostname.toLowerCase();
+    return url.protocol === "https:" && ["square.link", "squareup.com", "squareupsandbox.com"].some((d) => host === d || host.endsWith("." + d)) ? url.href : "";
+  } catch (e) { return ""; }
+}
+
+/** Sends the buyer to Square's checkout page. It changes data, so it is sent once and never repeated by itself. */
+async function payByCard() {
+  const button = $("pay-card"), error = $("card-error");
+  if (button.disabled) return;
+  button.disabled = true;
+  button.textContent = T.cardOpening;
+  error.hidden = true;
+  const secret = new URLSearchParams(location.search).get("t") || "";
+  const reply = await api("createCardCheckout", { secret, siteUrl: new URL("./", location.href).href });
+  if (reply.ok && reply.alreadyPaid) { location.reload(); return; }
+  const url = reply.ok ? squareCheckoutUrl(reply.url) : "";
+  if (url) {
+    // Coming back with the browser's Back button shows this page as it was left: make the button usable again
+    window.addEventListener("pageshow", (ev) => { if (ev.persisted) { button.disabled = false; button.textContent = T.payByCard; } }, { once: true });
+    location.href = url;
+    return;
+  }
+  button.disabled = false;
+  button.textContent = T.payByCard;
+  error.textContent = !reply.ok && reply.error !== "NETWORK" && reply.message ? reply.message : T.cardFailed;
+  error.hidden = false;
 }
 
 // ---- Formatting (same as the event pages) ----------------------------------------

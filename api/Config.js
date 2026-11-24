@@ -15,10 +15,15 @@
  *
  * All of these (and both passwords) can also be changed from the Exec Portal's Settings tab (admin only).
  *
+ * Card payments through Square (optional; without both of the first two, only e-transfer is offered):
+ *   SQUARE_ACCESS_TOKEN  The Square access token. Secret: never shown, logged or sent to a page.
+ *   SQUARE_LOCATION_ID   The Square location the payments go to.
+ *   SQUARE_ENV           "sandbox" for Square's test mode. Blank: real payments.
+ *
  * Set automatically by the system (don't edit): DATA_SHEET_ID, IMAGE_FOLDER_ID.
  */
 
-const API_VERSION = "0.24.0";
+const API_VERSION = "0.25.0";
 const MEMBER_CACHE_SECONDS = 300;   // search data is re-read from the sheet at most every 5 min
 const SESSION_SECONDS = 21600;      // signed out after 6 h without use (the Apps Script cache maximum)
 const SESSION_RENEW_MS = 600000;    // while in use, those 6 h restart at most this often
@@ -41,6 +46,29 @@ function getConfig_() {
     instagramUrl: String(props.getProperty("INSTAGRAM_URL") || "https://www.instagram.com/ucalgary.css/").trim(),
     membershipFee: fee !== "" && isFinite(Number(fee)) && Number(fee) >= 0 ? Number(fee) : DEFAULT_MEMBERSHIP_FEE
   };
+}
+
+/**
+ * The Square settings (Square.js). Kept apart from getConfig_ so the token is only ever read where a Square call is made.
+ * `enabled` = both the token and the location are set, so the pages may offer "Pay by card".
+ */
+function squareConfig_() {
+  const props = PropertiesService.getScriptProperties();
+  const token = String(props.getProperty("SQUARE_ACCESS_TOKEN") || "").trim();
+  const locationId = String(props.getProperty("SQUARE_LOCATION_ID") || "").trim();
+  const sandbox = String(props.getProperty("SQUARE_ENV") || "").trim().toLowerCase() === "sandbox";
+  return {
+    token: token,
+    locationId: locationId,
+    environment: sandbox ? "sandbox" : "production",
+    base: sandbox ? "https://connect.squareupsandbox.com" : "https://connect.squareup.com",
+    enabled: !!(token && locationId)
+  };
+}
+
+/** True when pages may offer "Pay by card". Never throws: a problem here just means e-transfer only. */
+function cardEnabled_() {
+  try { return squareConfig_().enabled; } catch (e) { return false; }
 }
 
 /**

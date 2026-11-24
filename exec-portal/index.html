@@ -614,6 +614,25 @@
         <button type="submit" id="set-general-save" class="primary" data-t="setSave"></button>
       </form>
 
+      <form id="set-card-form" data-pane="general" class="card editor" novalidate autocomplete="off">
+        <h3 class="sub-title" data-t="setCardTitle"></h3>
+        <p id="set-card-note" class="muted small"></p>
+        <label for="set-card-env" data-t="setCardEnv"></label>
+        <select id="set-card-env">
+          <option value="production" data-t="setCardEnvLive"></option>
+          <option value="sandbox" data-t="setCardEnvTest"></option>
+        </select>
+        <label for="set-card-location" data-t="setCardLocation"></label>
+        <input id="set-card-location" maxlength="64" autocomplete="off" spellcheck="false">
+        <label for="set-card-token" data-t="setCardToken"></label>
+        <input id="set-card-token" type="password" maxlength="300" autocomplete="new-password" spellcheck="false">
+        <p id="set-card-result" class="muted small"></p>
+        <div class="row-buttons">
+          <button type="submit" id="set-card-save" class="primary" data-t="setCardSave"></button>
+          <button type="button" id="set-card-off" class="link danger" data-t="setCardOff" hidden></button>
+        </div>
+      </form>
+
       <form id="set-membership-form" data-pane="membership" class="card editor" novalidate>
         <h3 class="sub-title" data-t="setMembershipTitle"></h3>
         <label for="set-sheet" data-t="setSheet"></label>
@@ -1272,8 +1291,8 @@
     </form>
   </dialog>
   <script src="config.js?v=0.3.7"></script>
-  <script src="strings.js?v=1.15.5"></script>
-  <script src="mock.js?v=0.8.4"></script>
+  <script src="strings.js?v=1.15.6"></script>
+  <script src="mock.js?v=0.8.5"></script>
   <script src="panda.js?v=1.5.1"></script>
   <script src="peekaboo.js?v=1.0.0"></script>
   <script src="app.js?v=1.11.4"></script>
@@ -1286,7 +1305,7 @@
   <script src="finance.js?v=1.4.2"></script>
   <script src="money.js?v=1.1.0"></script>
   <script src="activity.js?v=0.5.0"></script>
-  <script src="settings.js?v=0.11.2"></script>
+  <script src="settings.js?v=0.11.3"></script>
   <script src="emails.js?v=0.4.0"></script>
   <script src="mailall.js?v=0.3.9"></script>
   <script src="partners.js?v=1.6.2"></script>
@@ -1299,7 +1318,7 @@
   <script src="membernotes.js?v=1.0.1"></script>
   <script src="practice.js?v=1.0.0"></script>
   <script src="tasks.js?v=1.4.0"></script>
-  <script src="overview.js?v=1.3.1"></script>
+  <script src="overview.js?v=1.3.2"></script>
   <script src="shell.js?v=0.10.0"></script>
 </body>
 </html>

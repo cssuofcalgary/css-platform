@@ -139,7 +139,8 @@ function attentionActionItems(list) {
   return list.map((x) => {
     if (x.kind === "review") {
       const codes = x.codes.join(", ");
-      return actionItem("bad", "alert", prefix(x) + T.attnReview(codes, x.what), T.attnReviewNote(codes), [open(x), { label: T.attnDone, data: { "attn-do": "dismissReview", id: x.id } }]);
+      const line = x.reason ? T.attnCardReview(codes) : T.attnReview(codes, x.what);
+      return actionItem("bad", "alert", prefix(x) + line, x.reason || T.attnReviewNote(codes),[open(x), { label: T.attnDone, data: { "attn-do": "dismissReview", id: x.id } }]);
     }
     if (x.kind === "refunds") return actionItem("bad", "alert", prefix(x) + T.refundsNotice(x.count, dollars(x.amount)), "", [open(x)]);
     if (x.kind === "emails") return actionItem("info", "alert", prefix(x) + T.ovUnsent(x.count), "", [{ label: T.attnSendNow, data: { "attn-do": "sendPendingEmails", event: x.eventId } }]);

@@ -111,7 +111,8 @@ p { line-height: 1.55; }
 }
 .btn:hover, .register:hover { background: #1a1712; box-shadow: 0 4px 12px rgba(50, 38, 12, 0.25); }
 .btn:active, .register:active { transform: scale(0.97); }
-.register:disabled { background: #a79a80; cursor: not-allowed; box-shadow: none; transform: none; }
+.register:disabled, .btn:disabled { background: #a79a80; cursor: not-allowed; box-shadow: none; transform: none; }
+.pay-card-button { margin: 16px 0 6px; }
 
 .back, .link-button {
   display: inline-flex; align-items: center; gap: 6px;

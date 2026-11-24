@@ -60,6 +60,16 @@ function route_(req) {
     case "requestCancel":
       return requestCancel_(req.secret, !!req.undo);
 
+    // Card payments through Square (Square.js). Found by the ticket's secret; the payment is always checked with Square itself.
+    case "createCardCheckout":
+      return createCardCheckout_(req);
+
+    case "confirmCardPayment":
+      return confirmCardPayment_(req);
+
+    case "confirmSquareWebhook":   // from the events site's Square notification relay (public/api/square-webhook.js)
+      return confirmSquareWebhook_(req);
+
     case "memberPartners":
       return memberPartners_(req);
 

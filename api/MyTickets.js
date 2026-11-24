@@ -271,6 +271,18 @@ function myTickets_(req) {
     match = function (t) { return String(t.email || "").toLowerCase() === email ? "yes" : ""; };
   }
 
+  // Unpaid tickets paid by card whose "back to the ticket" step never happened: ask Square (a few orders, at most every 15 s
+  // each, never failing the page), then read the tables again so they show as paid.
+  if (cardEnabled_()) {
+    const unpaidOrders = {};
+    readRows_("Tickets").forEach(function (t) { if (t.status === "awaiting" && events[t.eventId] && match(t) === "yes") unpaidOrders[t.orderId] = true; });
+    let healed = false;
+    readRows_("Orders").filter(function (o) { return unpaidOrders[o.id] && squareCheckDue_(o); }).slice(0, 3).forEach(function (o) {
+      if (reconcileSquareOrderIfPending_(o)) healed = true;
+    });
+    if (healed) { delete DB_.rows["Orders"]; delete DB_.rows["Tickets"]; }
+  }
+
   const orders = {};
   readRows_("Orders").forEach(function (o) { orders[o.id] = o; });
   let possible = 0;

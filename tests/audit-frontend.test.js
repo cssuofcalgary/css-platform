@@ -122,6 +122,122 @@ async function main() {
   ok(entryUi.run("doorCalls.length===1 && doorCalls[0].action==='setEntryOpen' && !eventsState.events[0].entryOpen && eventsState.events[1].entryOpen && toasted.includes('First Event')"),
     "opening entry uses one atomic setEntryOpen call and updates closed events from the reply");
 
+  // ---- Card payments (Square Hosted Checkout): optional, behind cardEnabled, e-transfer always kept ----
+  const strings = read("public/strings.js"), publicSrc = read("public/public.js"), ticketSrc = read("public/ticket.js");
+  const T = page().run(strings + "; T");
+  ok(T.payByCard === "Pay by card (instant tickets)" && T.payByEtransfer === "Pay by Interac e-transfer" && !!T.cardOpening && !!T.cardFailed && !!T.payNoteCard,
+    "card payment strings live in public/strings.js");
+  ok(T.cardNotCompleted === "Payment not completed yet — you can try card again or pay by e-transfer.", "the came-back-unpaid message is in public/strings.js");
+  ok(!/Pay by card|Payment not completed/.test(publicSrc + ticketSrc), "public.js and ticket.js use T.xxx for the card wording, not inline text");
+
+  const payPage = () => {
+    const p = page({ API_URL: "https://test.invalid", setTimeout: () => 1, clearTimeout() {},
+      location: { href: "https://events.ucalgarycss.ca/?e=test", search: "?e=test", hash: "", hostname: "events.ucalgarycss.ca" },
+      window: { scrollTo() {}, addEventListener() {}, matchMedia: () => ({ matches: false }) } });
+    p.run(strings);
+    p.run(publicSrc.replace(/\bstart\(\);\s*$/, ""));
+    p.run("var apiCalls=[]; var apiReply={ok:false,error:'NETWORK'}; api=async(action,details)=>{apiCalls.push({action,details});return apiReply;}; pandaImg=()=>'';");
+    return p;
+  };
+  const unpaid = (extra) => JSON.stringify(Object.assign({ order: { status: "awaiting", total: 15, code: "TEST-1" }, etransferEmail: "pay@example.com",
+    tickets: [{ name: "TEST Person", ticketType: "General", price: 15, page: "ticket.html?t=TESTSECRET" }] }, extra));
+  const off = payPage();
+  off.run(`showPaymentScreen(${unpaid({})})`);
+  const offHtml = off.el("page").innerHTML;
+  ok(!offHtml.includes("pay-card") && offHtml.includes(T.sendEtransfer) && offHtml.includes("pay-box") && offHtml.includes("TEST-1") && offHtml.includes(T.statusWaiting),
+    "card switched off: the payment screen is the plain e-transfer screen, unchanged");
+  const on = payPage();
+  on.run(`showPaymentScreen(${unpaid({ cardEnabled: true })})`);
+  const onHtml = on.el("page").innerHTML;
+  ok(onHtml.includes('id="pay-card"') && onHtml.includes(T.payByCard) && onHtml.indexOf("pay-card") < onHtml.indexOf(T.payByEtransfer) && onHtml.indexOf(T.payByEtransfer) < onHtml.indexOf("pay-box"),
+    "card switched on: Pay by card comes first, then the Pay by Interac e-transfer heading");
+  ok(onHtml.includes("pay@example.com") && onHtml.includes("TEST-1") && onHtml.includes(T.statusWaiting), "card switched on: the e-transfer amount, email, code and status are all still shown");
+  for (const [label, extra] of [["free", { cardEnabled: true, order: { status: "paid", total: 0, code: "TEST-2" } }], ["held for review", { cardEnabled: true, needsReview: true }], ["without a ticket link", { cardEnabled: true, tickets: [{ name: "TEST", ticketType: "General", price: 15 }] }]]) {
+    const p = payPage();
+    p.run(`showPaymentScreen(${unpaid(extra)})`);
+    ok(!p.el("page").innerHTML.includes("pay-card"), "no card button when the registration is " + label);
+  }
+  on.run("apiReply={ok:true,url:'https://evil.example/square.link'}");
+  await on.run("payByCard('TESTSECRET','https://events.ucalgarycss.ca/ticket.html?t=TESTSECRET')");
+  ok(on.context.location.href === "https://events.ucalgarycss.ca/?e=test" && !on.el("card-error").hidden && !on.el("pay-card").disabled,
+    "a checkout address that is not Square's is never opened");
+  const call = on.run("apiCalls[0]");
+  ok(call.action === "createCardCheckout" && call.details.secret === "TESTSECRET" && call.details.siteUrl === "https://events.ucalgarycss.ca/", "Pay by card sends the ticket secret and the events site address");
+  on.run("apiCalls=[]; apiReply={ok:false,error:'NETWORK'}");
+  await on.run("payByCard('TESTSECRET','')");
+  ok(on.run("apiCalls.length") === 1 && on.el("card-error").textContent === T.cardFailed, "a dropped connection is not retried by itself and shows a calm message");
+  on.run("apiCalls=[]; apiReply={ok:false,error:'SOLD_OUT',message:'TEST This event is full.'}");
+  await on.run("payByCard('TESTSECRET','')");
+  ok(on.el("card-error").textContent === "TEST This event is full." && on.el("card-error").hidden === false && on.el("pay-card").textContent === T.payByCard, "a refusal shows the server's message and Pay by card can be pressed again");
+  on.run("apiReply={ok:true,alreadyPaid:true}");
+  await on.run("payByCard('TESTSECRET','https://events.ucalgarycss.ca/ticket.html?t=TESTSECRET')");
+  ok(on.context.location.href === "https://events.ucalgarycss.ca/ticket.html?t=TESTSECRET", "already paid: opens the ticket instead of a new checkout");
+  on.el("pay-card").disabled = false;
+  on.run("apiReply={ok:true,url:'https://sandbox.square.link/u/TEST'}");
+  await on.run("payByCard('TESTSECRET','')");
+  ok(on.context.location.href === "https://sandbox.square.link/u/TEST", "a Square checkout address is opened");
+  const allowed = (src) => { const p = page(); p.run(src.slice(src.indexOf("function squareCheckoutUrl"), src.indexOf("\n}\n", src.indexOf("function squareCheckoutUrl")) + 3).replace(/\r/g, "")); return (u) => p.run(`squareCheckoutUrl(${JSON.stringify(u)})`) !== ""; };
+  for (const [file, src] of [["public.js", publicSrc], ["ticket.js", ticketSrc]]) {
+    const test = allowed(src.replace(/\r\n/g, "\n"));
+    ok(test("https://square.link/u/TEST") && test("https://checkout.squareup.com/TEST") && test("https://sandbox.squareupsandbox.com/TEST")
+      && !test("http://square.link/u/TEST") && !test("https://evilsquare.link/TEST") && !test("https://square.link.evil.example/TEST") && !test("javascript:alert(1)"),
+      file + ": only https Square addresses (square.link, squareup.com, squareupsandbox.com) are allowed");
+  }
+  ok(!/createCardCheckout[\s\S]{0,300}(for \(let attempt|setTimeout\(\s*resolve)/.test(publicSrc + ticketSrc), "createCardCheckout is never wrapped in a retry loop");
+
+  // Ticket page: back from Square with ?card=1
+  const ticketPage = (search, getReply, confirmReply) => {
+    const order = [];
+    const loc = { href: "https://events.ucalgarycss.ca/ticket.html" + search, search, hash: "", pathname: "/ticket.html", hostname: "events.ucalgarycss.ca" };
+    const p = page({ API_URL: "https://test.invalid", CONTACT_EMAIL: "club@example.com", INSTAGRAM_URL: "", navigator: {}, location: loc,
+      history: { replaceState(_s, _t, url) { order.push("replaceState:" + url); loc.search = url.slice(url.indexOf("?")); loc.href = "https://events.ucalgarycss.ca" + url; } },
+      window: { addEventListener() {} } });
+    p.run(strings);
+    p.run(ticketSrc.replace(/\bstart\(\);\s*$/, ""));
+    p.context.order = order; p.context.getReply = getReply; p.context.confirmReply = confirmReply;
+    p.run("api=async(action,details)=>{order.push(action+':'+details.secret);return action==='getTicket'?getReply:confirmReply;};");
+    return { p, order, loc };
+  };
+  const awaitingTicket = (extra) => Object.assign({ ok: true, ticket: { id: "TKTTEST1", name: "TEST Person", ticketType: "General", status: "awaiting", checkedIn: false, orderCode: "TEST-1" },
+    event: { name: "TEST Event", date: "2099-01-01" }, etransferEmail: "pay@example.com", orderTotal: 15, orderReceived: 0 }, extra);
+  const back = ticketPage("?t=TESTSECRET&card=1", awaitingTicket({ cardEnabled: true }), { ok: true, paid: false });
+  await back.p.run("start()");
+  ok(back.order[0] === "replaceState:/ticket.html?t=TESTSECRET" && back.order[1] === "confirmCardPayment:TESTSECRET" && back.order[2] === "getTicket:TESTSECRET",
+    "ticket page: card=1 is removed from the address (t= kept), then confirmCardPayment, then the ticket loads");
+  const backHtml = back.p.el("page").innerHTML;
+  ok(backHtml.includes(T.cardNotCompleted.replace(/'/g, "&#39;")) && backHtml.indexOf(T.cardNotCompleted.slice(0, 20)) < backHtml.indexOf("TEST Person"),
+    "came back without paying: the calm message is above the normal unpaid ticket");
+  ok(backHtml.includes('id="pay-card"') && backHtml.includes("pay@example.com") && backHtml.includes("TEST-1"), "an unpaid ticket offers Pay by card next to the e-transfer details");
+  const paidBack = ticketPage("?t=TESTSECRET&card=1", awaitingTicket({ cardEnabled: true, ticket: { id: "TKTTEST1", name: "TEST Person", ticketType: "General", status: "paid", checkedIn: false, orderCode: "TEST-1" } }), { ok: true, paid: true });
+  paidBack.p.run("function QRCode(holder, options){ qrText = options.text; } QRCode.CorrectLevel={M:1}; var qrText='';");
+  paidBack.p.el("qr").querySelector = () => null;
+  await paidBack.p.run("start()");
+  ok(paidBack.p.run("qrText") === "https://events.ucalgarycss.ca/ticket.html?t=TESTSECRET" && !paidBack.p.el("page").innerHTML.includes(T.cardNotCompleted.slice(0, 20)) && !paidBack.p.el("page").innerHTML.includes("pay-card"),
+    "paid by card: the QR shows, holding the clean ticket address without card=1");
+  const plain = ticketPage("?t=TESTSECRET", awaitingTicket({ cardEnabled: false }), null);
+  await plain.p.run("start()");
+  ok(plain.order.length === 1 && plain.order[0] === "getTicket:TESTSECRET" && !plain.p.el("page").innerHTML.includes("pay-card") && plain.p.el("page").innerHTML.includes("pay@example.com"),
+    "card switched off: no confirm call and no card button; the e-transfer details are unchanged");
+  plain.p.run(`render(${JSON.stringify(awaitingTicket({ cardEnabled: true }))}, { state: "offline", savedAt: Date.now() })`);
+  ok(!plain.p.el("page").innerHTML.includes("pay-card"), "the saved offline copy never shows Pay by card");
+  ok(/etransferEmail: data\.etransferEmail, orderTotal: data\.orderTotal, orderReceived: data\.orderReceived \}/.test(ticketSrc), "the offline copy still saves the same ticket fields");
+
+  // Page versions and the offline worker
+  const ver = (html, file) => (html.match(new RegExp(file.replace(".", "\\.") + "\\?v=([0-9.]+)")) || [])[1] || "";
+  const atLeast = (v, min) => { const a = v.split(".").map(Number), b = min.split(".").map(Number); for (let i = 0; i < 3; i++) { if ((a[i] || 0) !== (b[i] || 0)) return (a[i] || 0) > (b[i] || 0); } return true; };
+  const indexHtml = read("public/index.html"), ticketHtml = read("public/ticket.html");
+  ok(ver(indexHtml, "strings.js") === ver(ticketHtml, "strings.js") && ver(indexHtml, "public.css") === ver(ticketHtml, "public.css"), "index.html and ticket.html load the same strings.js and public.css versions");
+  ok(atLeast(ver(indexHtml, "strings.js"), "1.9.2") && atLeast(ver(indexHtml, "public.js"), "1.9.2") && atLeast(ver(ticketHtml, "ticket.js"), "1.7.2") && atLeast(ver(indexHtml, "public.css"), "1.9.1"),
+    "card payment script versions were bumped so browsers fetch the new files");
+  const swEvents = {};
+  const sw = vm.createContext({ URL, Promise, setTimeout: () => 1, clearTimeout() {}, caches: { open: async () => ({ add: async () => {} }), keys: async () => [] },
+    self: { location: { origin: "https://events.ucalgarycss.ca" }, addEventListener: (name, fn) => { swEvents[name] = fn; }, skipWaiting() {}, clients: { claim() {} } } });
+  vm.runInContext(read("public/sw.js"), sw);
+  let swIntercepted = 0;
+  for (const request of [{ method: "POST", url: "https://events.ucalgarycss.ca/api/square-webhook" }, { method: "GET", url: "https://events.ucalgarycss.ca/api/square-webhook" }])
+    swEvents.fetch({ request, respondWith: () => { swIntercepted++; } });
+  ok(swIntercepted === 0 && /css-ticket-shell-v([3-9]|\d\d)/.test(read("public/sw.js")), "the ticket page worker never answers /api/ requests, and its cache name was bumped");
+
   console.log(failures ? `${failures} FAILED` : "ALL PASSED");
   process.exitCode = failures ? 1 : 0;
 }

@@ -1,7 +1,8 @@
 /**
  * CSS Platform API — "Needs attention": the things someone has to act on, from every live event at once, each with its next step.
  *
- *   review   a payment or refund that was cut off and couldn't be finished safely (NEEDS_REVIEW): check the order, then "Done"
+ *   review   a payment or refund that was cut off and couldn't be finished safely (NEEDS_REVIEW), or a Square card payment that
+ *            didn't simply pay an open order (too little, cancelled order, already paid): check the order, then "Done"
  *   refunds  money owed back that hasn't been returned yet
  *   emails   paid tickets whose email hasn't gone out (failed or waiting): "Send now"
  *   offer    a waitlist offer whose payment instructions never arrived: "Resend offer"
@@ -31,7 +32,8 @@ function attentionList_() {
     items.push({
       kind: "review", id: r.id, eventId: first.eventId || "", eventName: eventName(first.eventId),
       codes: ids.map(function (id) { return orders[id] ? orders[id].code : id; }), who: r.who || "", when: r.doneAt || r.createdAt,
-      what: r.action === "invalidateTickets" ? "refund" : "payment"
+      what: r.action === "invalidateTickets" ? "refund" : r.action === SQUARE_REVIEW_ACTION ? "card payment" : "payment",
+      reason: r.action === SQUARE_REVIEW_ACTION ? String(r.reply.message || "") : ""   // a Square card payment Finance must decide about (Square.js)
     });
   });
 

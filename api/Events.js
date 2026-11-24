@@ -231,7 +231,7 @@ function publicEvents_() {
 function publicEvent_(slug) {
   const event = findEvent_(function (e) { return e.slug === String(slug || "").toLowerCase(); });
   if (!event || event.status === "draft" || event.status === "archived") throw new ApiError_("NOT_FOUND", "Event not found.");
-  return { ok: true, site: siteInfo_(), event: publicEventView_(event) };
+  return { ok: true, site: siteInfo_(), event: publicEventView_(event), cardEnabled: cardEnabled_() };   // cardEnabled: "Pay by card" is on (Square.js)
 }
 
 /** Only what the public may see. */

@@ -165,7 +165,9 @@ function scanCode_(session, eventId, code, atDesk) {
 
   table_("Tickets");   // open the spreadsheet BEFORE taking the lock, where other requests can do the same in parallel
   let logEntry = null;
-  const result = withLock_(function () {
+  let squareOrder = null;     // an unpaid order with a Square card page: asked about AFTER the lock, then the scan is decided again
+  let squareAsked = false;
+  const decide = function () {
     const event = findEvent_(function (e) { return e.id === eventId; });
     if (!event) throw new ApiError_("NOT_FOUND", "Event not found.");
 
@@ -184,6 +186,7 @@ function scanCode_(session, eventId, code, atDesk) {
     }
     if (ticket.status === "awaiting") {
       const order = readRows_("Orders").filter(function (o) { return o.id === ticket.orderId; })[0] || {};
+      if (!squareAsked && squareCheckDue_(order)) { squareOrder = order; return null; }   // maybe paid by card: check Square, then decide again
       return deskResult_("orange", "Not paid yet. Send to the help desk (" + (order.code || "") + ", " + moneyText_(order.total) + ").", person);
     }
     if (ticket.checkedInAt) {
@@ -203,7 +206,15 @@ function scanCode_(session, eventId, code, atDesk) {
     logEntry = [session.name, atDesk ? "checkin.desk" : "checkin", ticket.id, { name: ticket.name, flag: ticket.flag || "" }];   // written after the lock is released
     if (matchedViaMember) return scanResult_("green", "Checked in! (Matched via Member Pass: " + matchedViaMember + "). Welcome!", person);
     return scanResult_("green", ticket.flag ? "Checked in at the help desk." : "Checked in. Welcome!", person);
-  });
+  };
+  let result = withLock_(decide);
+  if (!result && squareOrder) {
+    // Square is asked with the door lock released (it takes its own locks to record a payment), at most every 15 s per order.
+    // If Square is down this changes nothing and the person is sent to the help desk as before.
+    squareAsked = true;
+    if (reconcileSquareOrderIfPending_(squareOrder)) { delete DB_.rows["Orders"]; delete DB_.rows["Tickets"]; }
+    result = withLock_(decide);
+  }
   if (logEntry) log_.apply(null, logEntry);
   return result;
 }

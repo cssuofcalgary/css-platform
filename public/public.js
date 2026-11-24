@@ -116,7 +116,7 @@ function registerBlock(e) {
   if (!e.registrationOpen) return `<p class="notice">${T.closed}</p>`;
   return `
     ${e.spotsLeft !== null && e.spotsLeft <= 20 ? `<p class="spots">${T.spotsLeft(e.spotsLeft)}</p>` : ""}
-    ${e.ticketTypes.some((t) => Number(t.price) > 0) ? `<p class="muted small">${T.payNote}</p>` : ""}
+    ${e.ticketTypes.some((t) => Number(t.price) > 0) ? `<p class="muted small">${e.cardEnabled ? T.payNoteCard : T.payNote}</p>` : ""}
     <button class="register" id="open-register">${T.register}</button>`;
 }
 
@@ -504,12 +504,20 @@ function showPaymentScreen(reply) {
   const emails = reply.emails || { confirmation: true, ticket: true };   // an older server doesn’t say: assume the old behaviour
   const review = !!reply.needsReview;   // $0 order held until an exec checks membership
   const flagged = reply.tickets.filter((t) => t.flag && t.flag.indexOf("Member price") === 0);
+  // Card payment only when the club has it switched on, money is still owed and there is a ticket to pay for
+  const firstPage = reply.tickets[0] && reply.tickets[0].page ? new URL(reply.tickets[0].page, location.href) : null;
+  const cardSecret = firstPage ? firstPage.searchParams.get("t") || "" : "";
+  const card = !!reply.cardEnabled && !free && !review && Number(reply.order.total) > 0 && !!cardSecret;
   $("page").innerHTML = `
     <article class="done">
       ${pandaImg(!review && free ? "success" : "almost")}
       <h1 class="page-title">${review ? T.reviewTitle : free ? T.registeredFree : T.almostDone}</h1>
       ${review ? `<p class="lead">${T.reviewNote}</p>` : free ? (emails.ticket ? "" : `<p class="keep-note"><strong>${T.freeNoEmailNote}</strong></p>`) : `
-        <p class="lead">${T.sendEtransfer}</p>
+        ${card ? `
+        <button type="button" class="btn pay-card-button" id="pay-card">${T.payByCard}</button>
+        <p class="form-error" id="card-error" role="alert" hidden></p>
+        <h2 class="small-heading">${T.payByEtransfer}</h2>` : `
+        <p class="lead">${T.sendEtransfer}</p>`}
         <div class="pay-box">
           <div class="pay-row"><span>${T.amount}</span><div><strong class="big">${money(reply.order.total)}</strong> <small class="muted">${T.exactly}</small></div></div>
           <div class="pay-row"><span>${T.sendTo}</span><div><strong>${escapeHtml(reply.etransferEmail)}</strong>
@@ -537,7 +545,39 @@ function showPaymentScreen(reply) {
       setTimeout(() => { b.textContent = T.copy; }, 1500);
     } catch (e) { /* copying not allowed: they can still read it */ }
   }));
+  if (card) $("pay-card").addEventListener("click", () => payByCard(cardSecret, firstPage.href));
   window.scrollTo(0, 0);
+}
+
+/** Only Square's own checkout pages: anything else in the reply is ignored. */
+function squareCheckoutUrl(value) {
+  try {
+    const url = new URL(String(value || ""));
+    const host = url.hostname.toLowerCase();
+    return url.protocol === "https:" && ["square.link", "squareup.com", "squareupsandbox.com"].some((d) => host === d || host.endsWith("." + d)) ? url.href : "";
+  } catch (e) { return ""; }
+}
+
+/** Sends the buyer to Square's checkout page. It changes data, so it is sent once and never repeated by itself. */
+async function payByCard(secret, ticketPage) {
+  const button = $("pay-card"), error = $("card-error");
+  if (button.disabled) return;
+  button.disabled = true;
+  button.textContent = T.cardOpening;
+  error.hidden = true;
+  const reply = await api("createCardCheckout", { secret, siteUrl: new URL("./", location.href).href });
+  if (reply.ok && reply.alreadyPaid) { location.href = ticketPage; return; }
+  const url = reply.ok ? squareCheckoutUrl(reply.url) : "";
+  if (url) {
+    // Coming back with the browser's Back button shows this page as it was left: make the button usable again
+    window.addEventListener("pageshow", (ev) => { if (ev.persisted) { button.disabled = false; button.textContent = T.payByCard; } }, { once: true });
+    location.href = url;
+    return;
+  }
+  button.disabled = false;
+  button.textContent = T.payByCard;
+  error.textContent = !reply.ok && reply.error !== "NETWORK" && reply.message ? reply.message : T.cardFailed;
+  error.hidden = false;
 }
 
 // ---- Formatting ---------------------------------------------------------------
