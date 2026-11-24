@@ -732,8 +732,12 @@ button.all-row:hover { border-color: var(--border-2); }
 .board-card .task-meta { gap: 4px 8px; font-size: 12px; }
 .board-labels { display: flex; flex-wrap: wrap; gap: 4px; }
 .board-people { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+/* Narrower screens: the four columns shrink to fit; on a phone they swipe sideways */
 @media (max-width: 900px) {
-  .task-board { grid-template-columns: repeat(4, minmax(240px, 80vw)); overflow-x: auto; scroll-snap-type: x mandatory; padding-bottom: 6px; }
+  .task-board { grid-template-columns: repeat(4, minmax(160px, 1fr)); gap: 8px; overflow-x: auto; padding-bottom: 6px; }
+}
+@media (max-width: 600px) {
+  .task-board { grid-template-columns: repeat(4, minmax(240px, 80vw)); scroll-snap-type: x mandatory; }
   .board-col { scroll-snap-align: start; }
 }
 .td-section { display: grid; gap: 6px; }
