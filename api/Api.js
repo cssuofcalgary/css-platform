@@ -97,6 +97,9 @@ function route_(req) {
       return openMyAccess_(req);
 
     // ---- Exec ----
+    case "signInNames":
+      return signInNames_();
+
     case "login":
       return personalLogin_(req.password, req.name);
 
@@ -356,10 +359,10 @@ function route_(req) {
       return saveTask_(requireSession_(req.token), req.task);
 
     case "setTaskStatus":
-      return setTaskStatus_(requireSession_(req.token), req.id, req.status);
+      return setTaskStatus_(requireSession_(req.token), req.id, req.status, req.from);
 
     case "addTaskUpdate":
-      return addTaskUpdate_(requireSession_(req.token), req.id, req.text, req.status);
+      return addTaskUpdate_(requireSession_(req.token), req.id, req.text, req.status, req.clientId);
 
     case "removeTask":
       return removeTask_(requireSession_(req.token), req.id);

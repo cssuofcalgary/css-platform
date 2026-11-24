@@ -121,5 +121,25 @@ const afterPasswordChange = run(`saveSettings_(requireAdmin_('${afterSignOut.tok
 ok(run(`requireAdmin_('${afterPasswordChange.token}').personId`) === settingsAccount.id, "changing a shared password also preserves the admin account link");
 run(`resetPersonPassword_({name:'TEST Admin'},'${settingsAccount.id}')`);
 ok(attempt(`requireAdmin_('${afterPasswordChange.token}')`).error === "NOT_LOGGED_IN", "a later personal reset revokes replacement admin sessions too");
+
+run(`__adminToken = startSession_("TEST Admin", "admin")`);
+// Typing only a first name signs in as the full name on the People list; two people with that first name: asked to type the full name.
+route("saveSettings", { settings: { peopleLocked: false } });
+route("importPeople", { text: "Amy Lee,Events\nSam Wu,Finance\nSam Ng,Internal" });
+const amySetup = run(`personalLogin_('club-test','amy')`);
+ok(amySetup.needsPasswordSetup && amySetup.name === "Amy Lee", "a first name only one person has signs in as that person's full name");
+const amy = run(`finishExecSetup_('${amySetup.setupToken}','amy-pass')`);
+ok(amy.name === "Amy Lee" && run("taskTeam_().filter(p => /^amy/i.test(p.name)).length") === 1, "no second 'Amy' is added to the People list");
+ok(run(`personalLogin_('amy-pass','  AMY ').name`) === "Amy Lee" && run(`personalLogin_('amy-pass','Amy L').name`) === "Amy Lee", "later sign-ins work with the first name, or the start of the full name");
+const sam = attempt(`personalLogin_('club-test','sam')`);
+ok(sam.error === "NAME_AMBIGUOUS" && /Sam Wu/.test(sam.message) && /Sam Ng/.test(sam.message), "two people called Sam: asked for the full name, both are named");
+ok(run("taskTeam_().filter(p => /^sam$/i.test(p.name)).length") === 0, "an unclear name never adds a new person");
+ok(attempt(`personalLogin_('wrong','amy')`).error === "WRONG_PASSWORD", "a first name with a wrong password is still refused");
+run(`CacheService.getScriptCache().remove('signin_names')`);
+const names = run("signInNames_().names");
+ok(names.includes("Amy Lee") && names.includes("Sam Ng") && !names.some((n) => /Locked Test/.test(n)), "the sign-in name list has the active People names");
+ok(run("JSON.stringify(signInNames_())").indexOf("discord") < 0 && run("JSON.stringify(signInNames_())").indexOf("password") < 0, "the sign-in name list has names only");
+ok(run(`route_({ action: 'signInNames' }).ok`) === true, "the sign-in name list works before signing in");
+
 console.log(fails ? `\n${fails} FAILED` : "\nALL PASSED");
 process.exit(fails ? 1 : 0);

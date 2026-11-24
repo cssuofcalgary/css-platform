@@ -119,8 +119,40 @@ ok(r.err === "NOT_FOUND", "editing a task that doesn't exist: NOT_FOUND");
 ok(run(`__logs.some(function (l) { return l.action === "task.updated" && l.target === "${t1.task.id}"; })`), "task.updated logged");
 const rowOf = (id) => run(`TBL.Tasks.filter(function (t) { return t.id === "${id}"; })[0]`);
 ok(rowOf(t1.task.id).ownerDiscordId === "222222222222222222" && rowOf(t2.id).ownerDiscordId === "", "ownerDiscordId comes from the Team list on portal saves (Amy after the edit; blank for someone not on it)");
-r = fn(`saveTask_(S, { id: "${t1.task.id}", title: "Make big poster", status: "done" })`);
-ok(r.v && r.v.task.status === "todo" && !r.v.task.doneAt && rowOf(t1.task.id).status === "todo", "edit: a status sent with an edit is ignored (only the status pill and updates change it)");
+// The task window saves the status with everything else (one Save): one "set it to" line, merged when changed again soon.
+const tw = run(`saveTask_(S, { title: "Task window test", owner: "Amy" })`).task;
+r = fn(`saveTask_(S, { id: "${tw.id}", status: "done", labels: ["AGM", " agm ", "Budget"], checklist: [{ text: "Book room", done: true }, { text: "  " }, { text: "Posters" }] })`);
+ok(r.v && r.v.task.status === "done" && r.v.task.doneAt && rowOf(tw.id).status === "done", "edit: a status sent with the task window's Save is saved");
+ok(r.v.task.updates.length === 1 && r.v.task.updates[0].status === "done" && r.v.task.updates[0].text === "", "edit: the status change adds one 'set it to Done' line");
+ok(r.v.task.labels.join() === "AGM,Budget", "labels: tidied, each once (any capitals)");
+ok(r.v.task.checklist.length === 2 && r.v.task.checklist[0].done === true && r.v.task.checklist[1].done === false && r.v.task.checklist.every(function (c) { return c.id; }), "checklist: blank items dropped, each item gets an id");
+r = fn(`saveTask_(S, { id: "${tw.id}", status: "doing" })`);
+ok(r.v.task.status === "doing" && r.v.task.updates.length === 1 && r.v.task.updates[0].status === "doing", "changing the status again soon changes the same line instead of adding one");
+ok(r.v.task.labels.join() === "AGM,Budget" && r.v.task.checklist.length === 2, "a save without labels or checklist keeps them");
+ok(fn(`saveTask_(S, { id: "${tw.id}", labels: ["1","2","3","4","5","6","7"] })`).err === "BAD_REQUEST", "more than 6 labels: refused");
+ok(fn(`saveTask_(S, { id: "${tw.id}", labels: ["${"x".repeat(25)}"] })`).err === "BAD_REQUEST", "a label over 24 characters: refused");
+ok(fn(`saveTask_(S, { id: "${tw.id}", checklist: new Array(31).fill({ text: "a" }) })`).err === "BAD_REQUEST", "more than 30 checklist items: refused");
+r = fn(`setTaskStatus_(S, "${tw.id}", "blocked", "todo")`);
+ok(r.v && r.v.stale === true && r.v.task.status === "doing" && rowOf(tw.id).status === "doing", "a status tap based on an old status (from) changes nothing and says stale");
+r = fn(`setTaskStatus_(S, "${tw.id}", "blocked", "doing")`);
+ok(r.v && !r.v.stale && r.v.task.status === "blocked" && r.v.task.updates.length === 1, "a tap from the current status is saved, merged into the same line");
+run(`removeTask_(S, "${tw.id}")`);
+// Saved in the background: a repeat of the same new task or update (dropped connection) is not added twice
+const cid = "TKbgtest12345678";
+const firstAdd = run(`saveTask_(S, { title: "Background task", owner: "Amy", clientId: "${cid}" })`);
+const againAdd = run(`saveTask_(S, { title: "Background task", owner: "Amy", clientId: "${cid}" })`);
+ok(firstAdd.task.id === cid && againAdd.repeated === true && run(`TBL.Tasks.filter(function (t) { return t.id === "${cid}"; }).length`) === 1, "a new task sent twice with the same page-made name is saved once");
+const u1 = run(`addTaskUpdate_(S, "${cid}", "first try", "", "TUbgtest12345678")`);
+const u2 = run(`addTaskUpdate_(S, "${cid}", "first try", "", "TUbgtest12345678")`);
+ok(u1.update.id === "TUbgtest12345678" && u2.repeated === true && run(`TBL.TaskUpdates.filter(function (u) { return u.id === "TUbgtest12345678"; }).length`) === 1, "an update sent twice with the same page-made name is saved once");
+ok(run(`saveTask_(S, { title: "Odd name", owner: "Amy", clientId: "../../x" })`).task.id !== "../../x", "a made-up name that isn't the right shape is ignored");
+r = run(`saveTask_(S, { id: "${cid}", status: "blocked", from: "doing", labels: ["Late"] })`);
+ok(r.stale === true && r.task.status === "todo" && r.task.labels.join() === "Late", "a task window save based on an old status keeps the newer status but saves the rest");
+run(`PropertiesService.getScriptProperties().setProperty("TASKBOT_LAST_TICK", new Date().toISOString())`);
+const fetchesBefore = run(`__fetches.length`);
+run(`listTasks_(S)`);
+ok(run(`__fetches.length`) === fetchesBefore, "the task bot timer is running: opening Tasks doesn't read Discord itself");
+run(`PropertiesService.getScriptProperties().deleteProperty("TASKBOT_LAST_TICK"); removeTask_(S, "${cid}")`);
 
 // ---- Status, updates, removing ---------------------------------------------------------------
 r = run(`setTaskStatus_(S, "${t1.task.id}", "done")`);
@@ -128,7 +160,7 @@ ok(r.task.status === "done" && r.task.doneAt && r.task.updates[0].status === "do
 r = run(`setTaskStatus_(S, "${t1.task.id}", "doing")`);
 ok(r.task.status === "doing" && r.task.doneAt === "", "back to Doing: doneAt cleared");
 ok(fn(`setTaskStatus_(S, "${t1.task.id}", "finished")`).err === "BAD_REQUEST", "an unknown status is refused");
-ok(run(`__logs.filter(function (l) { return l.action === "task.status"; }).length`) === 2, "task.status logged");
+ok(run(`__logs.filter(function (l) { return l.action === "task.status" && l.target === "${t1.task.id}"; }).length`) === 2, "task.status logged");
 
 r = run(`addTaskUpdate_(S, "${t1.task.id}", "=SUM(1) drafted", "blocked")`);
 ok(r.update.text === "=SUM(1) drafted" && run(`TBL.TaskUpdates.filter(function (u) { return u.id === "${r.update.id}"; })[0].text`) === "'=SUM(1) drafted", "update text is stored safely (no formula) and shown as typed");
@@ -136,6 +168,17 @@ ok(r.task.status === "blocked" && r.update.status === "blocked" && r.update.sour
 ok(r.task.updates[0].id === r.update.id, "updates are newest first");
 ok(fn(`addTaskUpdate_(S, "${t1.task.id}", "${"y".repeat(1001)}")`).err === "BAD_REQUEST", "an update over 1000 characters is refused");
 ok(fn(`addTaskUpdate_(S, "${t1.task.id}", "  ")`).err === "BAD_REQUEST", "an empty update is refused");
+// @mentions in an update: the person on the People list (full name, or a first name only one active person has)
+r = run(`addTaskUpdate_(S, "${t1.task.id}", "can @AMY check this? cc @nobody and bob@amy.com")`);
+ok(r.mentioned.join() === "Amy" && !r.discordPosted, "an update finds @Amy (any capitals), ignores unknown names and email addresses; Discord off: nothing posted");
+ok(run(`taskMentions_("@Kevin and @Old Exec").map(function (p) { return p.name; }).join()`) === "Kevin", "people switched off on the People list aren't mentioned");
+ok(run(`taskMentions_("no mention here").length`) === 0, "no @: nobody");
+run(`__discord("webhook")`);
+r = run(`addTaskUpdate_(S, "${t1.task.id}", "@amy over to you")`);
+const pingPost = run(`__fetches.filter(function (f) { return f.body; }).pop()`);
+ok(r.discordPosted === true && pingPost && pingPost.body.allowed_mentions.users.join() === run("AMY") && pingPost.body.content.indexOf("<@" + run("AMY") + ">") !== -1, "a mention pings that person on Discord (and only them)");
+ok(run(`__lockedFetches`) === 0, "the ping is sent after the save, outside the lock");
+run(`__discord(""); __posted = 0; __lockedFetches = 0`);
 
 run(`removeTask_(S, "${t2.id}")`);
 let list = run(`listTasks_(S)`);

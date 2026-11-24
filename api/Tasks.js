@@ -228,10 +228,13 @@ function taskView_(t, updates) {
   return {
     id: t.id, title: t.title, department: t.department || "General", owner: t.owner || "", owners: taskAssignees_(t).map(function (p) { return p.name; }), status: TASK_STATUSES.indexOf(t.status) !== -1 ? t.status : "todo",
     due: t.due || "", notes: String(t.notes || "").replace(/^'/, ""), link: t.link || "",
+    checklist: taskChecklistOf_(t), labels: taskLabelsOf_(t),
     remind: taskReminderItems_(t), reminders: taskRemindersView_(t), nextReminder: next ? taskStamp_(next) : "",
     createdBy: t.createdBy, createdAt: t.createdAt, updatedBy: t.updatedBy || "", updatedAt: t.updatedAt || "", doneAt: t.doneAt || "",
     discordMessageId: String(t.discordMessageId || ""),
-    updates: (updates || []).slice().sort(function (a, b) { return String(b.createdAt).localeCompare(String(a.createdAt)); }).map(taskUpdateView_)
+    // Newest first; two at the same moment: the one added later first.
+    updates: (updates || []).map(function (u, i) { return { u: u, i: i }; }).sort(function (a, b) { return String(b.u.createdAt).localeCompare(String(a.u.createdAt)) || b.i - a.i; })
+      .map(function (x) { return taskUpdateView_(x.u); })
   };
 }
 
@@ -241,7 +244,10 @@ function taskUpdatesOf_(taskId) {
 
 /** Exec: the task list. Reads new Discord replies first (best effort: Discord trouble shows as a warning, never an error). */
 function listTasks_(session) {
-  const sync = syncDiscordReplies_();
+  // When the task bot's 1-minute timer is running it already reads Discord, so the list doesn't wait on Discord (or the lock).
+  const tick = Date.parse(String(PropertiesService.getScriptProperties().getProperty("TASKBOT_LAST_TICK") || ""));
+  const botRunning = !isNaN(tick) && Date.now() - tick < TASKBOT_ALIVE_MS;
+  const sync = botRunning ? { synced: 0, error: "" } : syncDiscordReplies_();
   const setup = discordSetup_();
   const byTask = {};
   readRows_("TaskUpdates").forEach(function (u) { (byTask[u.taskId] = byTask[u.taskId] || []).push(u); });
@@ -310,6 +316,56 @@ function taskCleanLink_(value) {
   return /^https?:\/\//i.test(link) ? link : "https://" + link;
 }
 
+const TASK_CHECKLIST_MAX = 30;
+const TASK_LABELS_MAX = 6;
+
+/** The saved checklist as [{ id, text, done }] (anything odd in the cell is skipped). */
+function taskChecklistOf_(task) {
+  return taskList_(task.checklist).filter(function (x) { return x && typeof x === "object" && String(x.text || "").trim(); }).map(function (x) {
+    return { id: String(x.id || ""), text: String(x.text).replace(/^'/, ""), done: x.done === true || String(x.done).toLowerCase() === "true" };
+  });
+}
+
+/** The saved labels as a list of words. */
+function taskLabelsOf_(task) {
+  return taskList_(task.labels).map(function (l) { return String(l || "").trim(); }).filter(Boolean);
+}
+
+/** A checklist sent with a save: up to 30 items of up to 200 characters. Items without an id get one. */
+function taskCleanChecklist_(value) {
+  if (value === undefined || value === null || value === "") return [];
+  if (!Array.isArray(value) || value.length > TASK_CHECKLIST_MAX) throw new ApiError_("BAD_REQUEST", "A checklist can have up to " + TASK_CHECKLIST_MAX + " items.");
+  const seen = {};
+  return value.map(function (x) {
+    x = x && typeof x === "object" ? x : { text: x };
+    const raw = String(x.text === undefined || x.text === null ? "" : x.text).replace(/\s+/g, " ").trim();
+    if (raw.length > 200) throw new ApiError_("BAD_REQUEST", "Keep each checklist item under 200 characters.");
+    const text = memberText_(raw, 200);
+    if (!text) return null;
+    let id = /^[A-Za-z0-9_-]{1,24}$/.test(String(x.id || "")) ? String(x.id) : "";
+    if (!id || seen[id]) id = newId_("CK");
+    seen[id] = true;
+    return { id: id, text: text, done: x.done === true };
+  }).filter(Boolean);
+}
+
+/** Labels sent with a save: up to 6 short words, each once (any capitals). */
+function taskCleanLabels_(value) {
+  if (value === undefined || value === null || value === "") return [];
+  if (!Array.isArray(value)) throw new ApiError_("BAD_REQUEST", "Choose the labels again.");
+  const seen = {}, out = [];
+  value.forEach(function (l) {
+    const raw = String(l === undefined || l === null ? "" : l).replace(/\s+/g, " ").trim();
+    if (raw.length > 24) throw new ApiError_("BAD_REQUEST", "Keep each label under 24 characters.");
+    const label = memberText_(raw, 24);
+    if (!label || seen[label.toLowerCase()]) return;
+    seen[label.toLowerCase()] = true;
+    out.push(label);
+  });
+  if (out.length > TASK_LABELS_MAX) throw new ApiError_("BAD_REQUEST", "A task can have up to " + TASK_LABELS_MAX + " labels.");
+  return out;
+}
+
 /** A new Tasks row. f: { title, owner, ownerDiscordId, due, department, status, notes, link, remind, by, discordMessageId, now (Date) }. */
 function taskNewRow_(f) {
   const now = (f.now || new Date()).toISOString();
@@ -317,6 +373,7 @@ function taskNewRow_(f) {
     id: newId_("TK"), title: memberText_(f.title, 140), department: f.department || "General", owner: memberText_(f.owner, 60),
     ownerDiscordId: /^\d{17,20}$/.test(String(f.ownerDiscordId || "")) ? String(f.ownerDiscordId) : "", assignees: f.assignees || [], status: f.status || "todo",
     due: f.due || "", notes: f.notes || "", link: f.link || "", remind: f.remind || [], remindSent: [], discordRefs: [],
+    checklist: f.checklist || [], labels: f.labels || [],
     createdBy: f.by, createdAt: now, updatedBy: f.by, updatedAt: now, doneAt: f.status === "done" ? now : "",
     discordMessageId: f.discordMessageId || "", removedAt: "", removedBy: ""
   };
@@ -342,8 +399,8 @@ function taskFresh_(id) {
 
 /**
  * Exec: add (no id) or edit a task. A new task is posted to Discord #tasks after it is saved, outside any lock; Discord
- * failing never fails the save (discordPosted says whether it went out). The status is only read for a new task: editing
- * never changes it (the status pill and updates do that).
+ * failing never fails the save (discordPosted says whether it went out). Editing can change the status too (the task
+ * window saves everything with one press of Save); a changed status adds one "set it to …" line, like the status pill.
  */
 function saveTask_(session, input) {
   input = input || {};
@@ -367,10 +424,22 @@ function saveTask_(session, input) {
   if (!editing || has("notes")) clean.notes = noteText_(String(input.notes || "").slice(0, 2000));
   if (!editing || has("link")) clean.link = taskCleanLink_(input.link);
   if (!editing || has("remind")) clean.remind = taskCleanRemind_(input.remind);
+  if (!editing || has("checklist")) clean.checklist = taskCleanChecklist_(input.checklist);
+  if (!editing || has("labels")) clean.labels = taskCleanLabels_(input.labels);
+  const newStatus = editing && has("status") && input.status !== "" ? taskCleanStatus_(input.status) : "";
   const department = TASK_DEPARTMENTS.indexOf(input.department) !== -1 ? input.department : "";
 
   if (!editing) {
+    // The page names a new task itself (saved in the background, and sent again if the connection dropped): the same name
+    // twice is the same task, so a repeat never adds it twice.
+    const clientId = /^TK[A-Za-z0-9_-]{8,40}$/.test(String(input.clientId || "")) ? String(input.clientId) : "";
+    let repeat = null;
     const task = withLock_(function () {   // the lock keeps NEXT_TASK_REMINDER (and the People list) right when two changes happen at once
+      if (clientId) {
+        delete DB_.rows["Tasks"];
+        repeat = readRows_("Tasks").filter(function (t) { return t.id === clientId; })[0] || null;
+        if (repeat) return repeat;
+      }
       delete DB_.rows["Team"];
       const owner = taskTeamByName_(clean.owner);
       clean.department = department || (owner && TASK_DEPARTMENTS.indexOf(owner.department) !== -1 ? owner.department : "General");
@@ -378,10 +447,12 @@ function saveTask_(session, input) {
       clean.owner = clean.assignees.length ? clean.assignees[0].name : "";
       clean.ownerDiscordId = clean.assignees.length ? clean.assignees[0].discordId : "";
       const row = taskNewRow_(Object.assign({ by: memberText_(session.name, 80) }, clean));
+      if (clientId) row.id = clientId;
       insertRow_("Tasks", row);
       refreshNextReminder_();
       return row;
     });
+    if (repeat) return { ok: true, task: taskView_(repeat, taskUpdatesOf_(repeat.id)), discordPosted: !!repeat.discordMessageId, repeated: true };
     log_(session.name, "task.created", task.id, { title: task.title, owner: task.owner, due: task.due });
     // Discord, after the save and outside any lock.
     const post = discordSend_(discordTaskMessage_(task, task.ownerDiscordId), taskOwnerDiscordIds_(task));
@@ -403,51 +474,133 @@ function saveTask_(session, input) {
       changes.owner = changes.assignees.length ? changes.assignees[0].name : "";
       changes.ownerDiscordId = changes.assignees.length ? changes.assignees[0].discordId : "";
     }
+    // from: the status the page showed. Someone else changed it since: their status stays (the rest still saves).
+    const stale = !!(newStatus && has("from") && input.from !== "" && TASK_STATUSES.indexOf(String(input.from)) !== -1 && String(input.from) !== task.status);
+    const statusChanged = newStatus && newStatus !== task.status && !stale;
+    if (statusChanged) Object.assign(changes, taskStatusChanges_(task, newStatus, session.name));
     changes.updatedBy = session.name;
     changes.updatedAt = new Date().toISOString();
     const after = Object.assign({}, task, changes);
     if (JSON.stringify(after.remind) !== JSON.stringify(task.remind) || after.due !== task.due) changes.remindSent = after.remindSent = taskSettledReminders_(after, Date.now());
     updateRow_("Tasks", task.id, changes, task._row);
+    if (statusChanged) taskRecordStatus_(task.id, newStatus, session.name, changes.updatedAt);
     log_(session.name, "task.updated", task.id, { title: after.title, owner: after.owner, due: after.due, status: after.status });
     refreshNextReminder_();
-    return { ok: true, task: taskView_(after, taskUpdatesOf_(task.id)), discordPosted: false };
+    const out = { ok: true, task: taskView_(after, taskUpdatesOf_(task.id)), discordPosted: false };
+    if (stale) out.stale = true;
+    return out;
   });
 }
 
-/** Exec: one tap on the status pill. Also adds an update row saying what it was set to. */
-function setTaskStatus_(session, id, status) {
+const TASK_STATUS_MERGE_MS = 10 * 60000;   // the same person changing the status again within 10 minutes: one history line
+
+/**
+ * CALL WHILE HOLDING THE SCRIPT LOCK. Writes the "X set it to Doing" line. When the newest line of this task is the same
+ * person's status-only line from the last 10 minutes, that line is changed instead of adding another, so flipping the
+ * status back and forth leaves one line with the final status.
+ */
+function taskRecordStatus_(taskId, status, by, at) {
+  const who = memberText_(by, 80);
+  delete DB_.rows["TaskUpdates"];
+  const last = taskUpdatesOf_(taskId).sort(function (a, b) { return String(b.createdAt).localeCompare(String(a.createdAt)); })[0];
+  const recent = last && !String(last.text || "").trim() && last.status && last.by === who && (last.source || "portal") === "portal" &&
+    Date.parse(at) - Date.parse(last.createdAt) < TASK_STATUS_MERGE_MS;
+  if (recent) {
+    updateRow_("TaskUpdates", last.id, { status: status, createdAt: at }, last._row);
+    delete DB_.rows["TaskUpdates"];
+    return;
+  }
+  insertRow_("TaskUpdates", { id: newId_("TU"), taskId: taskId, text: "", by: who, source: "portal", status: status, createdAt: at, discordMessageId: "" });
+}
+
+/**
+ * Exec: one tap on the status pill (or a drag on the board). from: the status the page showed before the tap. When the
+ * task has changed since (someone else, or an older tap arriving late), nothing is changed and the current task is sent
+ * back with stale: true, so a late or repeated request can never undo a newer change.
+ */
+function setTaskStatus_(session, id, status, from) {
   status = taskCleanStatus_(status);
+  const expected = from ? taskCleanStatus_(from) : "";
   return withLock_(function () {
     const task = taskFresh_(id);
-    if (task.status === status) return { ok: true, task: taskView_(task, taskUpdatesOf_(task.id)) };
+    const current = TASK_STATUSES.indexOf(task.status) !== -1 ? task.status : "todo";
+    if (current === status) return { ok: true, task: taskView_(task, taskUpdatesOf_(task.id)) };
+    if (expected && expected !== current) return { ok: true, stale: true, task: taskView_(task, taskUpdatesOf_(task.id)) };
     const changes = taskStatusChanges_(task, status, session.name);
     updateRow_("Tasks", task.id, changes, task._row);
-    insertRow_("TaskUpdates", { id: newId_("TU"), taskId: task.id, text: "", by: memberText_(session.name, 80), source: "portal", status: status, createdAt: changes.updatedAt, discordMessageId: "" });
+    taskRecordStatus_(task.id, status, session.name, changes.updatedAt);
     log_(session.name, "task.status", task.id, { title: task.title, status: status, was: task.status });
-    refreshNextReminder_();
+    if (task.status === "done" || status === "done") refreshNextReminder_();
     return { ok: true, task: taskView_(Object.assign({}, task, changes), taskUpdatesOf_(task.id)) };
   });
 }
 
 /** Exec: "Add an update" (optionally also changing the status). */
-function addTaskUpdate_(session, id, text, status) {
+/** clientId: the name the page gave this update (saved in the background, sent again after a dropped connection): a repeat is not added twice. */
+function addTaskUpdate_(session, id, text, status, clientId) {
   const raw = String(text === undefined || text === null ? "" : text).trim();
   if (!raw || raw.length > 1000) throw new ApiError_("BAD_REQUEST", "Write an update of up to 1000 characters.");
   const clean = noteText_(raw);
   if (!clean) throw new ApiError_("BAD_REQUEST", "Write an update of up to 1000 characters.");
   const newStatus = status ? taskCleanStatus_(status) : "";
-  return withLock_(function () {
+  const named = /^TU[A-Za-z0-9_-]{8,40}$/.test(String(clientId || "")) ? String(clientId) : "";
+  const reply = withLock_(function () {
     const task = taskFresh_(id);
+    if (named) {
+      delete DB_.rows["TaskUpdates"];
+      const before = readRows_("TaskUpdates").filter(function (u) { return u.id === named; })[0];
+      if (before) return { ok: true, repeated: true, update: taskUpdateView_(before), task: taskView_(task, taskUpdatesOf_(task.id)), _row: task };
+    }
     const setStatus = newStatus && newStatus !== task.status ? newStatus : "";
     const now = new Date().toISOString();
-    const update = { id: newId_("TU"), taskId: task.id, text: clean, by: memberText_(session.name, 80), source: "portal", status: setStatus, createdAt: now, discordMessageId: "" };
+    const update = { id: named || newId_("TU"), taskId: task.id, text: clean, by: memberText_(session.name, 80), source: "portal", status: setStatus, createdAt: now, discordMessageId: "" };
     insertRow_("TaskUpdates", update);
     const changes = setStatus ? taskStatusChanges_(task, setStatus, session.name) : { updatedBy: session.name, updatedAt: now };
     updateRow_("Tasks", task.id, changes, task._row);
     log_(session.name, "task.updated", task.id, { title: task.title, updateId: update.id, status: setStatus || undefined });
     if (setStatus) refreshNextReminder_();
-    return { ok: true, update: taskUpdateView_(update), task: taskView_(Object.assign({}, task, changes), taskUpdatesOf_(task.id)) };
+    return { ok: true, update: taskUpdateView_(update), task: taskView_(Object.assign({}, task, changes), taskUpdatesOf_(task.id)), _row: task };
   });
+  // @Name in the update: those people are pinged on Discord, under the task's own message. After the save, outside the lock.
+  const task = reply._row;
+  delete reply._row;
+  if (reply.repeated) return reply;   // already posted (and pinged) the first time
+  const mentioned = taskMentions_(clean);
+  reply.mentioned = mentioned.map(function (p) { return p.name; });
+  const ids = mentioned.map(function (p) { return p.discordId; }).filter(Boolean);
+  if (ids.length) {
+    const content = "💬 **" + discordEscape_(memberText_(session.name, 80)) + "** on **" + discordEscape_(task.title) + "**: " +
+      discordEscape_(clean.replace(/^'/, "")).slice(0, 1500) + "\n" + ids.map(function (i) { return "<@" + i + ">"; }).join(" ");
+    const post = discordSend_(content, ids, task.discordMessageId);
+    reply.discordPosted = !!post.ok;
+  }
+  return reply;
+}
+
+/**
+ * The people an update mentions: "@Amy Lee" (the full name on the People list), or "@Amy" when only one active person's
+ * first name is Amy. Any capitals. [{ name, discordId }], each once.
+ */
+function taskMentions_(text) {
+  const lower = String(text || "").toLowerCase();
+  if (lower.indexOf("@") === -1) return [];
+  const people = taskTeam_().filter(function (p) { return p.active && String(p.name || "").trim(); });
+  const firstCount = {};
+  people.forEach(function (p) { const f = teamNameKey_(p.name).split(" ")[0]; firstCount[f] = (firstCount[f] || 0) + 1; });
+  const said = function (words) {
+    let at = lower.indexOf("@" + words);
+    while (at !== -1) {
+      const before = at ? lower.charAt(at - 1) : "", after = lower.charAt(at + 1 + words.length);
+      const word = /[a-z0-9À-￿]/i;   // "bob@amy.com" is an email address, not a mention
+      if ((!before || !word.test(before)) && (!after || !word.test(after))) return true;
+      at = lower.indexOf("@" + words, at + 1);
+    }
+    return false;
+  };
+  return people.filter(function (p) {
+    const key = teamNameKey_(p.name), first = key.split(" ")[0];
+    return said(key) || (firstCount[first] === 1 && said(first));
+  }).map(function (p) { return { name: String(p.name).trim(), discordId: teamDiscordId_(p) }; });
 }
 
 /** Exec: anyone signed in can remove a task. It is kept in the sheet, marked removed. */

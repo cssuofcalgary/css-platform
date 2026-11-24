@@ -9,7 +9,7 @@
   <link rel="icon" href="assets/css-logo.png" type="image/png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Fraunces:opsz,wght@9..144,500;9..144,600&family=JetBrains+Mono:wght@400;500&display=swap">
-  <link rel="stylesheet" href="styles.css?v=1.9.1">
+  <link rel="stylesheet" href="styles.css?v=1.11.0">
   <link rel="stylesheet" href="theme.css?v=0.13.5">
   <link rel="stylesheet" href="peekaboo.css?v=1.0.1">
   <link rel="stylesheet" href="forest.css?v=1.0.7">
@@ -140,14 +140,18 @@
       <div class="task-toolbar">
         <div class="chips task-view" id="task-view" role="group">
           <button type="button" class="chip" data-task-view="list"></button>
+          <button type="button" class="chip" data-task-view="board"></button>
           <button type="button" class="chip" data-task-view="cal"></button>
         </div>
         <div class="chips task-filters" id="task-filters"></div>
+        <select id="task-label-filter" class="task-label-filter" hidden></select>
       </div>
       <p id="task-discord-warn" class="task-warn" role="status" hidden></p>
+      <p id="task-outbox-warn" class="task-warn" role="status" hidden></p>
       <p id="task-status" class="muted small" aria-live="polite"></p>
       <div id="task-empty" class="task-empty" hidden><span data-t="taskEmpty"></span> <button id="task-empty-new" class="link" type="button" data-t="taskNew"></button></div>
       <div id="task-groups"></div>
+      <div id="task-board" class="task-board" hidden></div>
       <div id="task-cal" class="task-cal" hidden>
         <div class="cal-head">
           <button type="button" id="cal-prev" class="icon-btn"><svg><use href="#i-left"/></svg></button>
@@ -1154,9 +1158,33 @@
       <div id="td-meta" class="task-meta"></div>
       <p id="td-notes" class="task-notes" hidden></p>
       <div class="chips task-seg" id="td-status" role="group"></div>
+      <div class="td-section">
+        <h3 class="td-h" data-t="taskPeople"></h3>
+        <div class="td-chips" id="td-people"></div>
+        <div class="td-add" id="td-person-add" hidden>
+          <input id="td-person" maxlength="60" autocomplete="off" autocapitalize="words" spellcheck="false" list="td-people-names" enterkeyhint="done">
+          <datalist id="td-people-names"></datalist>
+        </div>
+      </div>
+      <div class="td-section">
+        <h3 class="td-h" data-t="taskLabels"></h3>
+        <div class="td-chips" id="td-labels"></div>
+        <div class="td-add" id="td-label-add" hidden>
+          <input id="td-label" maxlength="24" autocomplete="off" spellcheck="false" list="td-label-names" enterkeyhint="done">
+          <datalist id="td-label-names"></datalist>
+        </div>
+      </div>
+      <div class="td-section">
+        <h3 class="td-h"><span data-t="taskChecklist"></span> <span id="td-check-count" class="task-count"></span></h3>
+        <ul id="td-checklist" class="td-checklist"></ul>
+        <input id="td-check-new" class="td-check-new" maxlength="200" autocomplete="off" enterkeyhint="done">
+      </div>
       <form id="td-update-form" class="task-update-form">
         <label for="td-update-text" class="visually-hidden" data-t="taskAddUpdate"></label>
-        <textarea id="td-update-text" rows="2" maxlength="1000"></textarea>
+        <div class="combo">
+          <textarea id="td-update-text" rows="2" maxlength="1000"></textarea>
+          <ul id="td-mention-list" class="combo-list" role="listbox" hidden></ul>
+        </div>
         <button type="submit" id="td-post" class="primary small-button" data-t="taskPost"></button>
       </form>
       <p id="td-error" class="error" role="alert" hidden></p>
@@ -1165,7 +1193,7 @@
       <div class="button-row task-detail-buttons">
         <button type="button" id="td-remove" class="link danger" data-t="taskRemove"></button>
         <button type="button" id="td-edit" class="secondary" data-t="taskEdit"></button>
-        <button type="button" id="td-close" class="primary" data-t="close"></button>
+        <button type="button" id="td-close" class="primary"></button>
       </div>
     </div>
   </dialog>
@@ -1200,13 +1228,13 @@
     </form>
   </dialog>
   <script src="config.js?v=0.3.7"></script>
-  <script src="strings.js?v=1.13.1"></script>
-  <script src="mock.js?v=0.6.2"></script>
+  <script src="strings.js?v=1.15.0"></script>
+  <script src="mock.js?v=0.8.0"></script>
   <script src="panda.js?v=1.5.1"></script>
   <script src="peekaboo.js?v=1.0.0"></script>
-  <script src="app.js?v=1.9.1"></script>
+  <script src="app.js?v=1.11.0"></script>
   <script src="execaccounts.js?v=1.0.0"></script>
-  <script src="events.js?v=1.8.0"></script>
+  <script src="events.js?v=1.9.0"></script>
   <script src="emailstatus.js?v=1.0.2"></script>
   <script src="waitlist.js?v=1.6.0"></script>
   <script src="payments.js?v=1.10.0"></script>
@@ -1223,10 +1251,10 @@
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" defer></script>
   <script src="door.js?v=0.13.0"></script>
-  <script src="members.js?v=1.3.0"></script>
+  <script src="members.js?v=1.4.0"></script>
   <script src="membernotes.js?v=1.0.1"></script>
-  <script src="tasks.js?v=1.2.0"></script>
-  <script src="overview.js?v=1.2.2"></script>
-  <script src="shell.js?v=0.9.5"></script>
+  <script src="tasks.js?v=1.4.0"></script>
+  <script src="overview.js?v=1.3.0"></script>
+  <script src="shell.js?v=0.9.6"></script>
 </body>
 </html>

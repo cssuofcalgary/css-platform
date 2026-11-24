@@ -29,14 +29,27 @@ async function openOverview() {
   $("ov-activity-wrap").hidden = state.role !== "admin";
   document.querySelector(".ov-grid").classList.toggle("single", state.role !== "admin");   // no Recent activity for execs: Upcoming events takes the full width
   const first = !ovState.loadedAt;
-  if (first) {
+  // First time: the copy kept on this device shows straight away (its action buttons stay off until the fresh one arrives).
+  const kept = first && !ovState.showingKept ? deviceLoad("overview") : null;
+  if (kept) {
+    $("ov-events").innerHTML = kept.events || "";
+    $("ov-tiles").innerHTML = kept.tiles || "";
+    $("ov-attention").innerHTML = kept.attention || "";
+    $("ov-attention").querySelectorAll(".attn-actions button").forEach((b) => { b.disabled = true; });
+    $("pay-nav-count").hidden = !kept.waiting;
+    $("pay-nav-count").textContent = kept.waiting || "";
+    $("door-nav-live").hidden = !kept.doorLive;
+    ovState.showingKept = true;
+  } else if (first && !ovState.showingKept) {
     $("ov-events").innerHTML = `<div class="state"><span class="spin"></span>${escapeHtml(T.ovLoading)}</div>`;
     $("ov-tiles").innerHTML = "";
     $("ov-attention").innerHTML = "";
   }
-  if (!eventsState.loaded || Date.now() - ovState.loadedAt > 60000) await loadEvents();
+  const quiet = { quiet: !first || ovState.showingKept };
+  if (!eventsState.loaded || eventsState.fromDevice || Date.now() - ovState.loadedAt > 60000) await loadEvents();
   if (mine !== ovState.counter) return;
-  if (!eventsState.loaded) {
+  if (!eventsState.loaded || (ovState.showingKept && eventsState.fromDevice)) {
+    if (ovState.showingKept) return;   // no connection: keep showing the kept copy (the connection notice says so)
     $("ov-events").innerHTML = ovMessage("error", T.ovError, "", true);
     return;
   }
@@ -50,19 +63,27 @@ async function openOverview() {
   const payEvents = upcoming.slice(0, 3);
   const doorEvents = live.filter((e) => e.entryOpen).slice(0, 2);
   const [pays, doors, , attention] = await Promise.all([
-    Promise.all(payEvents.map((e) => api("listOrders", { eventId: e.id, filter: "awaiting", limit: 1 }))),
+    Promise.all(payEvents.map((e) => api("listOrders", { eventId: e.id, filter: "awaiting", limit: 1 }, quiet))),
     Promise.all(doorEvents.map((e) => api("doorList", { eventId: e.id }))),
-    loadPending(false),   // memberships waiting on a payment (also sets the sidebar count); its result is read from memState
-    api("attentionList")   // every live event: payments to check, refunds owed, emails not sent, offers and cards not delivered
+    loadPending(false, quiet.quiet),   // memberships waiting on a payment (also sets the sidebar count); its result is read from memState
+    api("attentionList", {}, quiet)   // every live event: payments to check, refunds owed, emails not sent, offers and cards not delivered
   ]);
   if (mine !== ovState.counter) return;
+  // Lost the connection half way: keep the kept copy rather than show zeros.
+  const offline = [...pays, ...doors, attention].some((r) => !r.ok && ["NETWORK", "TEMPORARY", "BUSY"].includes(r.error));
+  if (offline && ovState.showingKept) return;
   ovState.loadedAt = Date.now();
+  ovState.showingKept = false;
 
   const payData = payEvents.map((e, i) => ({ event: e, data: pays[i].ok ? pays[i] : null }));
   const doorData = doorEvents.map((e, i) => ({ event: e, data: doors[i].ok ? doors[i] : null }));
   renderOverviewTiles(upcoming, payData, doorData);
   renderOverviewAttention(payData, doorData, upcoming.length, attention.ok ? attention.items : null);
   renderNavBadges(payData, doorData);
+  if (!offline) {
+    deviceSave("overview", { events: $("ov-events").innerHTML, tiles: $("ov-tiles").innerHTML, attention: $("ov-attention").innerHTML,
+      waiting: payData.reduce((n, p) => n + (p.data ? p.data.counts.awaiting : 0), 0), doorLive: doorData.length > 0 });
+  }
   if (state.role === "admin") loadOverviewActivity(mine);
 }
 

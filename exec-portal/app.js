@@ -18,14 +18,14 @@ const $ = (id) => document.getElementById(id);
 
 // Looking things up is safe to repeat, so a hiccup (Google being slow, a dropped connection) is retried
 // quietly. Anything that changes data (mark paid, scan, edit…) is never repeated automatically.
-const READ_ACTIONS = ["listEvents", "listOrders", "doorList", "eventSummary", "searchMembers", "getMember", "listRecentEmails"];
+const READ_ACTIONS = ["signInNames", "listEvents", "listOrders", "doorList", "eventSummary", "searchMembers", "getMember", "listRecentEmails"];
 const REQUEST_TIMEOUT_MS = 35000;
 const RETRY_PAUSE_MS = 1200;
 
 // The panda shows in the middle when a request takes longer than a moment (and moves on to "taking a little longer" and
 // "still working" the longer it waits). Door scans, searches-as-you-type and the keep-alive stay quiet, and so does the
 // scanner phone page. Jobs that work through a list show "almost there" instead.
-const QUIET_ACTIONS = ["ping", "scan", "doorList", "deskAlerts", "searchMembers", "getMember", "emailStatus", "listRecentEmails"];
+const QUIET_ACTIONS = ["signInNames", "ping", "scan", "doorList", "deskAlerts", "searchMembers", "getMember", "emailStatus", "listRecentEmails"];
 const EMAIL_ACTIONS = ["markOrderPaid", "markOrdersPaid", "sendPendingEmails", "resendTickets", "addOrder", "sendReminders", "editTicket", "offerWaitlist", "mailAll"];   // after these the email indicator is refreshed
 const BATCH_ACTIONS = ["sendPendingEmails", "markOrdersPaid", "sendReminders"];
 const PANDA_DELAY_MS = 700;
@@ -40,8 +40,9 @@ function pandaBusy(on, batch) {
   if (pandaBusyCount === 0) { clearTimeout(pandaBusyTimer); box.hidden = true; clearPanda(box); pandaBatch = false; }
 }
 
-async function api(action, details = {}) {
-  const quiet = SCANNER_MODE || QUIET_ACTIONS.includes(action);
+/** opts.quiet: no panda (something is already on screen and this only freshens it). */
+async function api(action, details = {}, opts = {}) {
+  const quiet = SCANNER_MODE || QUIET_ACTIONS.includes(action) || !!opts.quiet;
   if (!quiet) pandaBusy(true, BATCH_ACTIONS.includes(action));
   try {
     const reply = await apiRequest(action, details);
@@ -68,7 +69,11 @@ async function apiOnce(action, details = {}) {
 
 async function apiRequest(action, details = {}) {
   const body = { action, token: state.token, ...(SCANNER_MODE ? { scanner: true } : {}), ...details };   // "scanner" lets the server count this page as a scanner phone
-  if (!API_URL) return MockApi.handle(body);   // demo mode
+  if (!API_URL) {   // demo mode
+    const demo = await MockApi.handle(body);
+    setConnectionNotice(!demo.ok && demo.error === "NETWORK" ? "offline" : false);
+    return demo;
+  }
   // "Busy" means the server never started the action, so EVERY action can safely be tried again. Other hiccups are only
   // retried for lookups; something that changes data is never repeated on a guess.
   const isRead = READ_ACTIONS.includes(action);
@@ -81,7 +86,8 @@ async function apiRequest(action, details = {}) {
     setConnectionNotice(true);
     await new Promise((resolve) => setTimeout(resolve, RETRY_PAUSE_MS * attempt));
   }
-  setConnectionNotice(false);
+  // No connection at all: the warning stays up until a later request gets through.
+  setConnectionNotice(!reply.ok && reply.error === "NETWORK" ? "offline" : false);
   return reply;
 }
 
@@ -114,9 +120,42 @@ function showToast(message, kind) {
   toastTimer = setTimeout(() => { box.hidden = true; }, 8000);
 }
 
+/** on: true = "trying again", "offline" = no connection (stays until something gets through), false = hide. */
 function setConnectionNotice(on) {
   const box = $("connection-notice");
-  if (box) box.hidden = !on;
+  if (!box) return;
+  box.hidden = !on;
+  if (on) box.innerHTML = pandaImg("error", "pl-inline") + pandaEsc(on === "offline" ? T.offlineNotice : T.reconnecting);
+}
+
+// ---- Kept on this device ----------------------------------------------------
+// The last copy of Overview, Events and Tasks is kept in this browser (per person), so those pages show straight away
+// next time and freshen quietly. Member details, payments and door lists are never kept. Signing out wipes it all.
+const DEVICE_PREFIX = "css_keep_";
+const DEVICE_MAX_DAYS = 14;
+
+function deviceKey(name) {
+  return DEVICE_PREFIX + String(state.name || "").trim().replace(/\s+/g, " ").toLowerCase() + "|" + name;
+}
+
+function deviceSave(name, data) {
+  if (!state.name || SCANNER_MODE || state.role === "door") return;
+  try { localStorage.setItem(deviceKey(name), JSON.stringify({ at: Date.now(), data })); } catch (e) { /* full or blocked: just not kept */ }
+}
+
+/** The kept copy, or null (none, too old, or unreadable). */
+function deviceLoad(name) {
+  if (!state.name || SCANNER_MODE || state.role === "door") return null;
+  try {
+    const kept = JSON.parse(localStorage.getItem(deviceKey(name)) || "null");
+    if (!kept || Date.now() - kept.at > DEVICE_MAX_DAYS * 86400000) return null;
+    return kept.data;
+  } catch (e) { return null; }
+}
+
+/** Sign out: forget everything kept on this device (for everyone who used it). */
+function deviceForgetAll() {
+  try { Object.keys(localStorage).filter((k) => k.startsWith(DEVICE_PREFIX) || k.startsWith("css_outbox_")).forEach((k) => localStorage.removeItem(k)); } catch (e) { /* nothing kept */ }
 }
 
 function errorText(reply) {
@@ -149,10 +188,27 @@ function clearSavedNames() {
   fillSavedNames();
 }
 
-/** Fills the name box with the last name used here (unless something is typed) and offers the others as suggestions. */
+// The names on the People list, asked once per page load, so the name box suggests everyone's full name.
+let peopleNames = [];
+let peopleNamesAsked = false;
+async function loadPeopleNames() {
+  if (peopleNamesAsked) return;
+  peopleNamesAsked = true;
+  const reply = await api("signInNames");
+  if (!reply.ok || !Array.isArray(reply.names)) { peopleNamesAsked = false; return; }
+  peopleNames = reply.names.filter((n) => typeof n === "string" && n.trim());
+  fillSavedNames();
+}
+
+/**
+ * Fills the name box with the last name used here (unless something is typed) and suggests the others: the names used
+ * on this device first, then everyone on the People list.
+ */
 function fillSavedNames() {
   const names = savedNames();
-  $("name-list").innerHTML = names.map((n) => `<option value="${escapeHtml(n)}"></option>`).join("");
+  const seen = new Set(names.map((n) => n.trim().toLowerCase()));
+  const all = [...names, ...peopleNames.filter((n) => !seen.has(n.trim().toLowerCase()))];
+  $("name-list").innerHTML = all.map((n) => `<option value="${escapeHtml(n)}"></option>`).join("");
   if (names.length && !$("name-input").value.trim()) $("name-input").value = names[0];
 }
 
@@ -161,6 +217,7 @@ function showLogin(message) {
   $("login-view").hidden = false;
   setLoginError(message || "");
   fillSavedNames();
+  loadPeopleNames();
   // Name already there: straight to the password.
   ($("name-input").value.trim() ? $("password") : $("name-input")).focus();
 }
@@ -206,11 +263,17 @@ function completeSignIn(reply, action) {
   $("password").value = "";
   if (action === "login") rememberName(state.name);   // door sign-ins aren't remembered (often a shared phone)
   showApp();
+  // Signed in again while Tasks was already the open tab: load it now (and send any changes waiting on this device).
+  if (typeof loadTasks === "function" && !$("tab-tasks").hidden) loadTasks();
 }
 
 async function onLogout() {
+  // Task changes still waiting to be sent would be lost: ask first.
+  const waiting = typeof outboxCount === "function" ? outboxCount() : 0;
+  if (waiting && !(await askConfirm(T.signOutUnsent(waiting), T.signOutAnyway))) return;
   await api("logout");
   signOutLocally();
+  deviceForgetAll();
   showLogin();
 }
 
@@ -538,7 +601,6 @@ function fillText() {
   $("name-input").placeholder = T.namePlaceholder;
   $("pay-search").placeholder = T.paySearchPlaceholder;
   $("att-search").placeholder = T.attSearchPlaceholder;
-  $("connection-notice").innerHTML = pandaImg("error", "pl-inline") + pandaEsc(T.reconnecting);
   $("search-status").textContent = T.searchHint;
   document.title = T.appTitle;
 }

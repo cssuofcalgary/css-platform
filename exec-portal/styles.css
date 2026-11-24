@@ -705,3 +705,57 @@ button.all-row:hover { border-color: var(--border-2); }
 .people-lock { display: flex; align-items: center; gap: 10px; margin: 14px 0 0; }
 .people-import-preview { max-height: 260px; overflow: auto; border: 1px solid var(--border); border-radius: var(--radius); padding: 4px 12px; }
 .people-import-row { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 12px; padding: 6px 0; }
+
+/* Tasks: labels, checklist count, board view, and the task window's People / Labels / Checklist */
+.task-label-filter { width: auto; max-width: 180px; padding: 5px 10px; font-size: 13px; border-radius: 99px; }
+.task-label { display: inline-flex; align-items: center; gap: 4px; font: inherit; font-size: 11.5px; font-weight: 600; line-height: 18px; padding: 0 8px; border: 0; border-radius: 99px; white-space: nowrap; }
+.task-label.lab-0 { background: var(--info-bg); color: var(--info-text); }
+.task-label.lab-1 { background: var(--good-bg); color: var(--good-text); }
+.task-label.lab-2 { background: var(--warn-bg); color: var(--warn-text); }
+.task-label.lab-3 { background: var(--bad-bg); color: var(--bad-text); }
+.task-label.lab-4 { background: var(--gold-soft); color: var(--gold); }
+.task-label.lab-5 { background: var(--accent-soft); color: var(--accent-ink); }
+.task-check { display: inline-flex; align-items: center; gap: 3px; font-size: 12px; white-space: nowrap; }
+.task-check svg { width: 13px; height: 13px; }
+.task-check.all { color: var(--good-text); }
+.task-board { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; align-items: start; }
+.board-col { background: var(--sunken, var(--bg)); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px; min-height: 140px; transition: box-shadow .12s, background .12s; }
+.board-col.drop { box-shadow: inset 0 0 0 2px var(--accent); }
+.board-h { display: flex; align-items: center; gap: 8px; margin: 0 0 10px; font-size: 13px; }
+.board-cards { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.board-card { display: grid; gap: 6px; padding: 10px 12px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm, 8px); box-shadow: var(--shadow-1, none); cursor: grab; }
+.board-card:hover { border-color: var(--border-2, var(--border)); }
+.board-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.board-card.dragging { opacity: .4; }
+.board-card.overdue { border-left: 3px solid var(--bad-text); }
+.board-card.st-done .task-title { text-decoration: line-through; text-decoration-color: var(--muted); }
+.board-card .task-meta { gap: 4px 8px; font-size: 12px; }
+.board-labels { display: flex; flex-wrap: wrap; gap: 4px; }
+.board-people { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+@media (max-width: 900px) {
+  .task-board { grid-template-columns: repeat(4, minmax(240px, 80vw)); overflow-x: auto; scroll-snap-type: x mandatory; padding-bottom: 6px; }
+  .board-col { scroll-snap-align: start; }
+}
+.td-section { display: grid; gap: 6px; }
+.td-h { display: flex; align-items: center; gap: 8px; margin: 6px 0 0; font-size: 12px; font-weight: 600; letter-spacing: .4px; text-transform: uppercase; color: var(--muted); }
+.td-h .task-count[hidden] { display: none; }
+.td-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.td-chips .chip, .td-chips .task-label { cursor: pointer; }
+.td-chips .task-label { font-size: 13px; line-height: 26px; padding: 0 10px; }
+.td-add-chip { border-style: dashed; color: var(--text-2, var(--muted)); }
+.td-add input { width: 100%; max-width: 320px; }
+.td-checklist { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.td-checklist:empty { display: none; }
+.td-check { display: flex; align-items: center; gap: 6px; }
+.td-check label { flex: 1; display: flex; align-items: center; gap: 8px; min-width: 0; margin: 0; font-size: 14px; font-weight: 400; cursor: pointer; padding: 3px 0; }
+.td-check label span { overflow-wrap: anywhere; }
+.td-check input { width: 18px; height: 18px; flex: none; margin: 0; }
+.td-check.done label span { text-decoration: line-through; color: var(--muted); }
+.td-check .icon-btn { width: 28px; height: 28px; opacity: .55; }
+.td-check .icon-btn:hover { opacity: 1; }
+.td-check-new { width: 100%; }
+.task-update-form .combo { min-width: 0; }
+.task-update-form .combo textarea { width: 100%; }
+.task-update-form .combo-list { top: auto; bottom: calc(100% + 4px); }
+#td-close.changed { box-shadow: 0 0 0 3px var(--accent-soft); }
+.task-waiting { font-size: 11.5px; font-weight: 600; line-height: 18px; padding: 0 8px; border-radius: 99px; background: var(--warn-bg); color: var(--warn-text); white-space: nowrap; }

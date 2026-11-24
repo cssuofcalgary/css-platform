@@ -54,14 +54,47 @@ function execWrongPassword_(attempt) {
   throw new ApiError_("WRONG_PASSWORD", "That name and password don't match.");
 }
 
+/**
+ * The People row a typed sign-in name means: the exact name (any capitals or spacing), otherwise the one active person whose
+ * first name (or the start of whose full name) it is, so "amy" or "Amy L" signs in as "Amy Lee". Two people it could be:
+ * NAME_AMBIGUOUS, naming them. Nobody: null (a new person, as before).
+ */
+function signInPerson_(typed) {
+  const exact = taskTeamByName_(typed);
+  if (exact) return exact;
+  const key = teamNameKey_(typed);
+  const matches = readRows_("Team").filter(function (r) {
+    const name = teamNameKey_(r.name);
+    return isOn_(r.active) && name && (name.split(" ")[0] === key || name.indexOf(key + " ") === 0 || (key.indexOf(" ") !== -1 && name.indexOf(key) === 0));
+  });
+  if (matches.length === 1) return matches[0];
+  if (matches.length > 1) {
+    throw new ApiError_("NAME_AMBIGUOUS", "More than one person is called that: " +
+      matches.map(function (r) { return String(r.name).trim(); }).join(", ") + ". Type your full name.");
+  }
+  return null;
+}
+
+/** Public: the active names on the People list, for the sign-in name box. Names only. Kept for 5 minutes. */
+function signInNames_() {
+  const cache = CacheService.getScriptCache();
+  const saved = cache.get("signin_names");
+  if (saved) return { ok: true, names: JSON.parse(saved) };
+  const names = taskTeam_().filter(function (p) { return p.active && String(p.name || "").trim(); })
+    .map(function (p) { return String(p.name).replace(/\s+/g, " ").trim(); });
+  cache.put("signin_names", JSON.stringify(names), 300);
+  return { ok: true, names: names };
+}
+
 function personalLogin_(password, name) {
   const config = getConfig_();
   if (!config.password) throw new ApiError_("SETUP_NEEDED", "The club password has not been set.");
-  const who = memberText_(name, 60);
-  if (!who) throw new ApiError_("NAME_NEEDED", "Pick your name.");
+  const typed_ = memberText_(name, 60);
+  if (!typed_) throw new ApiError_("NAME_NEEDED", "Pick your name.");
+  const person = signInPerson_(typed_);
+  const who = person ? String(person.name).trim() : typed_;
   const attempt = execLoginAttempt_(who);
   const typed = String(password || "");
-  const person = taskTeamByName_(who);
   if (person && !isOn_(person.active)) return execWrongPassword_(attempt);
   if (person && person.passwordHash) {
     const expectedHash = person.passwordHash, expectedVersion = person.authVersion;

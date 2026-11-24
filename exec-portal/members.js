@@ -154,13 +154,13 @@ function showMemberList() {
 }
 
 /** The first page (or the next one, with append). Also keeps the sidebar count and the Overview alert up to date. */
-async function loadPending(append) {
+async function loadPending(append, quiet) {
   const mine = ++memState.counter;
   if (!append && !memState.loaded) $("pending-status").textContent = T.pendingLoading;
   const reply = await api("listPendingMembers", {
     offset: append ? memState.list.length : 0,
     limit: append ? MEMBERS_PAGE : Math.max(MEMBERS_PAGE, memState.list.length)
-  });
+  }, { quiet: !!quiet });
   if (mine !== memState.counter) return;
   if (!reply.ok) {
     if (reply.error === "NOT_LOGGED_IN") { signOutLocally(); return showLogin(errorText(reply)); }

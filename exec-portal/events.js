@@ -23,7 +23,7 @@ async function switchTab(name) {
   window.scrollTo(0, 0);
   if (name !== "door" && doorState.scanner) stopCamera();
   if (name === "overview") openOverview();
-  if (name === "events") { showEventsList(); if (!eventsState.loaded) loadEvents(); }
+  if (name === "events") { showEventsList(); if (!eventsState.loaded || eventsState.fromDevice) loadEvents(); }
   if (name === "payments") openPaymentsTab();
   if (name === "door") openDoorTab();
   if (name === "activity") openActivityTab();
@@ -35,12 +35,29 @@ async function switchTab(name) {
 // ---- List -------------------------------------------------------------------
 
 async function loadEvents() {
-  $("events-status").textContent = T.loadingEvents;
-  const reply = await api("listEvents");
-  if (!reply.ok) return handleEventError(reply, $("events-status"));
+  // First time: show the copy kept on this device straight away, then freshen it quietly.
+  if (!eventsState.loaded) {
+    const kept = deviceLoad("events");
+    if (kept && Array.isArray(kept.events)) {
+      eventsState.events = kept.events;
+      eventsState.counts = kept.counts || {};
+      eventsState.loaded = true;
+      eventsState.fromDevice = true;
+      renderEvents();
+      renderGlobalEvent();
+    }
+  }
+  if (!eventsState.loaded) $("events-status").textContent = T.loadingEvents;
+  const reply = await api("listEvents", {}, { quiet: eventsState.loaded });
+  if (!reply.ok) {
+    if (eventsState.fromDevice && reply.error !== "NOT_LOGGED_IN") return;   // keep showing the kept copy; the connection notice says why
+    return handleEventError(reply, $("events-status"));
+  }
   eventsState.events = reply.events;
   eventsState.counts = reply.counts || {};
   eventsState.loaded = true;
+  eventsState.fromDevice = false;
+  deviceSave("events", { events: reply.events, counts: reply.counts || {} });
   renderEvents();
   renderGlobalEvent();
 }
@@ -124,6 +141,11 @@ async function onEventsListClick(event) {
     return;
   }
   event.stopPropagation();
+  // Never change an event from the copy kept on this device: get the latest first.
+  if (eventsState.fromDevice) {
+    await loadEvents();
+    if (eventsState.fromDevice) return showToast(T.keptCopyOnly);
+  }
   const target = eventsState.events.find((e) => e.id === button.dataset.id);
   if (!target) return;
   if (button.dataset.action === "edit") return openEditor(target);

@@ -58,6 +58,8 @@ setInterval(async () => {
   if (!state.token || $("app-view").hidden || document.hidden) return;
   const reply = await api("ping");
   if (!reply.ok && reply.error === "NOT_LOGGED_IN") { signOutLocally(); showLogin(errorText(reply)); }
+  // Back online with task changes still waiting on this device: send them now.
+  if (reply.ok && typeof outboxCount === "function" && outboxCount()) flushOutbox();
 }, 30000);
 
 // ---- Tap the logo to refresh the page (handy on a phone at the door) ----

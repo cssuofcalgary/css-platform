@@ -62,7 +62,7 @@ const MockApi = (() => {
   ];
   let taskSeq = 10;
   const mkTask = (id, title, owner, department, status, due, mins, updates, extra) => ({
-    id, title, owner, department, status, due, notes: "", link: "", remind: [], nextReminder: "",
+    id, title, owner, owners: [owner], department, status, due, notes: "", link: "", remind: [], nextReminder: "", checklist: [], labels: [],
     createdBy: owner, createdAt: ago(mins), updatedAt: ago(mins), doneAt: status === "done" ? ago(60) : "", updates: updates || [], ...(extra || {})
   });
   let tasks = [
@@ -71,8 +71,9 @@ const MockApi = (() => {
     mkTask("tk2", "Make reel for badminton night", "Chris Li", "Marketing", "todo", day(0), 3000, [], { remind: [{ n: 1, unit: "days", at: "09:00" }] }),
     mkTask("tk3", "Order snacks for Lunar New Year", "Bella Chen", "Events", "blocked", day(3), 4000,
       [{ id: "u2", text: "Stuck: waiting on the budget sign-off", by: "Bella Chen", source: "discord", status: "blocked", createdAt: ago(45) }],
-      { remind: [{ n: 2, unit: "days", at: "09:00" }, { n: 0, unit: "days", at: "18:00" }] }),
-    mkTask("tk7", "Print posters for the AGM", "Bella Chen", "Events", "todo", day(3), 2000, []),
+      { remind: [{ n: 2, unit: "days", at: "09:00" }, { n: 0, unit: "days", at: "18:00" }], labels: ["Lunar New Year", "Budget"],
+        checklist: [{ id: "c1", text: "Get quotes from 2 stores", done: true }, { id: "c2", text: "Budget sign-off", done: false }, { id: "c3", text: "Place the order", done: false }] }),
+    mkTask("tk7", "Print posters for the AGM", "Bella Chen", "Events", "todo", day(3), 2000, [], { labels: ["AGM"], owners: ["Bella Chen", "Chris Li"] }),
     mkTask("tk8", "Confirm DJ for the formal", "Gordon", "Events", "doing", day(3), 2500, []),
     mkTask("tk9", "Send sponsor thank-you emails", "Emily Chan", "External", "todo", day(3), 2600, []),
     mkTask("tk4", "Reimburse Clubs Week receipts", "Emily Chan", "Finance", "todo", day(12), 1000, []),
@@ -142,7 +143,7 @@ const MockApi = (() => {
           discord: { ready: true, posting: true, reading: true, synced: 0, error: "" } };
       case "saveTask": {
         const input = req.task || {};
-        const title = String(input.title || "").trim();
+        const title = String(input.title === undefined && input.id ? (find(input.id) || {}).title || "" : input.title || "").trim();
         if (!title) return { ok: false, error: "BAD_REQUEST", message: "Say what the task is." };
         if (title.length > 140) return { ok: false, error: "BAD_REQUEST", message: "Keep the task under 140 characters." };
         const owners = [];
@@ -156,14 +157,25 @@ const MockApi = (() => {
         });
         const person = findPerson(owners[0] || "");
         const fields = { title, owner: owners[0] || "", owners, due: input.due || "", department: input.department || (person && person.department) || "General",
-          notes: input.notes || "", link: input.link || "", remind: cleanRemind(input.remind), updatedBy: me, updatedAt: new Date().toISOString() };
+          notes: input.notes || "", link: input.link || "", remind: cleanRemind(input.remind), updatedBy: me, updatedAt: new Date().toISOString(),
+          checklist: (Array.isArray(input.checklist) ? input.checklist : []).slice(0, 30).map((c, i) => ({ id: c.id || "ck" + (++taskSeq), text: String(c.text || "").trim().slice(0, 200), done: c.done === true })).filter((c) => c.text),
+          labels: [...new Set((Array.isArray(input.labels) ? input.labels : []).map((l) => String(l).trim().slice(0, 24)).filter(Boolean))].slice(0, 6) };
         if (input.id) {
           const t = find(input.id);
           if (!t) return { ok: false, error: "NOT_FOUND", message: "That task isn't there any more." };
-          Object.assign(t, fields);   // editing never changes the status
-          return { ok: true, task: plain(t), discordPosted: false };
+          ["owner", "owners", "due", "department", "notes", "link", "remind", "checklist", "labels"].forEach((k) => { if (input[k] === undefined && !(k === "owner" && input.owners)) delete fields[k]; });
+          if (input.department === undefined) delete fields.department;
+          if (input.status && input.status !== t.status && !(input.from && input.from !== t.status)) {
+            t.status = input.status;
+            t.doneAt = input.status === "done" ? new Date().toISOString() : "";
+            t.updates.unshift({ id: "u" + (++taskSeq), text: "", by: me, source: "portal", status: input.status, createdAt: new Date().toISOString() });
+          }
+          Object.assign(t, fields);
+          return { ok: true, task: { ...plain(t), updates: t.updates }, discordPosted: false };
         }
-        const t = { id: "tk" + (++taskSeq), status: input.status || "todo", createdBy: me, createdAt: new Date().toISOString(), doneAt: "", updates: [], ...fields };
+        const again = input.clientId && find(input.clientId);
+        if (again) return { ok: true, task: { ...plain(again), updates: again.updates }, discordPosted: true, repeated: true };
+        const t = { id: input.clientId || "tk" + (++taskSeq), status: input.status || "todo", createdBy: me, createdAt: new Date().toISOString(), doneAt: "", updates: [], ...fields };
         tasks.push(t);
         return { ok: true, task: plain(t), discordPosted: true };
       }
@@ -200,17 +212,25 @@ const MockApi = (() => {
       case "setTaskStatus": {
         const t = find(req.id);
         if (!t) return { ok: false, error: "NOT_FOUND", message: "That task isn't there any more." };
+        if (t.status === req.status) return { ok: true, task: { ...plain(t), updates: t.updates } };
+        if (req.from && req.from !== t.status) return { ok: true, stale: true, task: { ...plain(t), updates: t.updates } };
         t.status = req.status;
         t.doneAt = req.status === "done" ? new Date().toISOString() : "";
-        t.updates.unshift({ id: "u" + (++taskSeq), text: "", by: me, source: "portal", status: req.status, createdAt: new Date().toISOString() });
-        return { ok: true, task: plain(t) };
+        const last = t.updates[0];
+        if (last && !last.text && last.by === me && last.source === "portal" && Date.now() - Date.parse(last.createdAt) < 600000) Object.assign(last, { status: req.status, createdAt: new Date().toISOString() });
+        else t.updates.unshift({ id: "u" + (++taskSeq), text: "", by: me, source: "portal", status: req.status, createdAt: new Date().toISOString() });
+        return { ok: true, task: { ...plain(t), updates: t.updates } };
       }
       case "addTaskUpdate": {
         const t = find(req.id);
         if (!t) return { ok: false, error: "NOT_FOUND", message: "That task isn't there any more." };
-        const update = { id: "u" + (++taskSeq), text: String(req.text || "").trim().slice(0, 1000), by: me, source: "portal", status: req.status || "", createdAt: new Date().toISOString() };
+        const seen = req.clientId && t.updates.find((u) => u.id === req.clientId);
+        if (seen) return { ok: true, update: seen, task: { ...plain(t), updates: t.updates }, repeated: true };
+        const update = { id: req.clientId || "u" + (++taskSeq), text: String(req.text || "").trim().slice(0, 1000), by: me, source: "portal", status: req.status || "", createdAt: new Date().toISOString() };
         t.updates.unshift(update);
-        return { ok: true, update, task: plain(t) };
+        const lower = update.text.toLowerCase();
+        const mentioned = taskTeam.filter((p) => lower.includes("@" + nameKey(p.name)) || lower.includes("@" + nameKey(p.name).split(" ")[0])).map((p) => p.name);
+        return { ok: true, update, task: { ...plain(t), updates: t.updates }, mentioned, discordPosted: mentioned.length > 0 };
       }
       case "removeTask":
         tasks = tasks.filter((t) => t.id !== req.id);
@@ -246,9 +266,17 @@ const MockApi = (() => {
     }
 
     switch (req.action) {
+      case "signInNames":
+        return { ok: true, names: taskTeam.filter((p) => p.active !== false).map((p) => p.name) };
       case "login": {
         if (!String(req.name || "").trim()) return { ok: false, error: "NAME_NEEDED" };
-        const known = findPerson(req.name);
+        let known = findPerson(req.name);
+        if (!known) {
+          const key = nameKey(req.name);
+          const matches = taskTeam.filter((p) => p.active !== false && (nameKey(p.name).split(" ")[0] === key || nameKey(p.name).startsWith(key + " ")));
+          if (matches.length > 1) return { ok: false, error: "NAME_AMBIGUOUS", message: `More than one person is called that: ${matches.map((p) => p.name).join(", ")}. Type your full name.` };
+          known = matches[0];
+        }
         if (known && known.active === false) return { ok: false, error: "WRONG_PASSWORD" };
         if (known && accountHashes[known.id]) return await demoVerifyPassword(String(req.password || ""), accountHashes[known.id])
           ? demoSignIn(known.name, "exec", known) : { ok: false, error: "WRONG_PASSWORD" };
