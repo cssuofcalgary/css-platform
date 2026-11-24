@@ -125,7 +125,7 @@ async function main() {
   // ---- Card payments (Square Hosted Checkout): optional, behind cardEnabled, e-transfer always kept ----
   const strings = read("public/strings.js"), publicSrc = read("public/public.js"), ticketSrc = read("public/ticket.js");
   const T = page().run(strings + "; T");
-  ok(T.payByCard === "Pay by card (instant tickets)" && T.payByEtransfer === "Pay by Interac e-transfer" && !!T.cardOpening && !!T.cardFailed && !!T.payNoteCard,
+  ok(T.payByCard === "Pay by card" && T.payByEtransfer === "Pay by Interac e-transfer" && !!T.cardOpening && !!T.cardFailed && !!T.payNoteCard,
     "card payment strings live in public/strings.js");
   ok(T.cardNotCompleted === "Payment not completed yet — you can try card again or pay by e-transfer.", "the came-back-unpaid message is in public/strings.js");
   ok(!/Pay by card|Payment not completed/.test(publicSrc + ticketSrc), "public.js and ticket.js use T.xxx for the card wording, not inline text");

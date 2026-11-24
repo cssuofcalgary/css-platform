@@ -78,7 +78,7 @@ const STRINGS = {
     statusLink: "Check payment status",
     statusHeading: "Payment status",
     statusWaiting: "Waiting for payment",
-    payByCard: "Pay by card (instant tickets)",
+    payByCard: "Pay by card",
     payByEtransfer: "Pay by Interac e-transfer",
     cardOpening: "Opening card payment…",
     cardFailed: "We couldn't open card payment. Please try again, or pay by e-transfer.",
