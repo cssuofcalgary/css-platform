@@ -3,7 +3,7 @@
  *
  * E-transfer stays the normal way to pay. When the Square settings are filled in (Config.js: SQUARE_ACCESS_TOKEN and
  * SQUARE_LOCATION_ID), the ticket page also offers "Pay by card": we ask Square for a one-off checkout page for what
- * is still owed (a buyer-fee prototype is available only in Square sandbox) and send the person there. After paying,
+ * is still owed (plus the club's Square usage fee when enabled) and send the person there. After paying,
  * Square sends them back to their own ticket page (…/ticket.html?t=SECRET&card=1), which asks us to check.
  *
  * We never take the page's, the web address's or the webhook's word about money. We always ask Square itself which payments
@@ -21,7 +21,8 @@
 
 const SQUARE_API_VERSION = "2025-01-23";
 const SQUARE_PAID_BY = "Square (Card)";
-const SQUARE_FEE_ITEM_NAME = "Online card processing fee";
+const SQUARE_FEE_ITEM_NAME = "Square usage fee";
+const SQUARE_LEGACY_FEE_ITEM_NAME = "Online card processing fee";   // recognize checkout links created before the usage-fee setting
 const SQUARE_CHECK_SECONDS = 15;          // a ticket page, My tickets or a door scan asks Square about one order at most this often
 const SQUARE_LINK_REUSE_SECONDS = 1800;   // pressing "Pay by card" again within 30 minutes reopens the same Square page
 const SQUARE_MAX_LINKS = 10;              // Square checkout pages one registration can have
@@ -45,7 +46,8 @@ function isSquareOrder_(order) {
 
 /**
  * What a card checkout charges for `dueCents` of ticket money: `{ dueCents, feeCents, chargeCents }`.
- * When `passFee` is on, the total is grossed up so after Square takes `feePercent% + feeFixed`, CSS keeps `dueCents` in full.
+ * When enabled, add the configured percentage of the outstanding ticket amount plus a flat amount per checkout.
+ * These are the club's chosen fees, not a quote of Square's actual processing costs; never silently gross up the amount.
  */
 function cardQuote_(dueCents) {
   const due = Math.max(0, Math.round(Number(dueCents) || 0));
@@ -54,10 +56,8 @@ function cardQuote_(dueCents) {
   if (!cfg.enabled || !cfg.passFee) return { dueCents: due, feeCents: 0, chargeCents: due };
   const rate = Math.max(0, Number(cfg.feePercent) || 0) / 100;
   const fixed = cents_(Math.max(0, Number(cfg.feeFixed) || 0));
-  if ((rate <= 0 && fixed <= 0) || rate >= 0.5) return { dueCents: due, feeCents: 0, chargeCents: due };
-  let charge = Math.floor((due + fixed) / (1 - rate));
-  while (charge - (Math.round(charge * rate) + fixed) < due) charge++;
-  return { dueCents: due, feeCents: Math.max(0, charge - due), chargeCents: charge };
+  const fee = Math.round(due * rate) + fixed;
+  return { dueCents: due, feeCents: fee, chargeCents: due + fee };
 }
 
 // ---- Talking to Square --------------------------------------------------------------------------
@@ -111,7 +111,8 @@ function squareOrderCheck_(squareOrderId) {
     const m = (li && (li.total_money || li.base_price_money)) || {};
     if (m.currency && m.currency !== "CAD") return;
     const amt = Math.max(0, Math.round(Number(m.amount) || 0));
-    if (String((li && li.name) || "") === SQUARE_FEE_ITEM_NAME) orderFeeCents += amt;
+    const name = String((li && li.name) || "");
+    if (name === SQUARE_FEE_ITEM_NAME || name === SQUARE_LEGACY_FEE_ITEM_NAME) orderFeeCents += amt;
     else orderTicketCents += amt;
   });
   const orderTotalCents = orderTicketCents + orderFeeCents;
@@ -134,14 +135,12 @@ function squareOrderCheck_(squareOrderId) {
     const netCharged = Math.max(0, Math.round(Number(money.amount) || 0) - back);
     if (netCharged > 0) raw.push({ id: pid, netCharged: netCharged });
   });
-  const sumCharged = raw.reduce(function (s, x) { return s + x.netCharged; }, 0);
-  let feeLeft = orderFeeCents > 0 && orderTotalCents > 0
-    ? (sumCharged >= orderTotalCents ? orderFeeCents : Math.min(orderFeeCents, Math.round(sumCharged * orderFeeCents / orderTotalCents)))
-    : 0;
-  const found = raw.map(function (x, i) {
-    const share = i === raw.length - 1 ? Math.min(feeLeft, x.netCharged)
-      : Math.min(feeLeft, sumCharged > 0 ? Math.round(x.netCharged * feeLeft / sumCharged) : 0);
-    feeLeft -= share;
+  let chargedSoFar = 0, feeSoFar = 0;
+  const found = raw.map(function (x) {
+    chargedSoFar += x.netCharged;
+    const feeThroughPayment = orderTotalCents > 0 ? Math.min(orderFeeCents, Math.round(chargedSoFar * orderFeeCents / orderTotalCents)) : 0;
+    const share = Math.min(x.netCharged, Math.max(0, feeThroughPayment - feeSoFar));
+    feeSoFar += share;
     return { id: x.id, cents: x.netCharged - share, feeCents: share, chargedCents: x.netCharged };
   });
   const openUnused = sq.state === "OPEN" && tenders.length === 0 && found.length === 0;
@@ -274,7 +273,7 @@ function confirmSquareOrder_(orderId) {
     const allIds = squarePaymentIds_(order);
     const refIds = freshIds.length ? freshIds : [allIds[allIds.length - 1] || "card"];
     const amount = fresh.length ? dollars_(freshCents) : dollars_(availableReceivedCents_(order));
-    const chargedNote = freshFeeCents > 0 ? " (" + usd_(dollars_(freshChargedCents)) + " incl. " + usd_(dollars_(freshFeeCents)) + " card fee)" : "";
+    const chargedNote = freshFeeCents > 0 ? " (" + usd_(dollars_(freshChargedCents)) + " incl. " + usd_(dollars_(freshFeeCents)) + " Square usage fee)" : "";
 
     // Out-of-band Square Dashboard refund on an already-counted payment with no Portal Refunds row yet: alert Finance to check.
     const refundedCounted = check.refundedIds.filter(function (id) { return allIds.indexOf(id) !== -1; });
@@ -453,7 +452,8 @@ function createCardCheckout_(req) {
   const cache = CacheService.getScriptCache();
   let saved = null;
   try { saved = JSON.parse(cache.get("sqlink_" + order.id) || "null"); } catch (e) { saved = null; }
-  if (reusable && saved && saved.sq === ids[ids.length - 1] && saved.cents === quote.chargeCents && saved.url) return { ok: true, url: saved.url };
+  if (reusable && saved && saved.sq === ids[ids.length - 1] && saved.cents === quote.chargeCents &&
+      saved.ticketCents === quote.dueCents && saved.feeCents === quote.feeCents && saved.url) return { ok: true, url: saved.url };
   if (ids.length >= SQUARE_MAX_LINKS) throw new ApiError_("TOO_MANY_TRIES", "Too many card payment tries for this registration. Please pay by e-transfer, or contact us.");
 
   // Ask Square for the checkout page (no lock held while waiting for Square).
@@ -498,7 +498,7 @@ function createCardCheckout_(req) {
   });
   if (status === "paid") return { ok: true, alreadyPaid: true };
   if (status !== "awaiting") throw new ApiError_("BAD_REQUEST", "This registration was " + status + ", so it can't be paid. Please contact us.");
-  try { cache.put("sqlink_" + order.id, JSON.stringify({ sq: link.order_id, cents: quote.chargeCents, url: link.url }), SQUARE_LINK_REUSE_SECONDS); } catch (e) { /* a new page next time */ }
+  try { cache.put("sqlink_" + order.id, JSON.stringify({ sq: link.order_id, cents: quote.chargeCents, ticketCents: quote.dueCents, feeCents: quote.feeCents, url: link.url }), SQUARE_LINK_REUSE_SECONDS); } catch (e) { /* a new page next time */ }
   return { ok: true, url: link.url };
 }
 

@@ -139,7 +139,8 @@ function render(data, meta = { state: "live" }) {
   }[status] || { stamp: "", cls: "", note: "" };
   const showQr = ticket.status === "paid";
   const payByCardShown = status === "awaiting" && !!data.cardEnabled && meta.state === "live";   // needs a connection: never on the saved copy
-  const cardLabel = Number(data.cardFee) > 0 && Number(data.cardTotal) > 0 ? T.payByCardFee(money(data.cardTotal), money(data.cardFee)) : T.payByCard;
+  const cardLabel = T.payByCard;
+  const cardDetails = Number(data.cardFee) > 0 && Number(data.cardTotal) > 0 ? T.payByCardFee(money(data.cardTotal), money(data.cardFee)) : "";
   $("page").className = "card " + look.cls;   // coloured top edge matches the status
 
   $("page").innerHTML = `
@@ -154,7 +155,8 @@ function render(data, meta = { state: "live" }) {
       <hr class="perforation">
       ${look.stamp ? `<div class="stamp ${look.cls}">${look.stamp}</div>` : ""}
       ${look.note ? `<p class="ticket-state">${escapeHtml(look.note)}</p>` : ""}
-      ${payByCardShown ? `<button type="button" class="btn pay-card-button" id="pay-card" data-label="${escapeHtml(cardLabel)}">${escapeHtml(cardLabel)}</button>
+      ${payByCardShown ? `<button type="button" class="btn pay-card-button" id="pay-card" aria-describedby="card-details" data-label="${escapeHtml(cardLabel)}">${escapeHtml(cardLabel)}</button>
+      <p class="pay-card-details" id="card-details"><span>${escapeHtml(T.cardProvider)}</span>${cardDetails ? `<span>${escapeHtml(cardDetails)}</span>` : ""}</p>
       <p class="form-error" id="card-error" role="alert" hidden></p>` : ""}
       ${showQr && !ticket.checkedIn ? `<p class="muted small">${T.showAtDoor}</p>` : ""}
       ${canGiveFeedback ? `

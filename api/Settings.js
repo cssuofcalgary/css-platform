@@ -149,21 +149,19 @@ function saveSettings_(session, token, input) {
     if (location && !/^[A-Za-z0-9_\-]{4,64}$/.test(location)) throw new ApiError_("BAD_REQUEST", "That location ID doesn't look right. Copy it again from Square.");
     let passFee = now.passFee, feePercent = now.feePercent, feeFixed = now.feeFixed;
     if (input.squarePassFee !== undefined) {
-      if (typeof input.squarePassFee !== "boolean") throw new ApiError_("BAD_REQUEST", "Choose whether buyers pay the card processing fee.");
+      if (typeof input.squarePassFee !== "boolean") throw new ApiError_("BAD_REQUEST", "Choose whether to add a Square usage fee.");
       passFee = input.squarePassFee;
     }
     if (input.squareFeePercent !== undefined) {
       const rawPct = text(input.squareFeePercent, 10).replace(/%\s*$/, "");
-      if (!/^\d{1,2}(\.\d{1,2})?$/.test(rawPct) || Number(rawPct) > 10) throw new ApiError_("BAD_REQUEST", "The card fee percentage should be between 0 and 10, like 2.9.");
+      if (!/^\d{1,2}(\.\d{1,2})?$/.test(rawPct) || Number(rawPct) > 10) throw new ApiError_("BAD_REQUEST", "The Square usage fee percentage should be between 0 and 10.");
       feePercent = Number(rawPct);
     }
     if (input.squareFeeFixed !== undefined) {
       const rawFix = text(input.squareFeeFixed, 10).replace(/^\$\s*/, "");
-      if (!/^\d(\.\d{1,2})?$/.test(rawFix) || Number(rawFix) > 5) throw new ApiError_("BAD_REQUEST", "The fixed card fee should be between $0 and $5, like 0.30.");
+      if (!/^\d(\.\d{1,2})?$/.test(rawFix) || Number(rawFix) > 5) throw new ApiError_("BAD_REQUEST", "The flat Square usage fee should be between $0 and $5.");
       feeFixed = Number(rawFix);
     }
-    if (env !== "sandbox" && input.squarePassFee === true) throw new ApiError_("BAD_REQUEST", "Buyer card fees are only available in test mode. Square Canada does not support card surcharges.");
-    if (env !== "sandbox") passFee = false;
     const keysChanged = token !== now.token || location !== now.locationId || env !== now.environment;
     const feeChanged = passFee !== now.passFee || feePercent !== now.feePercent || feeFixed !== now.feeFixed;
     if (keysChanged || feeChanged) {
@@ -180,7 +178,7 @@ function saveSettings_(session, token, input) {
         updates.SQUARE_PASS_FEE = passFee ? "true" : "false";
         updates.SQUARE_FEE_PERCENT = String(feePercent);
         updates.SQUARE_FEE_FIXED = String(feeFixed);
-        if (!keysChanged) changed.push("card fee settings");
+        if (!keysChanged) changed.push("Square usage fee");
       }
     }
   }
@@ -317,7 +315,7 @@ function healthCheck_(session) {
   if (square.enabled) {
     checks.push({
       name: "Card payments (Square)", ok: true,
-      detail: square.environment === "sandbox" ? "On, in Square's test mode (no real money)." : (square.passFee ? "On (buyer pays card fee). People can pay by card or e-transfer." : "On. People can pay by card or e-transfer.")
+      detail: square.environment === "sandbox" ? "On, in Square's test mode (no real money)." : (square.passFee ? "On, with a Square usage fee. People can pay by card or e-transfer." : "On. People can pay by card or e-transfer.")
     });
   }
   run("Email allowance", function () {

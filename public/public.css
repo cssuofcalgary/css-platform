@@ -113,6 +113,9 @@ p { line-height: 1.55; }
 .btn:active, .register:active { transform: scale(0.97); }
 .register:disabled, .btn:disabled { background: #a79a80; cursor: not-allowed; box-shadow: none; transform: none; }
 .pay-card-button { margin: 16px 0 6px; }
+.pay-card-details { margin: 0 0 16px; color: var(--ink-soft); font-size: 12px; line-height: 1.5; text-align: center; }
+.pay-card-details span { display: block; }
+.pay-card-details span:first-child { font-size: 11px; }
 
 .back, .link-button {
   display: inline-flex; align-items: center; gap: 6px;

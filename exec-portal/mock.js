@@ -379,7 +379,7 @@ const MockApi = (() => {
           membershipSheetId: "", membershipTab: "Members", membershipYear: "", membershipFee: 10,
           execPasswordSet: true, adminPasswordSet: true, doorPasswordSet: false, publicSiteUrl: "../public/", peopleLocked,
           squareConfigured: false, squareEnvironment: "production", squareLocationId: "", squareTokenSet: false,
-          squarePassFee: false, squareFeePercent: 2.9, squareFeeFixed: 0.3
+          squarePassFee: false, squareFeePercent: 0, squareFeeFixed: 0
         } };
       case "saveSettings":
         if (!sessions.has(req.token)) return { ok: false, error: "NOT_LOGGED_IN" };

@@ -19,14 +19,14 @@
  *   SQUARE_ACCESS_TOKEN  The Square access token. Secret: never shown, logged or sent to a page.
  *   SQUARE_LOCATION_ID   The Square location the payments go to.
  *   SQUARE_ENV           "sandbox" for Square's test mode. Blank: real payments.
- *   SQUARE_PASS_FEE      Sandbox prototype only: "true" adds the fee in test mode. Live payments never add a card surcharge.
- *   SQUARE_FEE_PERCENT   Square's percentage fee when passed to the buyer. Default: 2.9.
- *   SQUARE_FEE_FIXED     Square's fixed dollar fee when passed to the buyer. Default: 0.30.
+ *   SQUARE_PASS_FEE      "true" adds the club's adjustable Square usage fee. Off by default.
+ *   SQUARE_FEE_PERCENT   Usage fee percentage of the outstanding ticket amount. Default: 0.
+ *   SQUARE_FEE_FIXED     Flat usage fee in dollars per Square checkout. Default: 0.
  *
  * Set automatically by the system (don't edit): DATA_SHEET_ID, IMAGE_FOLDER_ID.
  */
 
-const API_VERSION = "0.25.1";
+const API_VERSION = "0.26.0";
 const MEMBER_CACHE_SECONDS = 300;   // search data is re-read from the sheet at most every 5 min
 const SESSION_SECONDS = 21600;      // signed out after 6 h without use (the Apps Script cache maximum)
 const SESSION_RENEW_MS = 600000;    // while in use, those 6 h restart at most this often
@@ -34,8 +34,8 @@ const REMINDER_AFTER_HOURS = 48;   // an unpaid order gets a "please pay" remind
 const MAX_FAILED_LOGINS = 30;       // after this many wrong passwords in 10 min, new sign-ins pause for 10 min (people already signed in are unaffected)
 
 const DEFAULT_MEMBERSHIP_FEE = 12;   // until a fee is saved in Settings → Membership
-const DEFAULT_SQUARE_FEE_PERCENT = 2.9;
-const DEFAULT_SQUARE_FEE_FIXED = 0.3;
+const DEFAULT_SQUARE_FEE_PERCENT = 0;
+const DEFAULT_SQUARE_FEE_FIXED = 0;
 
 function getConfig_() {
   const props = PropertiesService.getScriptProperties();
@@ -73,8 +73,7 @@ function squareConfig_() {
     environment: sandbox ? "sandbox" : "production",
     base: sandbox ? "https://connect.squareupsandbox.com" : "https://connect.squareup.com",
     enabled: !!(token && locationId),
-    // Square Canada does not support card surcharges. Keep the prototype opt-in and sandbox-only.
-    passFee: sandbox && passRaw === "true",
+    passFee: passRaw === "true",
     feePercent: pct,
     feeFixed: fix
   };

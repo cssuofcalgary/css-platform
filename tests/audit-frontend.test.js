@@ -128,17 +128,21 @@ async function main() {
   cardSettings.run(read("exec-portal/strings.js"));
   cardSettings.run(read("exec-portal/settings.js"));
   cardSettings.run("showCardSettings({squareEnvironment:'production',squarePassFee:true})");
-  ok(cardSettings.el("set-card-fee-toggle").hidden && cardSettings.el("set-card-fee-fields").hidden && !cardSettings.el("set-card-pass-fee").checked,
-    "real-payment settings cannot expose or retain the sandbox fee toggle");
+  ok(!cardSettings.el("set-card-fee-toggle").hidden && !cardSettings.el("set-card-fee-fields").hidden && cardSettings.el("set-card-pass-fee").checked,
+    "an enabled Square usage fee can be adjusted in real-payment settings");
   cardSettings.run("showCardSettings({squareEnvironment:'sandbox',squarePassFee:true});");
   ok(!cardSettings.el("set-card-fee-toggle").hidden && !cardSettings.el("set-card-fee-fields").hidden,
-    "the explicitly enabled fee prototype remains available in test mode");
+    "the Square usage fee can also be tested in sandbox");
   cardSettings.el("set-card-env").value = "production";
   cardSettings.run("updateCardFeeFields()");
-  ok(cardSettings.el("set-card-fee-toggle").hidden && !cardSettings.el("set-card-pass-fee").checked,
-    "switching from test to real payments clears the buyer-fee selection");
+  ok(!cardSettings.el("set-card-fee-fields").hidden && cardSettings.el("set-card-pass-fee").checked,
+    "switching payment modes preserves the chosen usage-fee settings");
+  cardSettings.el("set-card-pass-fee").checked = false;
+  cardSettings.run("updateCardFeeFields()");
+  ok(cardSettings.el("set-card-fee-fields").hidden, "turning the usage fee off hides its amount controls");
   const strings = read("public/strings.js"), publicSrc = read("public/public.js"), ticketSrc = read("public/ticket.js");
   const T = page().run(strings + "; T");
+  ok(T.payByCardFee("$15.76", "$0.76") === "Includes $0.76 fee", "the fee subtext uses the requested short wording");
   ok(T.payByCard === "Pay by card" && T.payByEtransfer === "Pay by Interac e-transfer" && !!T.cardOpening && !!T.cardFailed && !!T.payNoteCard,
     "card payment strings live in public/strings.js");
   ok(T.cardNotCompleted === "Payment not completed yet — you can try card again or pay by e-transfer.", "the came-back-unpaid message is in public/strings.js");
@@ -173,10 +177,12 @@ async function main() {
   }
   const withFee = payPage();
   withFee.run(`showPaymentScreen(${unpaid({ cardEnabled: true, cardTotal: 15.76, cardFee: 0.76 })})`);
-  ok(withFee.el("page").innerHTML.includes(T.payByCardFee("$15.76", "$0.76")), "buyer card fee is shown upfront on the registration done button");
+  ok(withFee.el("page").innerHTML.includes(T.payByCardFee("$15.76", "$0.76")) && withFee.el("page").innerHTML.includes('id="card-details"') && withFee.el("page").innerHTML.includes(T.cardProvider),
+    "the Square provider and fee breakdown appear as subtext beneath the short payment button");
   withFee.run("apiReply={ok:false,error:'SOLD_OUT',message:'TEST Full.'}");
-  await withFee.run("payByCard('TESTSECRET','',T.payByCardFee('$15.76','$0.76'))");
-  ok(withFee.el("pay-card").textContent === T.payByCardFee("$15.76", "$0.76"), "after an error, the button keeps its fee wording");
+  await withFee.run("payByCard('TESTSECRET','',T.payByCard)");
+  ok(withFee.el("pay-card").textContent === T.payByCard && withFee.el("page").innerHTML.includes(T.payByCardFee("$15.76", "$0.76")),
+    "after an error, the short button label returns and the separate fee disclosure stays visible");
   on.run("apiReply={ok:true,url:'https://evil.example/square.link'}");
   await on.run("payByCard('TESTSECRET','https://events.ucalgarycss.ca/ticket.html?t=TESTSECRET')");
   ok(on.context.location.href === "https://events.ucalgarycss.ca/?e=test" && !on.el("card-error").hidden && !on.el("pay-card").disabled,

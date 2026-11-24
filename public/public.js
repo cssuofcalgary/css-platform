@@ -508,14 +508,16 @@ function showPaymentScreen(reply) {
   const firstPage = reply.tickets[0] && reply.tickets[0].page ? new URL(reply.tickets[0].page, location.href) : null;
   const cardSecret = firstPage ? firstPage.searchParams.get("t") || "" : "";
   const card = !!reply.cardEnabled && !free && !review && Number(reply.order.total) > 0 && !!cardSecret;
-  const cardLabel = Number(reply.cardFee) > 0 && Number(reply.cardTotal) > 0 ? T.payByCardFee(money(reply.cardTotal), money(reply.cardFee)) : T.payByCard;
+  const cardLabel = T.payByCard;
+  const cardDetails = Number(reply.cardFee) > 0 && Number(reply.cardTotal) > 0 ? T.payByCardFee(money(reply.cardTotal), money(reply.cardFee)) : "";
   $("page").innerHTML = `
     <article class="done">
       ${pandaImg(!review && free ? "success" : "almost")}
       <h1 class="page-title">${review ? T.reviewTitle : free ? T.registeredFree : T.almostDone}</h1>
       ${review ? `<p class="lead">${T.reviewNote}</p>` : free ? (emails.ticket ? "" : `<p class="keep-note"><strong>${T.freeNoEmailNote}</strong></p>`) : `
         ${card ? `
-        <button type="button" class="btn pay-card-button" id="pay-card" data-label="${escapeAttr(cardLabel)}">${escapeHtml(cardLabel)}</button>
+        <button type="button" class="btn pay-card-button" id="pay-card" aria-describedby="card-details" data-label="${escapeAttr(cardLabel)}">${escapeHtml(cardLabel)}</button>
+        <p class="pay-card-details" id="card-details"><span>${escapeHtml(T.cardProvider)}</span>${cardDetails ? `<span>${escapeHtml(cardDetails)}</span>` : ""}</p>
         <p class="form-error" id="card-error" role="alert" hidden></p>
         <h2 class="small-heading">${T.payByEtransfer}</h2>` : `
         <p class="lead">${T.sendEtransfer}</p>`}

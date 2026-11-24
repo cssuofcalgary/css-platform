@@ -454,45 +454,88 @@ function rest() {
 
   // ================= 9. Buyer pays Square fee + Audit regression checks =================
   {
-    // Fees are off by default and cannot be enabled for real payments, even through Script Properties.
+    // The club chooses the usage fee; it is off by default, with no automatic processing-rate assumptions.
     delete store.SQUARE_PASS_FEE;
     ok(run(`cardQuote_(1000).chargeCents`) === 1000, "an unset fee setting never adds a buyer fee");
     store.SQUARE_PASS_FEE = "true";
+    ok(run(`cardQuote_(1000).feeCents`) === 0, "enabling the fee without setting amounts still adds zero");
+    store.SQUARE_FEE_FIXED = "1";
     delete store.SQUARE_ENV;
-    ok(run(`cardQuote_(1000).chargeCents`) === 1000 && run(`squareConfig_().passFee`) === false, "production ignores an enabled buyer-fee property");
+    ok(run(`cardQuote_(1000).chargeCents`) === 1100 && run(`squareConfig_().passFee`) === true, "a chosen $1 usage fee works in production without gross-up");
+    ok(run(`cardQuote_(0).chargeCents`) === 0, "free orders never have a usage fee");
+    store.SQUARE_FEE_PERCENT = "2.8";
+    store.SQUARE_FEE_FIXED = "0.30";
     store.SQUARE_ENV = "sandbox";
     const q10 = run(`cardQuote_(1000)`), q25 = run(`cardQuote_(2500)`);
-    ok(q10.dueCents === 1000 && q10.feeCents === 61 && q10.chargeCents === 1061, "$10.00 order grosses up to $10.61 ($0.61 fee)");
-    ok(q25.dueCents === 2500 && q25.feeCents === 106 && q25.chargeCents === 2606, "$25.00 order grosses up to $26.06 ($1.06 fee)");
+    ok(q10.dueCents === 1000 && q10.feeCents === 58 && q10.chargeCents === 1058, "$10 plus the chosen 2.8% and $0.30 is exactly $10.58");
+    ok(q25.dueCents === 2500 && q25.feeCents === 100 && q25.chargeCents === 2600, "$25 plus the chosen 2.8% and $0.30 is exactly $26");
 
     run(`ord("BF1", "EV1", "awaiting", 10); tk("TKTBF1A", "BF1", "EV1", "awaiting", 10);`);
     const regRep = run(`registrationReply_(order("BF1"), [ticket("TKTBF1A")], "pay@css.test", ev("EV1"))`);
     const tixRep = call(`getTicket_(sec("TKTBF1A"))`).v;
-    ok(regRep.cardTotal === 10.61 && regRep.cardFee === 0.61 && tixRep.cardTotal === 10.61 && tixRep.cardFee === 0.61, "registration and ticket replies expose cardTotal ($10.61) and cardFee ($0.61)");
+    ok(regRep.cardTotal === 10.58 && regRep.cardFee === 0.58 && tixRep.cardTotal === 10.58 && tixRep.cardFee === 0.58 && regRep.order.total === 10 && tixRep.orderTotal === 10,
+       "both pages receive the usage fee and total upfront while e-transfer stays $10");
 
     const bfCreate = create("TKTBF1A");
     ok(bfCreate.ok && sq.lastLink.order && sq.lastLink.order.line_items.length === 2 &&
        sq.lastLink.order.line_items[0].base_price_money.amount === 1000 &&
-       sq.lastLink.order.line_items[1].name === "Online card processing fee" &&
-       sq.lastLink.order.line_items[1].base_price_money.amount === 61, "checkout sends itemized ticket ($10.00) + Online card processing fee ($0.61)");
+       sq.lastLink.order.line_items[1].name === "Square usage fee" &&
+       sq.lastLink.order.line_items[1].base_price_money.amount === 58, "checkout itemizes the $10 ticket and $0.58 Square usage fee");
 
-    pay(order("BF1").squareOrderId, 1061);
+    pay(order("BF1").squareOrderId, 1058);
     const bfConf = confirm("TKTBF1A");
     const bfOrd = order("BF1");
     ok(bfConf.v.paid === true && bfOrd.status === "paid" && bfOrd.received === "10" && !/more than was owed/.test(bfOrd.notes),
-       "when $10.61 arrives, $10.00 ticket revenue is recorded in received with NO false overpayment warning");
+       "when $10.58 arrives, $10 ticket revenue is recorded without a false overpayment warning");
     const bfLog = logOf("order.paid.card", "EV-BF1")[0];
-    ok(bfLog && bfLog.details.amount === 10 && bfLog.details.fee === 0.61 && bfLog.details.charged === 10.61, "Activity details record ticket amount ($10), fee ($0.61) and total charged ($10.61)");
+    ok(bfLog && bfLog.details.amount === 10 && bfLog.details.fee === 0.58 && bfLog.details.charged === 10.58, "Activity separately records the ticket amount, usage fee and charged total");
+
+    run(`ord("BFOLD", "EV1", "awaiting", 10); tk("TKTBFOLD", "BFOLD", "EV1", "awaiting", 10);`);
+    create("TKTBFOLD");
+    sq.orders[order("BFOLD").squareOrderId].line_items[1].name = "Online card processing fee";
+    pay(order("BFOLD").squareOrderId, 1058);
+    ok(confirm("TKTBFOLD").v.paid && order("BFOLD").received === "10", "older checkout fee labels are still recognized during reconciliation");
+
+    run(`ord("BFPART", "EV1", "awaiting", 10); tk("TKTBFPART", "BFPART", "EV1", "awaiting", 10);`);
+    create("TKTBFPART");
+    const installmentOrder = order("BFPART").squareOrderId;
+    pay(installmentOrder, 500); confirm("TKTBFPART");
+    pay(installmentOrder, 300); confirm("TKTBFPART");
+    pay(installmentOrder, 258);
+    ok(confirm("TKTBFPART").v.paid && order("BFPART").received === "10" && !run(`TBL.Refunds.some(r => r.orderId === "BFPART")`),
+       "three separately confirmed tenders allocate exactly the ticket total without a phantom overpayment");
+
+    store.SQUARE_FEE_PERCENT = "0"; store.SQUARE_FEE_FIXED = "1";
+    run(`ord("BFGRP", "EV1", "awaiting", 25); tk("TKTBFGRPA", "BFGRP", "EV1", "awaiting", 12.5); tk("TKTBFGRPB", "BFGRP", "EV1", "awaiting", 12.5);`);
+    const groupFee = create("TKTBFGRPA");
+    ok(sq.lastLink.order.line_items[1].base_price_money.amount === 100 && sq.lastLink.order.line_items[0].base_price_money.amount === 2500,
+       "a $1 flat usage fee applies once to a two-person order, not once per ticket");
+    ok(create("TKTBFGRPB").v.url === groupFee.v.url, "all group members reuse the same checkout at the current fee");
+    store.SQUARE_FEE_FIXED = "0.65";
+    const changedFeeLink = create("TKTBFGRPB");
+    ok(changedFeeLink.v.url !== groupFee.v.url && sq.lastLink.order.line_items[1].base_price_money.amount === 65,
+       "changing the usage fee replaces the cached checkout with the newly quoted fee");
+    store.SQUARE_PASS_FEE = "false";
+    const feeOffLink = create("TKTBFGRPA");
+    ok(feeOffLink.v.url !== changedFeeLink.v.url && sq.lastLink.quick_pay.price_money.amount === 2500,
+       "disabling the fee replaces a cached fee-bearing checkout with the ticket price alone");
+    store.SQUARE_PASS_FEE = "true";
 
     // Settings can update fee toggle/rates without re-calling Square when keys didn't change
     run(`var __cfg2 = getConfig_; getConfig_ = function () { var c = __cfg2(); c.password = "exec-pass-1"; c.adminPassword = "admin-pass-2"; return c; };`);
     const callsBefore = fetchStub.calls.length;
-    const productionFee = call(`saveSettings_(S, "", { squareEnvironment: "production", squarePassFee: true })`);
-    ok(productionFee.error === "BAD_REQUEST" && store.SQUARE_ENV === "sandbox" && fetchStub.calls.length === callsBefore,
-       "Settings refuses a real-payment surcharge before saving or calling Square");
+    delete store.SQUARE_ENV;
+    const productionFee = call(`saveSettings_(S, "", { squarePassFee: true, squareFeePercent: "0", squareFeeFixed: "1" })`);
+    ok(productionFee.ok && store.SQUARE_FEE_FIXED === "1" && run(`cardQuote_(1000).chargeCents`) === 1100 && fetchStub.calls.length === callsBefore,
+       "Settings saves the chosen live usage fee without revalidating unchanged Square keys");
+    const badFee = call(`saveSettings_(S, "", { squareFeePercent: "-1", squareFeeFixed: "2" })`);
+    const badFixed = call(`saveSettings_(S, "", { squareFeePercent: "2", squareFeeFixed: "not-money" })`);
+    ok(badFee.error === "BAD_REQUEST" && badFixed.error === "BAD_REQUEST" && store.SQUARE_FEE_FIXED === "1" && store.SQUARE_FEE_PERCENT === "0",
+       "invalid fee settings are rejected without partially saving the valid fields");
+    store.SQUARE_ENV = "sandbox";
     const feeSave = call(`saveSettings_(S, "", { squarePassFee: true, squareFeePercent: "2.8", squareFeeFixed: "0.30" })`);
     run(`getConfig_ = __cfg2;`);
-    ok(feeSave.ok && feeSave.v.changed.indexOf("card fee settings") !== -1 && fetchStub.calls.length === callsBefore && store.SQUARE_FEE_PERCENT === "2.8",
+    ok(feeSave.ok && feeSave.v.changed.indexOf("Square usage fee") !== -1 && fetchStub.calls.length === callsBefore && store.SQUARE_FEE_PERCENT === "2.8",
        "Settings saves updated card fee rates without extra Square calls");
     delete store.SQUARE_FEE_PERCENT; delete store.SQUARE_FEE_FIXED;
     store.SQUARE_PASS_FEE = "false";
