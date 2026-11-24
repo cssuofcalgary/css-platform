@@ -80,7 +80,9 @@ node tests/membershipform.test.js
 node tests/membershipform-ui.test.js
 ```
 
-Each prints PASS/FAIL lines and exits with an error if anything fails. Run all 36 suites before a deploy:
+`people.test.js` covers pasted rosters, admin permissions, the registration lock, personal-password setup and sign-in, hashed storage, password resets, revoked sessions and deactivation. `execaccounts-ui.test.js` covers the first-time password screen and remembered names from existing sessions.
+
+Each prints PASS/FAIL lines and exits with an error if anything fails. Run every suite before a deploy:
 
 ```bash
 for f in tests/*.test.js; do node "$f"; done

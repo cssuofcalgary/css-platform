@@ -192,7 +192,12 @@ async function signInWith(action, button, label) {
   button.disabled = false;
   button.textContent = label;
   if (!reply.ok) return setLoginError(errorText(reply));
+  $("password").value = "";
+  if (reply.needsPasswordSetup) return openExecPasswordSetup(reply);
+  completeSignIn(reply, action);
+}
 
+function completeSignIn(reply, action) {
   state.token = reply.token;
   state.name = reply.name;
   state.role = reply.role || "exec";
@@ -222,6 +227,7 @@ function signOutLocally() {
 // ---- Member search ----------------------------------------------------------
 
 function showApp() {
+  if (state.role !== "door" && state.name) rememberName(state.name); // also backfill names from older saved sessions
   $("login-view").hidden = true;
   $("app-view").hidden = false;
   $("who-name").textContent = state.name;

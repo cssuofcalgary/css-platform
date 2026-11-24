@@ -15,7 +15,7 @@ function openAdminDialog() {
 
 async function onAdminSubmit(ev) {
   ev.preventDefault();
-  if (state.role === "admin") {   // leaving admin mode = signing out; the exec password gets you back in as a normal exec
+  if (state.role === "admin") {   // leaving admin mode = signing out; a personal password signs back in as an exec
     $("admin-dialog").close();
     await onLogout();
     return;

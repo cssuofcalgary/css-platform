@@ -98,7 +98,10 @@ function route_(req) {
 
     // ---- Exec ----
     case "login":
-      return login_(req.password, req.name);
+      return personalLogin_(req.password, req.name);
+
+    case "finishExecSetup":
+      return finishExecSetup_(req.setupToken, req.password);
 
     case "loginDoor":
       return loginDoor_(req.password, req.name);
@@ -367,6 +370,16 @@ function route_(req) {
     case "savePerson":
       return savePerson_(requireAdmin_(req.token), req.person);
 
+    case "previewPeopleImport":
+      requireAdmin_(req.token);
+      return previewPeopleImport_(req.text);
+
+    case "importPeople":
+      return importPeople_(requireAdmin_(req.token), req.text);
+
+    case "resetPersonPassword":
+      return resetPersonPassword_(requireAdmin_(req.token), req.id);
+
     case "removePerson":
       return removePerson_(requireAdmin_(req.token), req.id);
 
@@ -457,10 +470,11 @@ function warmCaches_(doorOnly) {
 }
 
 /** A new signed-in session. It carries the current "epoch"; signing everyone out changes the epoch. */
-function startSession_(name, role) {
+function startSession_(name, role, person) {
   const token = Utilities.getUuid();
   CacheService.getScriptCache().put("session_" + token,
-    JSON.stringify({ name: name, role: role, sid: Utilities.getUuid().replace(/-/g, "").slice(0, 12), since: new Date().toISOString(), epoch: currentEpoch_() }), SESSION_SECONDS);
+    JSON.stringify({ name: name, role: role, sid: Utilities.getUuid().replace(/-/g, "").slice(0, 12), since: new Date().toISOString(), epoch: currentEpoch_(),
+      ...(person ? { personId: person.id, personVersion: person.authVersion } : {}) }), SESSION_SECONDS);
   return token;
 }
 
@@ -469,6 +483,7 @@ function requireSession_(token) {
   if (!raw) throw new ApiError_("NOT_LOGGED_IN", "Please log in again.");
   const session = JSON.parse(raw);
   if ((session.epoch || "0") !== currentEpoch_()) throw new ApiError_("NOT_LOGGED_IN", "Please log in again.");   // everyone was signed out
+  checkExecAccountSession_(session);
   touchSession_(token, session);
   if (session.role === "door") checkDoorSession_(ROUTE_ACTION_);
   renewSession_(token, session);

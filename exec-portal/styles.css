@@ -677,7 +677,7 @@ button.all-row:hover { border-color: var(--border-2); }
 }
 /* Settings → People */
 .people-list { display: grid; gap: 6px; }
-.people-row { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1.2fr) 44px 32px; gap: 6px; align-items: center; }
+.people-row { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1.2fr) 44px 120px 32px; gap: 6px; align-items: center; }
 .people-row.saving { opacity: .6; }
 .people-row .toggle { justify-self: center; }
 .people-row .people-remove { margin-left: 0; }
@@ -693,5 +693,10 @@ button.all-row:hover { border-color: var(--border-2); }
   .people-row .people-dept, .people-row .people-discord { grid-column: 1 / -1; }
   .people-row .toggle { grid-column: 2; grid-row: 1; }
   .people-row .people-remove { grid-column: 3; grid-row: 1; }
+  .people-row .people-reset { grid-column: 1 / -1; justify-self: start; }
 }
 .task-detail-buttons { align-items: center; }
+.people-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.people-lock { display: flex; align-items: center; gap: 10px; margin: 14px 0 0; }
+.people-import-preview { max-height: 260px; overflow: auto; border: 1px solid var(--border); border-radius: var(--radius); padding: 4px 12px; }
+.people-import-row { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 12px; padding: 6px 0; }

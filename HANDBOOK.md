@@ -4,10 +4,13 @@ For execs. No tech knowledge needed.
 
 ## Signing in
 1. Open the **Exec Portal**: https://exec.ucalgarycss.ca/ (bookmark it). It opens on the **Overview**: what needs attention, upcoming events and recent activity. The menu is on the left.
-2. Type the **exec password** (ask the President) and **your name**. Your name goes next to every change you make.
+2. Type **your name** and **your own password**. The first time, use the **club password** (ask the President): a screen opens where you create your own password. Your name goes next to every change you make.
 3. You stay signed in while you keep using the portal, and are signed out after about 6 hours without it. **Sign out** on shared computers.
 
 Wrong password 30 times → sign-in pauses for 10 minutes.
+Forgot your password? Ask an admin to use **Settings → People → Reset password** beside your name. Sign in with the club password, then choose a replacement. Admins cannot view personal passwords.
+
+**Settings → People → Paste a list:** paste one name per line, optionally followed by a comma and department (for example `Kevin B, Events`). Preview, then **Add people**. Names already on the list are skipped without replacing their department or Discord ID. **Only listed execs can sign in** blocks new registrations until an admin adds the name; the settings password still allows admin recovery.
 The **sun/moon button** (bottom of the menu) switches light and dark. Tap the **CSS logo** to refresh the page.
 
 ## Members tab: sign-ups, payments and search

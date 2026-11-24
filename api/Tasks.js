@@ -13,7 +13,7 @@ const TASK_DONE_SHOWN_DAYS = 30;
 // ---- Team (who tasks can be given to) ------------------------------------------------------------
 
 function teamView_(r) {
-  return { id: r.id, name: r.name, department: TASK_DEPARTMENTS.indexOf(r.department) !== -1 ? r.department : "", discordId: String(r.discordId || ""), active: isOn_(r.active), sort: Number(r.sort) || 0 };
+  return { id: r.id, name: r.name, department: TASK_DEPARTMENTS.indexOf(r.department) !== -1 ? r.department : "", discordId: String(r.discordId || ""), active: isOn_(r.active), sort: Number(r.sort) || 0, passwordSet: !!r.passwordHash };
 }
 
 /** The whole team list (on and off), in its saved order. */
@@ -54,6 +54,7 @@ function teamInsert_(name, department) {
  */
 function teamAddOnSignIn_(name) {
   try {
+    if (peopleLocked_()) return;
     const clean = memberText_(name, 60);
     const key = teamNameKey_(clean);
     if (!key) return;
@@ -64,7 +65,7 @@ function teamAddOnSignIn_(name) {
     let row = null;
     try {
       delete DB_.rows["Team"];
-      if (!there()) row = teamInsert_(clean, "");
+      if (!peopleLocked_() && !there()) row = teamInsert_(clean, "");
     } finally {
       lock.releaseLock();
     }
@@ -291,6 +292,7 @@ function taskNewRow_(f) {
 
 /** CALL WHILE HOLDING THE SCRIPT LOCK. A task given to someone not on the People list adds them (department: the task's, unless General). */
 function taskAddOwner_(session, name, department) {
+  if (peopleLocked_()) return null;
   const row = teamInsert_(name, department);
   log_(session.name, "person.added", row.id, { name: name, source: "task" });
   return row;

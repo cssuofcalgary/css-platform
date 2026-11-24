@@ -29,6 +29,7 @@ function getSettings_(token) {
       membershipTab: config.membershipTab,
       membershipYear: config.membershipYear,
       membershipFee: config.membershipFee,
+      peopleLocked: peopleLocked_(),
       execPasswordSet: !!config.password,
       adminPasswordSet: !!config.adminPassword,
       doorPasswordSet: !!props.getProperty("SCANNER_PASSWORD"),
@@ -52,6 +53,11 @@ function saveSettings_(session, token, input) {
   const emailOk = function (v) { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v); };
   const text = function (v, max) { return String(v === undefined || v === null ? "" : v).trim().slice(0, max); };
   let notes = "";
+
+  if (input.peopleLocked !== undefined) {
+    if (typeof input.peopleLocked !== "boolean") throw new ApiError_("BAD_REQUEST", "Choose whether the People list is locked.");
+    if (input.peopleLocked !== peopleLocked_()) { updates.PEOPLE_LOCKED = String(input.peopleLocked); changed.push("People list lock"); }
+  }
 
   if (input.etransferEmail !== undefined) {
     const v = text(input.etransferEmail, 120).toLowerCase();

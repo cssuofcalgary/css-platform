@@ -32,7 +32,7 @@ const TABLES = {
   Tasks: ["id", "title", "department", "owner", "status", "due", "notes", "link", "createdBy", "createdAt", "updatedBy", "updatedAt",
           "doneAt", "discordMessageId", "removedAt", "removedBy", "remind", "remindSent", "discordRefs", "ownerDiscordId"],
   TaskUpdates: ["id", "taskId", "text", "by", "source", "status", "createdAt", "discordMessageId"],
-  Team: ["id", "name", "department", "discordId", "active", "sort"],
+  Team: ["id", "name", "department", "discordId", "active", "sort", "passwordHash", "passwordSetAt", "authVersion"],
   Log: ["time", "who", "action", "target", "details"]
 };
 

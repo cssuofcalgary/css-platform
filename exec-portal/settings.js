@@ -7,6 +7,8 @@ async function openSettingsTab() {
   const reply = await api("getSettings");
   if (!reply.ok) return handleEventError(reply, $("set-status"));
   const s = reply.settings;
+  $("people-locked").checked = !!s.peopleLocked;
+  $("people-locked").disabled = false;
   $("set-status").textContent = "";
   $("set-etransfer").value = s.etransferEmail;
   $("set-contact").value = s.contactEmail;
@@ -218,6 +220,7 @@ function personRowHtml(p) {
     <select class="people-dept" aria-label="${escapeHtml(T.teamDept)}"><option value="">${escapeHtml(T.peopleNoDept)}</option>${depts.map((d) => `<option${d === dept ? " selected" : ""}>${escapeHtml(d)}</option>`).join("")}</select>
     <input class="people-discord" inputmode="numeric" maxlength="20" autocomplete="off" aria-label="${escapeHtml(T.teamDiscord)}" placeholder="${escapeHtml(T.teamDiscord)}" value="${escapeHtml(p.discordId || "")}">
     <input type="checkbox" class="toggle people-active" aria-label="${escapeHtml(T.teamActive)}"${peopleActive(p.active) ? " checked" : ""}>
+    <button type="button" class="secondary small-button people-reset"${p.passwordSet ? "" : " disabled"}>${escapeHtml(p.passwordSet ? T.peopleReset : T.peoplePasswordNotSet)}</button>
     <button type="button" class="icon-btn people-remove" title="${escapeHtml(T.peopleRemove)}" aria-label="${escapeHtml(T.peopleRemove)}"><svg><use href="#i-x"/></svg></button>
   </div>`;
 }
@@ -305,6 +308,20 @@ $("people-list").addEventListener("keydown", (e) => {
   if (e.key === "Enter" && e.target.matches("input:not([type=checkbox])")) { e.preventDefault(); e.target.blur(); }
 });
 $("people-list").addEventListener("click", async (e) => {
+  const reset = e.target.closest(".people-reset");
+  if (reset) {
+    const row = reset.closest(".people-row");
+    if (peopleSaving.get(row)) await peopleSaving.get(row).done;
+    const name = row.querySelector(".people-name").value.trim();
+    if (!(await askConfirm(T.peopleResetConfirm(name), T.peopleReset))) return;
+    reset.disabled = true;
+    const reply = await api("resetPersonPassword", { id: row.dataset.id });
+    if (!reply.ok) { reset.disabled = false; return peopleFail(reply); }
+    reset.textContent = T.peoplePasswordNotSet;
+    sharePeople(reply.team);
+    peopleSay(T.peopleResetDone(name), "good");
+    return;
+  }
   const b = e.target.closest(".people-remove");
   if (!b) return;
   const row = b.closest(".people-row");
@@ -337,3 +354,76 @@ $("people-device-clear").addEventListener("click", () => {
   syncDeviceNames();
   peopleSay(T.peopleDeviceCleared, "good");
 });
+
+$("people-locked").addEventListener("change", async () => {
+  const toggle = $("people-locked");
+  const locked = toggle.checked;
+  toggle.disabled = true;
+  const reply = await api("saveSettings", { settings: { peopleLocked: locked } });
+  toggle.disabled = false;
+  if (!reply.ok) {
+    toggle.checked = !locked;
+    return handleEventError(reply, $("people-lock-result"));
+  }
+  $("people-lock-result").textContent = locked ? T.peopleLockSaved : T.peopleUnlockSaved;
+});
+
+// Preview first. The server checks every row and skips existing names again when Add is pressed.
+let peopleImportText = "", peopleImportRequest = 0;
+$("people-paste").addEventListener("click", async () => {
+  await Promise.all(Array.from($("people-list").querySelectorAll(".people-row"), (row) => peopleSaving.get(row)?.done));
+  $("people-paste-text").value = "";
+  $("people-paste-text").placeholder = T.peoplePastePlaceholder;
+  $("people-import-preview").hidden = true;
+  $("people-import-result").textContent = "";
+  $("people-import-save").disabled = true;
+  peopleImportText = "";
+  $("people-import-dialog").showModal();
+  $("people-paste-text").focus();
+});
+$("people-paste-text").addEventListener("input", () => {
+  peopleImportRequest++;
+  peopleImportText = "";
+  $("people-import-preview").hidden = true;
+  $("people-import-result").textContent = "";
+  $("people-import-save").disabled = true;
+});
+$("people-import-review").addEventListener("click", async () => {
+  const text = $("people-paste-text").value;
+  const request = ++peopleImportRequest;
+  $("people-import-review").disabled = true;
+  $("people-import-save").disabled = true;
+  const reply = await api("previewPeopleImport", { text });
+  $("people-import-review").disabled = false;
+  if (request !== peopleImportRequest || !$("people-import-dialog").open) return;
+  if (!reply.ok) return peopleImportFail(reply);
+  peopleImportText = text;
+  $("people-import-preview").innerHTML = `<ul class="plain-list">${reply.rows.map((p) =>
+    `<li class="people-import-row"><span>${escapeHtml(p.name)}${p.department ? " · " + escapeHtml(p.department) : ""}</span><span class="muted small">${escapeHtml(p.add ? T.peopleImportAdd : T.peopleImportSkip)}</span></li>`).join("")}</ul>`;
+  $("people-import-preview").hidden = false;
+  $("people-import-result").className = "muted small";
+  $("people-import-result").textContent = T.peopleImportSummary(reply.added, reply.skipped);
+  $("people-import-save").disabled = !reply.added;
+});
+function peopleImportFail(reply) {
+  if (reply.error === "NOT_LOGGED_IN") $("people-import-dialog").close();
+  handleEventError(reply, $("people-import-result"));
+}
+$("people-import-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const save = $("people-import-save");
+  if (save.disabled || !peopleImportText || peopleImportText !== $("people-paste-text").value) return;
+  save.disabled = $("people-import-review").disabled = $("people-import-cancel").disabled = $("people-paste-text").disabled = true;
+  save.textContent = T.peopleImportAdding;
+  const reply = await api("importPeople", { text: peopleImportText });
+  $("people-import-review").disabled = $("people-import-cancel").disabled = $("people-paste-text").disabled = false;
+  save.textContent = T.peopleImport;
+  if (!reply.ok) { save.disabled = false; return peopleImportFail(reply); }
+  sharePeople(reply.team);
+  renderPeople(reply.team || []);
+  $("people-import-dialog").close();
+  peopleSay(T.peopleImportDone(reply.added, reply.skipped), "good");
+});
+$("people-import-cancel").addEventListener("click", () => $("people-import-dialog").close());
+$("people-import-dialog").addEventListener("cancel", (event) => { if ($("people-paste-text").disabled) event.preventDefault(); });
+$("people-import-dialog").addEventListener("close", () => { peopleImportRequest++; });

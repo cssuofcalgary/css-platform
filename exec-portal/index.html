@@ -9,7 +9,7 @@
   <link rel="icon" href="assets/css-logo.png" type="image/png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Fraunces:opsz,wght@9..144,500;9..144,600&family=JetBrains+Mono:wght@400;500&display=swap">
-  <link rel="stylesheet" href="styles.css?v=1.8.1">
+  <link rel="stylesheet" href="styles.css?v=1.9.0">
   <link rel="stylesheet" href="theme.css?v=0.13.5">
   <link rel="stylesheet" href="peekaboo.css?v=1.0.1">
   <link rel="stylesheet" href="forest.css?v=1.0.7">
@@ -714,10 +714,15 @@
       <div class="card editor" id="set-people-card" data-pane="people">
         <div class="row-between">
           <div><h3 class="sub-title" data-t="peopleTitle"></h3></div>
-          <button id="people-add" class="secondary small-button" type="button" data-t="teamAdd"></button>
+          <div class="people-actions">
+            <button id="people-paste" class="secondary small-button" type="button" data-t="peoplePaste"></button>
+            <button id="people-add" class="secondary small-button" type="button" data-t="teamAdd"></button>
+          </div>
         </div>
+        <label class="people-lock"><input id="people-locked" type="checkbox" class="toggle" disabled><span data-t="peopleLocked"></span></label>
+        <p id="people-lock-result" class="muted small" role="status"></p>
         <p id="people-bot" class="muted small" hidden></p>
-        <div class="people-row people-head" aria-hidden="true"><span data-t="teamName"></span><span data-t="teamDept"></span><span data-t="teamDiscord"></span><span data-t="teamActive"></span><span></span></div>
+        <div class="people-row people-head" aria-hidden="true"><span data-t="teamName"></span><span data-t="teamDept"></span><span data-t="teamDiscord"></span><span data-t="teamActive"></span><span data-t="passwordLabel"></span><span></span></div>
         <div id="people-list" class="people-list"></div>
         <p id="people-result" class="muted small" role="status"></p>
         <div class="cred people-device">
@@ -1164,12 +1169,42 @@
     </div>
   </dialog>
 
+  <dialog id="people-import-dialog" class="edit-dialog">
+    <form id="people-import-form" class="editor">
+      <h2 data-t="peoplePaste"></h2>
+      <label for="people-paste-text" data-t="peoplePasteLabel"></label>
+      <textarea id="people-paste-text" rows="8" maxlength="20000" spellcheck="false"></textarea>
+      <div id="people-import-preview" class="people-import-preview" hidden></div>
+      <p id="people-import-result" class="muted small" role="status"></p>
+      <div class="button-row">
+        <button id="people-import-cancel" class="secondary" type="button" data-t="cancel"></button>
+        <button id="people-import-review" class="secondary" type="button" data-t="peoplePreview"></button>
+        <button id="people-import-save" class="primary" type="submit" data-t="peopleImport" disabled></button>
+      </div>
+    </form>
+  </dialog>
+  <dialog id="exec-password-dialog" class="edit-dialog">
+    <form id="exec-password-form" class="editor">
+      <h2 data-t="execCreatePassword"></h2>
+      <p id="exec-password-name" class="muted"></p>
+      <label for="exec-password-new" data-t="execNewPassword"></label>
+      <input id="exec-password-new" type="password" autocomplete="new-password" minlength="8" maxlength="72" required>
+      <label for="exec-password-again" data-t="execRepeatPassword"></label>
+      <input id="exec-password-again" type="password" autocomplete="new-password" minlength="8" maxlength="72" required>
+      <p id="exec-password-error" class="error" role="alert" hidden></p>
+      <div class="button-row">
+        <button id="exec-password-cancel" type="button" class="secondary" data-t="cancel"></button>
+        <button id="exec-password-save" type="submit" class="primary" data-t="execSavePassword"></button>
+      </div>
+    </form>
+  </dialog>
   <script src="config.js?v=0.3.7"></script>
-  <script src="strings.js?v=1.12.1"></script>
-  <script src="mock.js?v=0.5.1"></script>
+  <script src="strings.js?v=1.13.0"></script>
+  <script src="mock.js?v=0.6.0"></script>
   <script src="panda.js?v=1.5.1"></script>
   <script src="peekaboo.js?v=1.0.0"></script>
-  <script src="app.js?v=1.8.1"></script>
+  <script src="app.js?v=1.9.0"></script>
+  <script src="execaccounts.js?v=1.0.0"></script>
   <script src="events.js?v=1.8.0"></script>
   <script src="emailstatus.js?v=1.0.2"></script>
   <script src="waitlist.js?v=1.6.0"></script>
@@ -1178,7 +1213,7 @@
   <script src="finance.js?v=1.4.2"></script>
   <script src="money.js?v=1.1.0"></script>
   <script src="activity.js?v=0.5.0"></script>
-  <script src="settings.js?v=0.10.1"></script>
+  <script src="settings.js?v=0.11.0"></script>
   <script src="emails.js?v=0.4.0"></script>
   <script src="mailall.js?v=0.3.8"></script>
   <script src="partners.js?v=1.6.2"></script>
@@ -1191,6 +1226,6 @@
   <script src="membernotes.js?v=1.0.1"></script>
   <script src="tasks.js?v=1.1.1"></script>
   <script src="overview.js?v=1.2.2"></script>
-  <script src="shell.js?v=0.9.3"></script>
+  <script src="shell.js?v=0.9.4"></script>
 </body>
 </html>

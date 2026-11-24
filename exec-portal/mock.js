@@ -19,18 +19,21 @@ const MockApi = (() => {
 
   let ready = null;
   function loadLogic() {
-    ready = ready || new Promise((resolve, reject) => {
+    ready = ready || Promise.all(["Members.js", "People.js", "Bcrypt.js"].map((file) => new Promise((resolve, reject) => {
       const s = document.createElement("script");
-      s.src = "../api/Members.js";
+      s.src = "../api/" + file;
       s.onload = resolve;
-      s.onerror = () => reject(new Error("Could not load ../api/Members.js"));
+      s.onerror = () => reject(new Error("Could not load " + file));
       document.head.appendChild(s);
-    });
+    })));
     return ready;
   }
 
   const sessions = new Set();
   const sessionNames = {};
+  const sessionPeople = {};
+  const accountHashes = {}, accountVersions = {}, setupTokens = {};
+  let peopleLocked = false;
 
   // ---- Tasks (made-up team and tasks, kept in memory until the page reloads) ----
   const day = (n) => { const d = new Date(new Date().toLocaleDateString("en-CA", { timeZone: "America/Edmonton" }) + "T12:00:00Z"); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
@@ -67,6 +70,27 @@ const MockApi = (() => {
   // People: one list for sign-in names and "Who" (matched ignoring case and extra spaces)
   const nameKey = (s) => String(s || "").trim().replace(/\s+/g, " ").toLowerCase();
   const findPerson = (name) => taskTeam.find((p) => nameKey(p.name) === nameKey(name));
+  const demoTeam = () => taskTeam.map((p) => ({ ...p, passwordSet: !!accountHashes[p.id] }));
+  function demoSignIn(name, role, person) {
+    const token = (role === "admin" ? "demo-admin-" : "demo-") + Math.random().toString(36).slice(2);
+    sessions.add(token);
+    sessionNames[token] = name;
+    if (person) sessionPeople[token] = { id: person.id, version: accountVersions[person.id] };
+    return { ok: true, token, name, role };
+  }
+  function demoImport(text, save) {
+    const parsed = parsePeoplePaste_(text, TASK_DEPTS);
+    if (parsed.error) return { ok: false, error: "BAD_REQUEST", message: parsed.error };
+    const seen = new Set(taskTeam.map((p) => nameKey(p.name)));
+    let added = 0;
+    const rows = parsed.rows.map((p) => {
+      const add = !seen.has(nameKey(p.name));
+      seen.add(nameKey(p.name));
+      if (add) { added++; if (save) addPerson(p.name, p.department); }
+      return { ...p, add };
+    });
+    return { ok: true, rows, added, skipped: rows.length - added, ...(save ? { team: demoTeam() } : {}) };
+  }
   function addPerson(name, department) {
     const clean = String(name || "").trim().replace(/\s+/g, " ");
     if (!clean || findPerson(clean)) return;
@@ -98,7 +122,7 @@ const MockApi = (() => {
     switch (req.action) {
       case "listTasks":
         tasks.forEach(withReminders);
-        return { ok: true, tasks: JSON.parse(JSON.stringify(tasks)), team: JSON.parse(JSON.stringify(taskTeam)),
+        return { ok: true, tasks: JSON.parse(JSON.stringify(tasks)), team: demoTeam(),
           discord: { ready: true, posting: true, reading: true, synced: 0, error: "" } };
       case "saveTask": {
         const input = req.task || {};
@@ -107,8 +131,8 @@ const MockApi = (() => {
         if (title.length > 140) return { ok: false, error: "BAD_REQUEST", message: "Keep the task under 140 characters." };
         const typed = String(input.owner || "").trim().replace(/\s+/g, " ");
         let person = findPerson(typed);
-        if (typed && !person) { addPerson(typed, input.department && input.department !== "General" ? input.department : ""); person = findPerson(typed); }
-        const fields = { title, owner: person ? person.name : "", due: input.due || "", department: input.department || (person && person.department) || "General",
+        if (typed && !person && !peopleLocked) { addPerson(typed, input.department && input.department !== "General" ? input.department : ""); person = findPerson(typed); }
+        const fields = { title, owner: person ? person.name : typed, due: input.due || "", department: input.department || (person && person.department) || "General",
           notes: input.notes || "", link: input.link || "", remind: cleanRemind(input.remind), updatedBy: me, updatedAt: new Date().toISOString() };
         if (input.id) {
           const t = find(input.id);
@@ -133,12 +157,23 @@ const MockApi = (() => {
         if (p.id && !row) return { ok: false, error: "NOT_FOUND", message: "That person isn't on the list any more." };
         if (!row) { row = { id: "tm" + (++taskSeq), sort: taskTeam.length + 1 }; taskTeam.push(row); }
         Object.assign(row, { name, department: p.department || "", discordId, active: p.active !== false });
-        return { ok: true, person: { ...row }, team: JSON.parse(JSON.stringify(taskTeam)) };
+        return { ok: true, person: { ...row, passwordSet: !!accountHashes[row.id] }, team: demoTeam() };
+      }
+      case "previewPeopleImport": case "importPeople":
+        if (!isAdmin) return { ok: false, error: "ADMIN_ONLY" };
+        return demoImport(req.text, req.action === "importPeople");
+      case "resetPersonPassword": {
+        if (!isAdmin) return { ok: false, error: "ADMIN_ONLY" };
+        const row = taskTeam.find((p) => p.id === req.id);
+        if (!row) return { ok: false, error: "NOT_FOUND" };
+        delete accountHashes[row.id];
+        accountVersions[row.id] = Math.random().toString(36);
+        return { ok: true, team: demoTeam() };
       }
       case "removePerson":
         if (!isAdmin) return { ok: false, error: "ADMIN_ONLY" };
         taskTeam = taskTeam.filter((p) => p.id !== req.id);
-        return { ok: true, team: JSON.parse(JSON.stringify(taskTeam)) };
+        return { ok: true, team: demoTeam() };
       case "setTaskStatus": {
         const t = find(req.id);
         if (!t) return { ok: false, error: "NOT_FOUND", message: "That task isn't there any more." };
@@ -178,18 +213,46 @@ const MockApi = (() => {
     await loadLogic();
     await new Promise((r) => setTimeout(r, 250));   // feel like a real network call
     const members = rowsToMembers_([HEADERS, ...ROWS]);
+    const signedPerson = sessionPeople[req.token];
+    if (signedPerson) {
+      const person = taskTeam.find((p) => p.id === signedPerson.id);
+      if (!person || person.active === false || signedPerson.version !== accountVersions[person.id]) {
+        sessions.delete(req.token);
+        return { ok: false, error: "NOT_LOGGED_IN" };
+      }
+    }
 
     switch (req.action) {
       case "login": {
-        const role = req.password === DEMO_ADMIN_PASSWORD ? "admin" : req.password === DEMO_PASSWORD ? "exec" : "";
-        if (!role) return { ok: false, error: "WRONG_PASSWORD" };
         if (!String(req.name || "").trim()) return { ok: false, error: "NAME_NEEDED" };
-        const token = (role === "admin" ? "demo-admin-" : "demo-") + Math.random().toString(36).slice(2);
-        sessions.add(token);
-        sessionNames[token] = req.name.trim();
-        addPerson(req.name);   // like the real sign-in: a new name joins People
         const known = findPerson(req.name);
-        return { ok: true, token, name: known ? known.name : req.name.trim(), role };
+        if (req.password === DEMO_ADMIN_PASSWORD) {
+          if (!peopleLocked) addPerson(req.name);
+          return demoSignIn(known ? known.name : req.name.trim(), "admin");
+        }
+        if (known && known.active === false) return { ok: false, error: "WRONG_PASSWORD" };
+        if (known && accountHashes[known.id]) return bcrypt.compareSync(String(req.password || ""), accountHashes[known.id])
+          ? demoSignIn(known.name, "exec", known) : { ok: false, error: "WRONG_PASSWORD" };
+        if (req.password !== DEMO_PASSWORD) return { ok: false, error: "WRONG_PASSWORD" };
+        if (!known && peopleLocked) return { ok: false, error: "PERSON_NOT_LISTED", message: "Your name isn't on the People list. Ask an admin to add you first." };
+        const setupToken = Math.random().toString(36);
+        setupTokens[setupToken] = { name: known ? known.name : req.name.trim(), id: known?.id || "", version: known ? accountVersions[known.id] : undefined, at: Date.now() };
+        return { ok: true, needsPasswordSetup: true, setupToken, name: known ? known.name : req.name.trim() };
+      }
+      case "finishExecSetup": {
+        const setup = setupTokens[req.setupToken];
+        if (!setup || Date.now() - setup.at > 600000) return { ok: false, error: "PASSWORD_SETUP_EXPIRED", message: "Sign in with the club password again." };
+        const password = String(req.password || "");
+        if (password.length < 8 || bcrypt.truncates(password)) return { ok: false, error: "BAD_REQUEST", message: "Use at least 8 characters, up to 72 bytes, for your password." };
+        if ([DEMO_PASSWORD, DEMO_ADMIN_PASSWORD].includes(password)) return { ok: false, error: "BAD_REQUEST", message: "Choose a password different from the club and settings passwords." };
+        let known = findPerson(setup.name);
+        if ((setup.id && (!known || setup.id !== known.id)) || (known && (known.active === false || accountHashes[known.id] || accountVersions[known.id] !== setup.version))) return { ok: false, error: "PASSWORD_SETUP_EXPIRED", message: "Your sign-in details changed. Sign in again." };
+        if (!known && peopleLocked) return { ok: false, error: "PERSON_NOT_LISTED", message: "Ask an admin to add your name first." };
+        if (!known) { addPerson(setup.name); known = findPerson(setup.name); }
+        accountHashes[known.id] = bcrypt.hashSync(password, 12);
+        accountVersions[known.id] = Math.random().toString(36);
+        delete setupTokens[req.setupToken];
+        return demoSignIn(known.name, "exec", known);
       }
       case "logout":
         sessions.delete(req.token);
@@ -200,8 +263,13 @@ const MockApi = (() => {
         return { ok: true, settings: {
           etransferEmail: "payments@example.com", contactEmail: "club@example.com", instagramUrl: "",
           membershipSheetId: "", membershipTab: "Members", membershipYear: "", membershipFee: 10,
-          execPasswordSet: true, adminPasswordSet: true, doorPasswordSet: false, publicSiteUrl: "../public/"
+          execPasswordSet: true, adminPasswordSet: true, doorPasswordSet: false, publicSiteUrl: "../public/", peopleLocked
         } };
+      case "saveSettings":
+        if (!sessions.has(req.token)) return { ok: false, error: "NOT_LOGGED_IN" };
+        if (!String(req.token).startsWith("demo-admin-")) return { ok: false, error: "ADMIN_ONLY" };
+        if (typeof req.settings?.peopleLocked === "boolean") peopleLocked = req.settings.peopleLocked;
+        return { ok: true, changed: ["People list lock"] };
       case "searchMembers":
         if (!sessions.has(req.token)) return { ok: false, error: "NOT_LOGGED_IN" };
         const matches = searchMembers_(members, req.query, 100000);
@@ -213,6 +281,7 @@ const MockApi = (() => {
       }
       case "listTasks": case "saveTask": case "setTaskStatus": case "addTaskUpdate": case "removeTask":
       case "remindTasksOnDiscord": case "saveTeam": case "taskBotStatus": case "savePerson": case "removePerson":
+      case "previewPeopleImport": case "importPeople": case "resetPersonPassword":
         if (!sessions.has(req.token)) return { ok: false, error: "NOT_LOGGED_IN" };
         return taskReply(req);
       default:

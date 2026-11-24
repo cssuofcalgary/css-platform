@@ -81,10 +81,10 @@ git add <files> && git commit -m "…" && git push origin main
 - `appendRow` coerces booleans: the code stores `"TRUE"`/`"FALSE"` strings through `toCell_`.
 
 ## Product decisions already made (don't reopen unless asked)
-- No individual exec accounts or roles; shared passwords (department permissions are an open question for Gordon).
-- Authentication trade-offs stay as they are.
+- Execs set a personal password after their first sign-in with the club password. Settings → People can bulk-add names, lock registration to listed active execs, and reset a person's password without revealing it. The settings password remains the admin recovery sign-in. Door sign-in is unchanged.
+- Passwords are bcrypt hashes (vendored bcryptjs 3.0.3 in `api/Bcrypt.js`; license in `api/Bcrypt-LICENSE.txt`); never return or log passwords or hashes. Password resets and deactivation revoke that person's sessions.
 - New email defaults apply to all upcoming events. Refunds work per person. Old refunded orders show "return not recorded" in grey. The full payment-exception workflow exists.
 - Offline ticket copy, help-desk alerts, scan log, undo for volunteers (own check-in, 10 minutes) are in.
 
 ## Still open
-Department permissions (needs Gordon's decision), individual exec sign-ins (bookmarked 2026-11-23: each exec signs in as themselves from Settings → People, e.g. "Kevin B · Events", and the portal opens on their department first — the Tasks filter, and later other tabs; People already stores each person's department), a reusable question builder and standalone surveys, load measurement for bigger events, a plain-language handover guide, real-device checks of the newest flows.
+Department permissions (needs Gordon's decision), department-first landing after sign-in (e.g. Kevin B → Events, Marcus → Internal; personal passwords and departments are already stored), a reusable question builder and standalone surveys, load measurement for bigger events, a plain-language handover guide, real-device checks of the newest flows.

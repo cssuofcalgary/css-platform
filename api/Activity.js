@@ -15,7 +15,7 @@ const ACTIVITY_GROUPS = {
   system: ["backup"],
   edits: ["ticket.edit", "tickets.disabled", "tickets.enabled"],
   events: ["event.create", "event.update", "event.status", "image.upload", "event.email", "event.archive", "event.restore", "event.delete"],
-  settings: ["settings.save", "membership.form", "sessions.clear", "health.check", "session.kick"],
+  settings: ["settings.save", "membership.form", "sessions.clear", "health.check", "session.kick", "people.imported", "person.passwordSet", "person.passwordReset"],
   emails: ["email.sent", "email.failed"]
 };
 // Members: notes, IDs and cards count with payments (the money-and-people side of the club).
@@ -147,6 +147,9 @@ function activitySummary_(r, events) {
     case "person.added": return "added " + (d.name || "someone") + " to the People list" + (d.source === "sign-in" ? " (first sign-in)" : d.source === "task" ? " (given a task)" : "");
     case "person.saved": return (d.added ? "added " : "edited ") + (d.name || "someone") + (d.added ? " to" : " on") + " the People list";
     case "person.removed": return "removed " + (d.name || "someone") + " from the People list";
+    case "people.imported": return "added " + (d.added || 0) + " people from a pasted list";
+    case "person.passwordSet": return "set up their own sign-in password";
+    case "person.passwordReset": return "reset the sign-in password for " + (d.name || "someone");
     default: return r.action + (r.target ? " " + r.target : "");
   }
 }
