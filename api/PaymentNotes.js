@@ -73,16 +73,26 @@ function addPaymentNote_(session, orderId, text, clientId, eventId) {
   const named = /^PN[A-Za-z0-9_-]{8,40}$/.test(String(clientId || "")) ? String(clientId) : "";
   return withLock_(function () {
     const order = paymentNoteOrder_(orderId, eventId);
-    delete DB_.rows["PaymentNotes"];
-    const theirs = readRows_("PaymentNotes").filter(function (n) { return n.orderId === order.id; });
-    const before = named ? theirs.filter(function (n) { return n.id === named; })[0] : null;
-    if (before) return Object.assign({ ok: true, repeated: true, note: paymentNoteView_(before) }, paymentNoteSummary_(theirs));
-    const note = { id: named || newId_("PN"), orderId: order.id, eventId: order.eventId || "", text: clean,
-      by: memberText_(session.name, 80), createdAt: new Date().toISOString(), removedAt: "", removedBy: "" };
-    insertRow_("PaymentNotes", note);
-    log_(session.name, "payment.note", order.code || order.id, { orderId: order.id, noteId: note.id });
-    return Object.assign({ ok: true, note: paymentNoteView_(note) }, paymentNoteSummary_(theirs.concat([note])));
+    const added = insertPaymentNoteLocked_(session, order, clean, named);
+    if (!added.repeated) log_(session.name, "payment.note", order.code || order.id, { orderId: order.id, noteId: added.note.id });
+    return Object.assign({ ok: true }, added);
   });
+}
+
+/**
+ * Adds one comment to an order. The caller already holds withLock_ and has cleaned the text (noteText_).
+ * A clientId that is already there returns that comment (repeated: true) instead of adding a second one.
+ * Returns { note, repeated?, noteCount, latestNote }. Does not write the Log: the caller says what happened.
+ */
+function insertPaymentNoteLocked_(session, order, text, clientId) {
+  delete DB_.rows["PaymentNotes"];
+  const theirs = readRows_("PaymentNotes").filter(function (n) { return n.orderId === order.id; });
+  const before = clientId ? theirs.filter(function (n) { return n.id === clientId; })[0] : null;
+  if (before) return Object.assign({ repeated: true, note: paymentNoteView_(before) }, paymentNoteSummary_(theirs));
+  const note = { id: clientId || newId_("PN"), orderId: order.id, eventId: order.eventId || "", text: text,
+    by: memberText_(session.name, 80), createdAt: new Date().toISOString(), removedAt: "", removedBy: "" };
+  insertRow_("PaymentNotes", note);
+  return Object.assign({ note: paymentNoteView_(note) }, paymentNoteSummary_(theirs.concat([note])));
 }
 
 /** A comment written by mistake: the person who wrote it, or an admin, can remove it. It stays in the sheet, marked removed. */

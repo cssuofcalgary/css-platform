@@ -93,7 +93,7 @@ function attendeeCard(a) {
         <div class="sub">${escapeHtml(a.email || "")}${a.ucid ? " · UCID " + escapeHtml(a.ucid) : ""}${a.memberId ? " · " + escapeHtml(a.memberId) : ""} · ${escapeHtml(a.order.code || "")}</div>
         ${answers ? `<div class="sub">${answers}</div>` : ""}
         ${a.note ? `<div class="sub"><strong>${escapeHtml(T.attendeeNote)}:</strong> ${escapeHtml(a.note).replace(/\r?\n/g, "<br>")}</div>` : ""}
-        ${a.flag ? `<span class="flag">⚠ ${escapeHtml(a.flag)}</span>` : ""}
+        ${a.flag ? `<span class="flag">⚠ ${escapeHtml(a.flag)}</span>${editable ? " " + clearFlagLink(a.id) : ""}` : ""}
       </div>
       ${editable ? `<div class="row-buttons"><button class="link" data-att-edit="${a.id}">${T.editPerson}</button>
         ${a.status === "disabled" ? `<button class="link" data-att-enable="${a.id}">${T.btnEnableTicket}</button>` : !a.checkedInAt ? `<button class="link danger" data-att-disable="${a.id}">${T.btnDisableTicket}</button>` : ""}</div>` : ""}
@@ -101,6 +101,15 @@ function attendeeCard(a) {
 }
 
 async function onAttendeeClick(event) {
+  const clearFlag = event.target.closest("button[data-clear-flag]");
+  if (clearFlag && clearFlag.dataset.clearFlag) {
+    const person = attState.data.attendees.find((x) => x.id === clearFlag.dataset.clearFlag);
+    if (!person) return;
+    return openClearFlagDialog(person, () => {
+      eventsState.loaded = false;   // the Flagged count on the Events list is out of date now
+      loadAttendees();
+    });
+  }
   const button = event.target.closest("button[data-att-edit], button[data-att-disable], button[data-att-enable]");
   if (!button || button.disabled) return;
   const a = attState.data.attendees.find((x) => x.id === (button.dataset.attEdit || button.dataset.attDisable || button.dataset.attEnable));

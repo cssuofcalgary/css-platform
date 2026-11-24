@@ -792,3 +792,7 @@ button.all-row:hover { border-color: var(--border-2); }
 .pnote-h .muted { font-size: 12px; }
 .pnote-h .pnote-x { margin-left: auto; width: 28px; height: 28px; }
 .pnote p { margin: 2px 0 0; white-space: pre-line; overflow-wrap: anywhere; }
+
+/* "Checked it": the flag being cleared, quoted in its small window (edit.js) */
+.flag-quote { color: var(--warn-text); background: var(--warn-bg); border-radius: 8px; padding: 8px 10px; margin: 0 0 12px; overflow-wrap: anywhere; }
+[data-clear-flag] { font-size: 13px; }

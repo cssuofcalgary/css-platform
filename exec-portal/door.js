@@ -235,7 +235,7 @@ function personRow(t, showPay) {
       <div>
         <div class="name"><strong>${escapeHtml(t.name)}</strong> · ${escapeHtml(t.ticketType)}</div>
         <div class="sub">${escapeHtml(t.orderCode || "")}${t.orderTotal ? " · " + money(t.orderTotal) : ""}${t.etransferName ? " · e-transfer: " + escapeHtml(t.etransferName) : ""}${answers ? " · " + answers : ""}</div>
-        ${t.flag ? `<span class="flag">⚠ ${escapeHtml(t.flag)}</span>` : ""}
+        ${t.flag ? `<span class="flag">⚠ ${escapeHtml(t.flag)}</span> ${clearFlagLink(t.id)}` : ""}
       </div>
       ${action}
     </li>`;
@@ -423,6 +423,16 @@ async function onDoorListClick(ev) {
   const checkin = ev.target.closest("[data-checkin]");
   const pay = ev.target.closest("[data-pay]");
   const undo = ev.target.closest("[data-undo]");
+  const clearFlag = ev.target.closest("[data-clear-flag]");
+  if (clearFlag && clearFlag.dataset.clearFlag) {
+    const t = doorFind(clearFlag.dataset.clearFlag);
+    if (!t) return;
+    return openClearFlagDialog(t, async () => {
+      t.flag = "";
+      await loadDoor();
+      if ($("manual-results").children.length && doorState.matches.length) $("manual-results").innerHTML = doorState.matches.map((m) => personRow(m, true)).join("");
+    });
+  }
   if (checkin) {
     // Typing a name / tapping a list = the help desk, so flagged people can be let in after checking.
     const t = doorFind(checkin.dataset.checkin);

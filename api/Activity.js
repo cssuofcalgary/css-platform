@@ -19,7 +19,7 @@ const ACTIVITY_GROUPS = {
   emails: ["email.sent", "email.failed"]
 };
 // Members: notes, IDs and cards count with payments (the money-and-people side of the club).
-ACTIVITY_GROUPS.payments.push("member.note", "member.noteRemoved", "member.assignId", "member.resendPass", "payment.needsReview", "refund.needsReview", "payment.reviewed", "waitlist.resend", "waitlist.offer", "waitlist.remove", "payment.note", "payment.noteRemoved");
+ACTIVITY_GROUPS.payments.push("member.note", "member.noteRemoved", "member.assignId", "member.resendPass", "payment.needsReview", "refund.needsReview", "payment.reviewed", "waitlist.resend", "waitlist.offer", "waitlist.remove", "payment.note", "payment.noteRemoved", "ticket.flagCleared");
 
 function activityGroup_(action) {
   const groups = Object.keys(ACTIVITY_GROUPS);
@@ -129,6 +129,7 @@ function activitySummary_(r, events) {
     case "member.noteRemoved": return "removed a note from member " + r.target;
     case "payment.note": return "commented on payment " + r.target;
     case "payment.noteRemoved": return "removed a comment from payment " + r.target;
+    case "ticket.flagCleared": return "checked and cleared the help-desk flag for " + (d.name || r.target) + (d.order ? " (" + d.order + ")" : "") + (d.reason ? ": " + d.reason : "");
     case "member.assignId": return "created member ID " + r.target + (d.name ? " for " + d.name : "");
     case "member.resendPass": return "resent the membership card to " + (d.name || r.target);
     case "payment.needsReview": return "a cut-off payment for " + r.target + " needs checking (nothing more was recorded)";

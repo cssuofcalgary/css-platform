@@ -379,6 +379,9 @@ const MockApi = (() => {
       case "listPaymentNotes": case "addPaymentNote": case "removePaymentNote":
         if (!sessions.has(req.token)) return { ok: false, error: "NOT_LOGGED_IN" };
         return paymentNoteReply(req);
+      case "clearTicketFlag":   // the demo has no tickets, so there is never a flag to clear
+        if (!sessions.has(req.token)) return { ok: false, error: "NOT_LOGGED_IN" };
+        return { ok: false, error: "NOT_FOUND", message: "Ticket not found." };
       default:
         return { ok: false, error: "UNKNOWN_ACTION" };
     }

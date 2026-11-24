@@ -110,7 +110,7 @@ function orderCard(o) {
           ${canDisableTicket(t) && (o.status === "paid" || o.status === "awaiting") ? ` · <button class="link danger" data-act="disable" data-ticket="${t.id}">${T.btnDisableTicket}</button>` : ""}
           ${t.status === "disabled" && (o.status === "paid" || o.status === "awaiting") ? ` · <button class="link" data-act="enable" data-ticket="${t.id}">${T.btnEnableTicket}</button>` : ""}
           ${t.checkedInAt ? ` · ${T.checkedInMark}` : ""}${stoppedTicketMark(o, t)}${t.emailedAt && !t.emailedAt.startsWith("test") && !t.emailedAt.startsWith("claim:") ? ` · ${T.emailedMark}` : ""}
-          ${t.flag ? `<br><span class="flag">${escapeHtml(t.flag)}</span>` : ""}</li>`).join("")}
+          ${t.flag ? `<br><span class="flag">${escapeHtml(t.flag)}</span> ${clearFlagLink(t.id)}` : ""}</li>`).join("")}
       </ul>
       <div class="o-money">${moneyLines(o)}</div>
       <div class="o-total"><span class="order-total">${money(o.total)}</span><span class="pill ${statusClass}">${statusText}</span></div>
@@ -152,6 +152,8 @@ async function onOrdersClick(event) {
   if (event.target.closest("[data-wl-act]")) return onWaitlistClick(event);
   const edit = event.target.closest("button[data-edit-ticket]");
   if (edit) return editTicket(edit);
+  const clearFlag = event.target.closest("button[data-clear-flag]");
+  if (clearFlag && clearFlag.dataset.clearFlag) return clearPaymentFlag(clearFlag.dataset.clearFlag);
   const button = event.target.closest("button[data-act]");
   if (!button || button.disabled) return;
   const card = button.closest(".order");
@@ -206,6 +208,19 @@ async function onOrdersClick(event) {
   }
   setTimeout(loadOrders, button.dataset.act === "restore" ? 0 : 1800);
   eventsState.loaded = false;   // counts on the Events tab changed
+}
+
+/** "Checked it" next to a flag: clear it, then update that card in place (flag gone, new comment shown). */
+function clearPaymentFlag(ticketId) {
+  const order = payState.data.orders.find((o) => o.tickets.some((t) => t.id === ticketId));
+  if (!order) return;
+  const ticket = order.tickets.find((t) => t.id === ticketId);
+  openClearFlagDialog(ticket, (reply) => {
+    ticket.flag = "";
+    if (reply.noteCount !== undefined) { order.noteCount = reply.noteCount; order.latestNote = reply.latestNote || null; }
+    const card = [...document.querySelectorAll("#orders .order")].find((c) => c.dataset.order === order.id);
+    if (card) card.outerHTML = orderCard(order);
+  });
 }
 
 /** A free registration needs approval, with no payment amount to ask for. */

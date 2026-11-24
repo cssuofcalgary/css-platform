@@ -135,6 +135,55 @@ function setEditError(text) {
   $("edit-error").hidden = !text;
 }
 
+// ---- "Checked it": clear a help-desk flag (Payments, Attendees, Door help desk) ----
+// onDone(reply) runs after the server cleared it (or someone already had); the caller refreshes its own list.
+const clearFlagState = { ticket: null, onDone: null };
+
+/** The small link shown next to a flag. Not for door sign-ins or the scanner page. */
+function clearFlagLink(ticketId) {
+  if (state.role === "door" || (typeof SCANNER_MODE !== "undefined" && SCANNER_MODE)) return "";
+  return `<button type="button" class="link" data-clear-flag="${escapeHtml(ticketId)}">${T.clearFlagLink}</button>`;
+}
+
+function openClearFlagDialog(ticket, onDone) {
+  clearFlagState.ticket = ticket;
+  clearFlagState.onDone = onDone;
+  $("cf-title").textContent = T.clearFlagTitle(ticket.name || "");
+  $("cf-flag").textContent = ticket.flag || "";
+  $("cf-reason").value = "";
+  setClearFlagBusy(false);
+  $("cf-error").hidden = true;
+  $("clear-flag-dialog").showModal();
+  $("cf-reason").focus();
+}
+
+function setClearFlagBusy(busy) {
+  $("cf-save").disabled = busy;
+  $("cf-reason").disabled = busy;
+  $("cf-save").textContent = busy ? T.clearFlagBusy : T.clearFlagYes;
+}
+
+async function onClearFlagSubmit(event) {
+  event.preventDefault();
+  const ticket = clearFlagState.ticket;
+  if (!ticket || $("cf-save").disabled) return;
+  setClearFlagBusy(true);
+  const reply = await api("clearTicketFlag", { ticketId: ticket.id, reason: $("cf-reason").value.trim() });
+  if (!reply.ok) {
+    setClearFlagBusy(false);
+    if (reply.error === "NOT_LOGGED_IN") { $("clear-flag-dialog").close(); return handleEventError(reply, $("cf-error")); }
+    $("cf-error").textContent = errorText(reply);
+    $("cf-error").hidden = false;
+    return;
+  }
+  $("clear-flag-dialog").close();
+  showToast(reply.already ? T.flagAlreadyCleared : T.flagCleared(reply.markPaidHint), "success");
+  if (clearFlagState.onDone) clearFlagState.onDone(reply);
+}
+
+$("clear-flag-form").addEventListener("submit", onClearFlagSubmit);
+$("cf-cancel").addEventListener("click", () => $("clear-flag-dialog").close());
+
 $("edit-form").addEventListener("submit", onEditSubmit);
 $("ed-delete").addEventListener("click", onEditDelete);
 $("edit-cancel").addEventListener("click", () => $("edit-dialog").close());

@@ -292,6 +292,9 @@ function route_(req) {
     case "updateTicket":
       return updateTicket_(requireSession_(req.token), req.ticketId, req.changes, req.siteUrl, req.orderChanges);
 
+    case "clearTicketFlag":
+      return clearTicketFlag_(requireSession_(req.token), req.ticketId, req.reason);
+
     case "activityLog":
       requireAdmin_(req.token);
       return activityLog_(req.filters);

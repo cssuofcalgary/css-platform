@@ -602,6 +602,50 @@ function updateTicket_(session, ticketId, changes, siteUrl, orderChanges) {
   return { ok: true, changed: true, emailsSent: sent.sent, total: result.total, orderStatus: result.orderStatus };
 }
 
+const FLAG_REASON_MAX = 200;
+
+/**
+ * "Checked it": an exec has looked into a help-desk flag (for example a member-price ticket for someone in a partner
+ * club) and it's fine. Any exec can do this; door sign-ins can't. Only the flag is cleared: the payment is not touched.
+ * What the flag said, who cleared it and the optional reason are kept as a comment on the payment, and in the Log.
+ * A $0 order that was waiting for this check still needs "Mark paid" afterwards (the reply says so with markPaidHint).
+ */
+function clearTicketFlag_(session, ticketId, reason) {
+  if (session.role === "door") throw new ApiError_("DOOR_ONLY", "Door sign-in can only scan tickets.");
+  const id = String(ticketId || "");
+  if (!id) throw new ApiError_("BAD_REQUEST", "Which ticket?");
+  const why = memberText_(reason, FLAG_REASON_MAX);
+  return withLock_(function () {
+    delete DB_.rows["Tickets"];   // re-read inside the lock: someone may have just changed it
+    delete DB_.rows["Orders"];
+    const tickets = readRows_("Tickets");
+    const ticket = tickets.filter(function (t) { return t.id === id; })[0];
+    if (!ticket) throw new ApiError_("NOT_FOUND", "Ticket not found.");
+    const event = findEvent_(function (e) { return e.id === ticket.eventId; });
+    if (event && (event.archivedAt || event.status === "archived")) {
+      throw new ApiError_("BAD_REQUEST", "This event is archived. Its tickets can't be changed.");
+    }
+    const was = String(ticket.flag || "").trim();
+    if (!was) return { ok: true, already: true, ticketId: ticket.id, orderId: ticket.orderId };
+
+    updateRow_("Tickets", ticket.id, { flag: "" }, ticket._row);
+    const order = readRows_("Orders").filter(function (o) { return o.id === ticket.orderId; })[0];
+    const reply = { ok: true, ticketId: ticket.id, orderId: ticket.orderId };
+    if (order) {
+      const text = noteText_("Flag checked for " + ticket.name + ": " + was.replace(/[.\s]+$/, "") + "." + (why ? " " + why : ""));
+      const added = insertPaymentNoteLocked_(session, order, text, "");
+      reply.noteCount = added.noteCount;
+      reply.latestNote = added.latestNote;
+      const othersFlagged = tickets.some(function (t) {
+        return t.orderId === order.id && t.id !== ticket.id && String(t.flag || "").trim() && t.status !== "cancelled" && t.status !== "refunded";
+      });
+      reply.markPaidHint = order.status === "awaiting" && cents_(order.total) === 0 && !othersFlagged;
+    }
+    log_(session.name, "ticket.flagCleared", ticket.id, { name: ticket.name, order: order ? order.code : "", was: was, reason: why });
+    return reply;
+  });
+}
+
 // ---- Public ticket page ---------------------------------------------------------
 
 function getTicket_(secret) {
