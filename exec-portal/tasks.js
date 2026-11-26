@@ -3,10 +3,21 @@
 // Two views: a list grouped by due date, and a month calendar. The list of people lives in Settings → People.
 
 const TASK_STATUSES = ["todo", "doing", "blocked", "done"];
-const TASK_DEPTS = ["Events", "Marketing", "Internal", "External", "Finance", "General"];
+const TASK_DEPTS = ["Events", "Marketing", "Internal", "External", "Finance", "General"];   // replaced by the server's list (Settings → People can add more)
 const TASK_FILTER_KEY = "css_task_filter";
 const TASK_VIEW_KEY = "css_task_view";
 const REM_MAX = 5;
+const CHECK_MAX = 60;
+
+/** The departments the server sent, General last. Changed in place, because Settings → People uses the same list. */
+function setTaskDepts(list) {
+  if (!Array.isArray(list) || !list.length) return;
+  const clean = [...new Set(list.map((d) => String(d || "").trim()).filter((d) => d && d !== "General"))];
+  TASK_DEPTS.splice(0, TASK_DEPTS.length, ...clean, "General");
+}
+
+/** A person's departments, the first one first (older lists have just one). */
+const personDepts = (p) => (p && Array.isArray(p.departments) && p.departments.length ? p.departments : p && p.department ? [p.department] : []);
 
 const taskState = {
   tasks: [], team: [], discord: {}, loaded: false, request: 0,
@@ -15,6 +26,8 @@ const taskState = {
   calDay: "",         // the day listed under the calendar ("yyyy-mm-dd"), or ""
   editing: null,      // the task open in the New/Edit dialog (null = new)
   owners: [],         // selected people in the New/Edit dialog
+  checklist: [],      // the New/Edit dialog's copy of the checklist (Everyone / a department adds a line per person)
+  checklistBase: "[]",
   deptTouched: false, // the department was picked by hand, so changing Who no longer changes it
   openId: "",         // the task open in the detail dialog
   menuId: "",         // the task whose status menu is open
@@ -135,6 +148,7 @@ function newestNote(task) {
 function showTaskList(data) {
   taskState.tasks = data.tasks || [];
   taskState.team = data.team || [];
+  setTaskDepts(data.departments);
   taskState.discord = data.discord || {};
   taskState.loaded = true;
   applyOutbox();
@@ -162,7 +176,7 @@ async function loadTasks() {
   $("task-status").textContent = "";
   taskState.outboxOffline = false;
   renderOutboxWarn();
-  deviceSave("tasks", { tasks: reply.tasks || [], team: reply.team || [], discord: reply.discord || {} });
+  deviceSave("tasks", { tasks: reply.tasks || [], team: reply.team || [], departments: reply.departments || [], discord: reply.discord || {} });
   showTaskList(reply);
   if (outboxCount()) flushOutbox();
   if (taskState.openId && $("task-detail-dialog").open) {
@@ -301,7 +315,7 @@ function taskRow(t) {
   return `<li class="task-row st-${status}" data-task-id="${escapeHtml(t.id)}" tabindex="0">
     <div class="task-main">
       <div class="task-title">${escapeHtml(t.title)}</div>
-      <div class="task-meta">${notSentChip(t)}<span>${escapeHtml(taskOwners(t).join(", ") || T.taskNobody)}</span>${dueChip(t)}${reminderChip(t)}${checkChip(t)}${taskLabels(t).map(labelChip).join("")}</div>
+      <div class="task-meta">${notSentChip(t)}<span>${escapeHtml(ownersShort(t) || T.taskNobody)}</span>${dueChip(t)}${reminderChip(t)}${checkChip(t)}${taskLabels(t).map(labelChip).join("")}</div>
       ${note ? `<div class="task-last">${note.source === "discord" ? discordMark() : ""}<span>${escapeHtml(note.text)}</span></div>` : ""}
     </div>
     <button type="button" class="task-status st-${status}" data-status-for="${escapeHtml(t.id)}" aria-haspopup="menu">${escapeHtml(statusLabel(status))}</button>
@@ -657,8 +671,61 @@ function taskOwners(task) {
   return Array.isArray(task.owners) ? task.owners : task.owner ? [task.owner] : [];
 }
 
+/** "Amy, Bella, Chris +9" on the list, so a task given to everyone stays one line. */
+function ownersShort(task) {
+  const names = taskOwners(task);
+  return names.length > 3 ? T.taskOwnersMore(names.slice(0, 3).join(", "), names.length - 3) : names.join(", ");
+}
+
 function renderSelectedOwners() {
   $("tk-owners").innerHTML = taskState.owners.map((name, i) => `<button type="button" class="chip" data-remove-owner="${i}" aria-label="${escapeHtml(T.taskOwnerRemove + " " + name)}">${escapeHtml(name)} <span aria-hidden="true">×</span></button>`).join("");
+  $("tk-groups").innerHTML = groupButtonsHtml(taskState.owners, taskState.checklist);
+}
+
+// ---- Everyone, or a whole department, at once -------------------------------------------------------------
+// Each person added this way also gets a checklist line with their name, to tick when they've done their part.
+// (A Discord "done" from them ticks their line; reminders only tag the people who haven't ticked theirs.)
+
+/** "Everyone", then each department with someone active in it: [{ key, label, names }]. key "" = everyone. */
+function taskGroups() {
+  const people = activeTeam();
+  const names = (list) => [...new Map(list.map((p) => { const n = p.name.trim().replace(/\s+/g, " "); return [normName(n), n]; })).values()];
+  const groups = [{ key: "", label: T.taskEveryone, names: names(people) }];
+  TASK_DEPTS.forEach((d) => groups.push({ key: d, label: d, names: names(people.filter((p) => personDepts(p).includes(d))) }));
+  return groups.filter((g) => g.names.length);
+}
+
+/** The "+ Everyone", "+ Events"… buttons. One that would add nobody new is greyed out. */
+function groupButtonsHtml(owners, checklist) {
+  return taskGroups().map((g) => {
+    const all = g.names.every((n) => owners.some((o) => sameName(o, n)) && checklist.some((c) => sameName(c.text, n)));
+    return `<button type="button" class="chip" data-group="${escapeHtml(g.key)}"${all ? " disabled" : ""}>+ ${escapeHtml(g.label)}</button>`;
+  }).join("");
+}
+
+/** Adds a group's people, and a checklist line with each one's name. */
+function addGroup(owners, checklist, key) {
+  const group = taskGroups().find((g) => g.key === key);
+  if (!group) return;
+  let full = false;
+  group.names.forEach((n) => {
+    if (!owners.some((o) => sameName(o, n))) owners.push(n);
+    if (checklist.some((c) => sameName(c.text, n))) return;
+    if (checklist.length < CHECK_MAX) checklist.push({ id: "", text: n, done: false }); else full = true;
+  });
+  if (full) showToast(T.taskTooManyItems);
+}
+
+/** One more person on a task that already has a line per person gets a line too. Call before adding them. */
+function addNameLine(owners, checklist, name) {
+  const perPerson = checklist.some((c) => owners.some((o) => sameName(o, c.text)));
+  if (perPerson && !checklist.some((c) => sameName(c.text, name)) && checklist.length < CHECK_MAX) checklist.push({ id: "", text: name, done: false });
+}
+
+/** Someone taken off the task: their name line goes too, unless they had already ticked it. */
+function dropNameLine(checklist, name) {
+  const i = checklist.findIndex((c) => !c.done && sameName(c.text, name));
+  if (i >= 0) checklist.splice(i, 1);
 }
 
 function ownerSuggestions(query, picked = taskState.owners) {
@@ -720,7 +787,10 @@ function pickOwner(name) {
   const person = teamPerson(typed);
   const canonical = person ? person.name.trim() : typed;
   if (!taskState.owners.length && !taskState.deptTouched) $("tk-dept").value = deptFor(canonical);
-  if (!taskState.owners.some((picked) => sameName(picked, canonical))) taskState.owners.push(canonical);
+  if (!taskState.owners.some((picked) => sameName(picked, canonical))) {
+    addNameLine(taskState.owners, taskState.checklist, canonical);
+    taskState.owners.push(canonical);
+  }
   $("tk-owner").value = "";
   renderSelectedOwners();
   hideOwnerList();
@@ -814,8 +884,15 @@ function addReminderRow() {
 // ---- New / edit ---------------------------------------------------------------------------------------
 
 function deptFor(owner) {
-  const p = teamPerson(owner);
-  return p && TASK_DEPTS.includes(p.department) ? p.department : "General";
+  const first = personDepts(teamPerson(owner)).find((d) => TASK_DEPTS.includes(d));
+  return first || "General";
+}
+
+/** The Department choices. A task whose department was removed from the list since keeps it as a choice. */
+function fillDeptSelect(current) {
+  const list = TASK_DEPTS.slice();
+  if (current && !list.includes(current)) list.splice(Math.max(0, list.length - 1), 0, current);
+  $("tk-dept").innerHTML = list.map((d) => `<option value="${escapeHtml(d)}">${escapeHtml(d)}</option>`).join("");
 }
 
 function syncQuickChips() {
@@ -836,11 +913,15 @@ function openTaskDialog(task, due) {
   const deptFilter = TASK_DEPTS.includes(taskState.filter) ? taskState.filter : "";
   const me = teamPerson(state.name);
   taskState.owners = task ? taskOwners(task).slice() : [me ? me.name.trim() : String(state.name || "").trim()].filter(Boolean);
+  // The checklist isn't shown here, but Everyone / a department adds a line per person to it.
+  taskState.checklist = task ? taskChecklist(task).map((c) => ({ id: c.id || "", text: c.text, done: !!c.done })) : [];
+  taskState.checklistBase = JSON.stringify(taskState.checklist);
   $("tk-owner").value = "";
   renderSelectedOwners();
   hideOwnerList();
   $("tk-due").value = task ? taskIso(task.due) : taskIso(due);
-  $("tk-dept").value = task ? (TASK_DEPTS.includes(task.department) ? task.department : "General") : (deptFilter || deptFor(taskState.owners[0]));
+  fillDeptSelect(task && task.department);
+  $("tk-dept").value = task ? task.department || "General" : (deptFilter || deptFor(taskState.owners[0]));
   if (!task && deptFilter) taskState.deptTouched = true;
   $("tk-reminders").innerHTML = (task ? remindersOf(task) : []).map(reminderRowHtml).join("");
   syncReminderAdd();
@@ -855,7 +936,7 @@ function openTaskDialog(task, due) {
 
 /** Everything in the New/Edit form, to tell whether something was changed. */
 function taskFormSnapshot() {
-  return JSON.stringify([$("tk-title").value.trim(), taskState.owners, $("tk-owner").value.trim(), $("tk-due").value, $("tk-dept").value,
+  return JSON.stringify([$("tk-title").value.trim(), taskState.owners, taskState.checklist, $("tk-owner").value.trim(), $("tk-due").value, $("tk-dept").value,
     readReminderRows(), $("tk-notes").value.trim(), $("tk-link").value.trim()]);
 }
 
@@ -891,6 +972,8 @@ async function onTaskSubmit(event) {
     link: $("tk-link").value.trim(),
     remind: rows.map(cleanReminder)
   };
+  // Name lines added with Everyone / a department (or taken off with a person): sent only when they changed.
+  if (editing ? JSON.stringify(taskState.checklist) !== taskState.checklistBase : taskState.checklist.length) task.checklist = taskState.checklist.map((c) => ({ ...c }));
   // A new task gets its name here, so it can show straight away and a repeat send is never added twice.
   if (!editing) { delete task.id; task.clientId = newLocalId("TK"); }
   task.owners.forEach((name) => { if (!teamPerson(name)) taskState.team.push({ id: "", name, department: task.department, discordId: "", active: true }); });
@@ -974,6 +1057,7 @@ function renderTaskDetail() {
     (d.labels.length < 6 ? `<button type="button" class="chip td-add-chip" id="td-label-open">+ ${escapeHtml(T.taskAddLabel)}</button>` : "");
   const people = ownerSuggestions("", d.owners);
   $("td-people-names").innerHTML = people.map((n) => `<option value="${escapeHtml(n)}"></option>`).join("");
+  $("td-groups").innerHTML = groupButtonsHtml(d.owners, d.checklist);
   $("td-label-names").innerHTML = allLabels().filter((l) => !d.labels.some((x) => sameName(x, l))).map((l) => `<option value="${escapeHtml(l)}"></option>`).join("");
   // Checklist
   const done = d.checklist.filter((c) => c.done).length;
@@ -983,7 +1067,7 @@ function renderTaskDetail() {
     <label><input type="checkbox" data-check="${i}"${c.done ? " checked" : ""}> <span>${escapeHtml(c.text)}</span></label>
     <button type="button" class="icon-btn" data-uncheck-item="${i}" title="${escapeHtml(T.taskChecklistRemove)}" aria-label="${escapeHtml(T.taskChecklistRemove)}"><svg><use href="#i-x"/></svg></button>
   </li>`).join("");
-  $("td-check-new").hidden = d.checklist.length >= 30;
+  $("td-check-new").hidden = d.checklist.length >= CHECK_MAX;
   renderDraftButton();
   const updates = t.updates || [];
   $("td-updates").innerHTML = updates.length ? updates.map((u) => {
@@ -1011,7 +1095,10 @@ function draftAddPerson(typed) {
   const d = taskState.draft;
   if (!d || !String(typed || "").trim()) return;
   const name = personByTyped(typed);
-  if (!d.owners.some((n) => sameName(n, name))) d.owners.push(name);
+  if (!d.owners.some((n) => sameName(n, name))) {
+    addNameLine(d.owners, d.checklist, name);
+    d.owners.push(name);
+  }
   $("td-person").value = "";
   renderTaskDetail();
   $("td-person").focus();
@@ -1033,7 +1120,7 @@ function draftAddCheck() {
   const d = taskState.draft;
   const text = $("td-check-new").value.trim().replace(/\s+/g, " ").slice(0, 200);
   if (!d || !text) return;
-  if (d.checklist.length >= 30) return showToast(T.taskTooManyItems);
+  if (d.checklist.length >= CHECK_MAX) return showToast(T.taskTooManyItems);
   d.checklist.push({ id: "", text, done: false });
   $("td-check-new").value = "";
   renderTaskDetail();
@@ -1186,7 +1273,7 @@ function onTaskListKey(e) {
   document.querySelectorAll("#task-view [data-task-view]").forEach((b) => { b.textContent = T.taskViews[b.dataset.taskView]; });
   $("task-view").setAttribute("aria-label", T.taskViewLabel);
   [["cal-prev", T.calPrev], ["cal-next", T.calNext]].forEach(([id, label]) => { $(id).title = label; $(id).setAttribute("aria-label", label); });
-  $("tk-dept").innerHTML = TASK_DEPTS.map((d) => `<option value="${d}">${d}</option>`).join("");
+  fillDeptSelect("");
   $("td-update-text").placeholder = T.taskAddUpdate;
 
   $("task-new-button").addEventListener("click", () => openTaskDialog(null));
@@ -1265,7 +1352,15 @@ function onTaskListKey(e) {
   $("tk-owners").addEventListener("click", (e) => {
     const button = e.target.closest("[data-remove-owner]");
     if (!button) return;
-    taskState.owners.splice(Number(button.dataset.removeOwner), 1);
+    taskState.owners.splice(Number(button.dataset.removeOwner), 1).forEach((name) => dropNameLine(taskState.checklist, name));
+    renderSelectedOwners();
+    hideOwnerList();
+  });
+  $("tk-groups").addEventListener("click", (e) => {
+    const button = e.target.closest("[data-group]");
+    if (!button || button.disabled) return;
+    addGroup(taskState.owners, taskState.checklist, button.dataset.group);
+    if (!taskState.deptTouched) $("tk-dept").value = button.dataset.group || "General";
     renderSelectedOwners();
     hideOwnerList();
   });
@@ -1351,8 +1446,16 @@ function onTaskListKey(e) {
     const d = taskState.draft;
     if (!d) return;
     const x = e.target.closest("[data-remove-person]");
-    if (x) { d.owners.splice(Number(x.dataset.removePerson), 1); return renderTaskDetail(); }
+    if (x) { d.owners.splice(Number(x.dataset.removePerson), 1).forEach((name) => dropNameLine(d.checklist, name)); return renderTaskDetail(); }
     if (e.target.closest("#td-person-open")) { $("td-person-add").hidden = false; $("td-person").focus(); }
+  });
+  $("td-groups").addEventListener("click", (e) => {
+    const d = taskState.draft;
+    const button = e.target.closest("[data-group]");
+    if (!d || !button || button.disabled) return;
+    addGroup(d.owners, d.checklist, button.dataset.group);
+    $("td-person-add").hidden = true;
+    renderTaskDetail();
   });
   $("td-person").addEventListener("keydown", (e) => {
     if (e.key === "Enter" && !e.isComposing) { e.preventDefault(); draftAddPerson($("td-person").value); }

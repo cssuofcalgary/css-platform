@@ -46,11 +46,76 @@ async function main() {
   element("tk-owner").value = "A < B";
   run("pickOwner($('tk-owner').value)");
   ok(element("tk-owners").innerHTML.includes("A &lt; B") && !element("tk-owners").innerHTML.includes("A < B"), "assignee names are escaped in labels and remove buttons");
+  await everyone();
   await background();
   console.log(fails ? `\n${fails} FAILED` : "\nALL PASSED");
   process.exit(fails ? 1 : 0);
 }
 main().catch((error) => {console.error(error);process.exit(1);});
+
+// Everyone / a department at once: everyone in it is added, with a checklist line per person to tick.
+async function everyone() {
+  const press = (id, group) => element(id).listeners.click({ target: { closest: (sel) => sel === "[data-group]" ? { dataset: { group }, disabled: false } : null } });
+  const removeOwner = (i) => element("tk-owners").listeners.click({ target: { closest: (sel) => sel === "[data-remove-owner]" ? { dataset: { removeOwner: String(i) } } : null } });
+  const texts = (list) => list.map((c) => c.text + (c.done ? "✓" : "")).join();
+  run(`state.name='Kevin'; calls.length=0; taskState.filter='mine';
+    taskState.team=[{name:'Kevin',department:'Events',departments:['Events','Finance'],active:true},{name:'Marcus',department:'Internal',active:true},{name:'Old Exec',department:'Events',active:false}];
+    setTaskDepts(['Events','Marketing','Internal','External','Finance','Photo Team','General']);`);
+  ok(run("TASK_DEPTS.join()") === "Events,Marketing,Internal,External,Finance,Photo Team,General", "the department list comes from the server, General last");
+  ok(run("taskGroups().map(g=>g.label+':'+g.names.join('+')).join('|')") === "Everyone:Kevin+Marcus|Events:Kevin|Internal:Marcus|Finance:Kevin",
+    "buttons: Everyone, then each department with someone active in it (people in two departments count in both; inactive people left out)");
+
+  run("openTaskDialog(null)");
+  ok(element("tk-groups").innerHTML.includes('data-group=""') && element("tk-groups").innerHTML.includes("+ Everyone") && element("tk-groups").innerHTML.includes("+ Finance"), "the New task window shows the buttons");
+  press("tk-groups", "");
+  ok(run("taskState.owners.join()") === "Kevin,Marcus" && texts(run("taskState.checklist")) === "Kevin,Marcus", "Everyone adds every active person, and a checklist line with each name");
+  ok(element("tk-dept").value === "General", "…and the task's department becomes General");
+  ok(/data-group="" disabled/.test(element("tk-groups").innerHTML), "Everyone is greyed out once everyone is on it");
+  removeOwner(1);
+  ok(run("taskState.owners.join()") === "Kevin" && texts(run("taskState.checklist")) === "Kevin", "taking someone off also takes their name line away");
+  run("pickOwner('marcus')");
+  ok(texts(run("taskState.checklist")) === "Kevin,Marcus", "adding one person to such a task gives them a name line too");
+  element("tk-title").value = "Fill out availability";
+  await run("onTaskSubmit({preventDefault(){}})");
+  await new Promise((r) => setTimeout(r, 0));
+  let sent = run("calls.filter(c=>c.action==='saveTask').pop().details.task");
+  ok(sent.owners.join() === "Kevin,Marcus" && texts(sent.checklist) === "Kevin,Marcus", "saving sends the people and their name lines");
+
+  run("openTaskDialog(null)");
+  press("tk-groups", "Internal");
+  ok(run("taskState.owners.join()") === "Kevin,Marcus" && texts(run("taskState.checklist")) === "Marcus" && element("tk-dept").value === "Internal",
+    "a department button adds its people with a line each, and sets the department");
+  run("openTaskDialog(null)");
+  ok(run("taskState.checklist.length") === 0, "a new task window starts with no name lines");
+
+  run("calls.length=0; openTaskDialog({id:'plain',title:'Plain',owners:['Kevin'],department:'Events',checklist:[{id:'c1',text:'Book room',done:false}]})");
+  run("pickOwner('Marcus')");
+  await run("onTaskSubmit({preventDefault(){}})");
+  sent = run("calls.filter(c=>c.action==='saveTask').pop().details.task");
+  ok(sent.checklist === undefined && sent.owners.join() === "Kevin,Marcus", "an ordinary task: adding a person adds no line, and the checklist isn't sent");
+
+  run("openTaskDialog({id:'ticked',title:'Ticked',owners:['Kevin','Marcus'],department:'Events',checklist:[{id:'a',text:'Kevin',done:true},{id:'b',text:'Marcus',done:false}]})");
+  removeOwner(0); removeOwner(0);
+  ok(texts(run("taskState.checklist")) === "Kevin✓", "taking off someone who already ticked their name keeps their ticked line");
+
+  run("openTaskDialog({id:'old',title:'Old department',owners:['Kevin'],department:'Gone Dept'})");
+  ok(element("tk-dept").innerHTML.includes("Gone Dept") && element("tk-dept").value === "Gone Dept", "a task whose department was removed keeps it as a choice");
+  run("openTaskDialog({id:'odd',title:'Odd',owners:['Kevin'],department:'A <b>'})");
+  ok(element("tk-dept").innerHTML.includes("A &lt;b&gt;"), "department names are escaped in the choices");
+  ok(run("ownersShort({owners:['A','B','C','D','E']})") === "A, B, C +2" && run("ownersShort({owners:['A','B']})") === "A, B", "the list shows up to three names, then +N");
+
+  // The task window: the same buttons under "+ Add person"
+  run(`calls.length=0; taskState.tasks=[{id:'tw',title:'Window',owners:['Kevin'],department:'Events',status:'todo',checklist:[],labels:[],updates:[]}];
+    dueChip=()=>''; reminderChip=()=>''; openTaskDetail('tw');`);
+  ok(element("td-groups").innerHTML.includes("+ Everyone"), "the task window shows the buttons too");
+  press("td-groups", "");
+  ok(run("taskState.draft.owners.join()") === "Kevin,Marcus" && texts(run("taskState.draft.checklist")) === "Kevin,Marcus", "Everyone in the task window adds everyone and their name lines");
+  element("td-people").listeners.click({ target: { closest: (sel) => sel === "[data-remove-person]" ? { dataset: { removePerson: "0" } } : null } });
+  ok(texts(run("taskState.draft.checklist")) === "Marcus", "taking someone off in the task window takes their line away");
+  run("saveTaskDetail()");
+  sent = run("calls.length ? calls[calls.length-1].details.task : null") || run("outboxRead().pop().details.task");
+  ok(sent && texts(sent.checklist) === "Marcus" && sent.owners.join() === "Marcus", "Save sends the people and the checklist");
+}
 
 // Background saving: shown at once, sent in the background, kept on the device while there's no connection.
 async function background() {

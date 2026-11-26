@@ -274,12 +274,29 @@ $("set-sessions-refresh").addEventListener("click", loadSessions);
 const PEOPLE_DEPTS = () => (typeof TASK_DEPTS !== "undefined" ? TASK_DEPTS : ["Events", "Marketing", "Internal", "External", "Finance", "General"]);
 const peopleActive = (v) => !(v === false || v === 0 || /^(false|no|0)$/i.test(String(v)));
 
+/** A person's departments, the first one first (older lists have just one). */
+const personDeptList = (p) => (Array.isArray(p.departments) && p.departments.length ? p.departments : p.department ? [p.department] : []).slice();
+
+/** A chip for each of the person's departments (× takes it off), then a "+ Add" menu with the others. */
+function personDeptsHtml(list) {
+  const others = PEOPLE_DEPTS().filter((d) => !list.includes(d));
+  return list.map((d) => `<button type="button" class="chip people-dept-chip" data-dept="${escapeHtml(d)}" aria-label="${escapeHtml(T.peopleDeptRemove(d))}">${escapeHtml(d)} <span aria-hidden="true">×</span></button>`).join("") +
+    (others.length ? `<select class="people-dept-add" aria-label="${escapeHtml(T.peopleDeptAdd)}"><option value="">+ ${escapeHtml(T.peopleDeptAddShort)}</option>${others.map((d) => `<option value="${escapeHtml(d)}">${escapeHtml(d)}</option>`).join("")}</select>` : "");
+}
+
+function rowDepts(row) {
+  try { const list = JSON.parse(row.dataset.depts || "[]"); return Array.isArray(list) ? list : []; } catch (e) { return []; }
+}
+function setRowDepts(row, list) {
+  row.dataset.depts = JSON.stringify(list);
+  row.querySelector(".people-depts").innerHTML = personDeptsHtml(list);
+}
+
 function personRowHtml(p) {
-  const dept = String(p.department || "");
-  const depts = PEOPLE_DEPTS();
-  return `<div class="people-row" data-id="${escapeHtml(p.id || "")}">
+  const depts = personDeptList(p);
+  return `<div class="people-row" data-id="${escapeHtml(p.id || "")}" data-depts="${escapeHtml(JSON.stringify(depts))}">
     <input class="people-name" maxlength="60" autocomplete="off" autocapitalize="words" aria-label="${escapeHtml(T.teamName)}" value="${escapeHtml(p.name || "")}">
-    <select class="people-dept" aria-label="${escapeHtml(T.teamDept)}"><option value="">${escapeHtml(T.peopleNoDept)}</option>${depts.map((d) => `<option${d === dept ? " selected" : ""}>${escapeHtml(d)}</option>`).join("")}</select>
+    <div class="people-depts" role="group" aria-label="${escapeHtml(T.teamDept)}">${personDeptsHtml(depts)}</div>
     <input class="people-discord" inputmode="numeric" maxlength="20" autocomplete="off" aria-label="${escapeHtml(T.teamDiscord)}" placeholder="${escapeHtml(T.teamDiscord)}" value="${escapeHtml(p.discordId || "")}">
     <input type="checkbox" class="toggle people-active" aria-label="${escapeHtml(T.teamActive)}"${peopleActive(p.active) ? " checked" : ""}>
     <button type="button" class="secondary small-button people-reset"${p.passwordSet ? "" : " disabled"}>${escapeHtml(p.passwordSet ? T.peopleReset : T.peoplePasswordNotSet)}</button>
@@ -306,12 +323,81 @@ function sharePeople(team) {
   if (Array.isArray(team) && typeof taskState !== "undefined") taskState.team = team;
 }
 
+// ---- Departments: the five built in stay; the club can add its own (and remove those again). ----
+
+function shareDepts(list) {
+  if (typeof setTaskDepts === "function") setTaskDepts(list);
+}
+
+const BUILT_IN_DEPTS = ["Events", "Marketing", "Internal", "External", "Finance", "General"];
+
+function renderDepts() {
+  $("dept-list").innerHTML = PEOPLE_DEPTS().map((d) => BUILT_IN_DEPTS.includes(d)
+    ? `<span class="chip dept-chip">${escapeHtml(d)}</span>`
+    : `<button type="button" class="chip dept-chip" data-remove-dept="${escapeHtml(d)}" aria-label="${escapeHtml(T.deptRemove(d))}">${escapeHtml(d)} <span aria-hidden="true">×</span></button>`).join("");
+}
+
+function deptSay(text, kind) {
+  $("dept-result").className = (kind === "error" ? "error" : kind === "good" ? "good-text" : "muted") + " small";
+  $("dept-result").textContent = text || "";
+}
+
+/** After adding or removing a department: the new list everywhere, and each person's chips and menus redrawn. */
+function deptChanged(reply) {
+  shareDepts(reply.departments);
+  sharePeople(reply.team);
+  renderDepts();
+  $("people-list").querySelectorAll(".people-row").forEach((row) => {
+    const person = (reply.team || []).find((p) => p.id && p.id === row.dataset.id);
+    setRowDepts(row, person ? personDeptList(person) : rowDepts(row).filter((d) => PEOPLE_DEPTS().includes(d)));
+  });
+}
+
+async function addDept() {
+  const name = $("dept-new").value.trim().replace(/\s+/g, " ");
+  if (!name) return $("dept-new").focus();
+  $("dept-add").disabled = true;
+  const reply = await api("addDepartment", { name });
+  $("dept-add").disabled = false;
+  if (!reply.ok) {
+    if (reply.error === "NOT_LOGGED_IN") return handleEventError(reply, $("dept-result"));
+    return deptSay(errorText(reply), "error");
+  }
+  $("dept-new").value = "";
+  deptChanged(reply);
+  deptSay(T.deptAdded(name), "good");
+}
+
+$("dept-new").placeholder = T.deptNewPlaceholder;
+$("dept-new").setAttribute("aria-label", T.deptNewPlaceholder);
+$("dept-add").addEventListener("click", addDept);
+$("dept-new").addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.isComposing) { e.preventDefault(); addDept(); } });
+$("dept-list").addEventListener("click", async (e) => {
+  const b = e.target.closest("[data-remove-dept]");
+  if (!b) return;
+  const name = b.dataset.removeDept;
+  // Wait for any person still saving, so their row is drawn again with what the server has.
+  await Promise.all(Array.from($("people-list").querySelectorAll(".people-row"), (row) => peopleSaving.get(row)?.done));
+  if (!(await askConfirm(T.deptRemoveConfirm(name), T.peopleRemove))) return;
+  b.disabled = true;
+  const reply = await api("removeDepartment", { name });
+  b.disabled = false;
+  if (!reply.ok) {
+    if (reply.error === "NOT_LOGGED_IN") return handleEventError(reply, $("dept-result"));
+    return deptSay(errorText(reply), "error");
+  }
+  deptChanged(reply);
+  deptSay(T.deptRemoved(name), "good");
+});
+
 async function loadPeople() {
   peopleSay(T.peopleLoading);
   const reply = await api("listTasks");
   if (!reply.ok) return handleEventError(reply, $("people-result"));
   peopleSay("");
+  shareDepts(reply.departments);
   sharePeople(reply.team || []);
+  renderDepts();
   renderPeople(reply.team || []);
   const bot = await api("taskBotStatus");
   $("people-bot").hidden = !bot.ok;
@@ -348,7 +434,7 @@ async function savePersonRowNow(row) {
     return;   // a new row with no name yet is simply not saved
   }
   if (discordId && !/^\d{17,20}$/.test(discordId)) { discordInput.focus(); return peopleSay(T.teamBadDiscord(name), "error"); }
-  const person = { id: row.dataset.id || "", name, department: row.querySelector(".people-dept").value, discordId, active: row.querySelector(".people-active").checked };
+  const person = { id: row.dataset.id || "", name, departments: rowDepts(row), discordId, active: row.querySelector(".people-active").checked };
   row.classList.add("saving");
   const reply = await api("savePerson", { person });
   row.classList.remove("saving");
@@ -362,13 +448,27 @@ async function savePersonRowNow(row) {
 
 $("people-list").addEventListener("change", (e) => {
   const row = e.target.closest(".people-row");
-  if (row) savePersonRow(row);
+  if (!row) return;
+  if (e.target.matches(".people-dept-add")) {
+    const dept = e.target.value;
+    if (!dept) return;
+    setRowDepts(row, [...rowDepts(row).filter((d) => d !== dept), dept]);
+  }
+  savePersonRow(row);
 });
 // Enter in a box saves that row (the change event follows from leaving the box).
 $("people-list").addEventListener("keydown", (e) => {
   if (e.key === "Enter" && e.target.matches("input:not([type=checkbox])")) { e.preventDefault(); e.target.blur(); }
 });
 $("people-list").addEventListener("click", async (e) => {
+  const chip = e.target.closest(".people-dept-chip");
+  if (chip) {
+    const row = chip.closest(".people-row");
+    setRowDepts(row, rowDepts(row).filter((d) => d !== chip.dataset.dept));
+    const add = row.querySelector(".people-dept-add");
+    if (add) add.focus();
+    return savePersonRow(row);
+  }
   const reset = e.target.closest(".people-reset");
   if (reset) {
     const row = reset.closest(".people-row");

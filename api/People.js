@@ -37,7 +37,7 @@ function parsePeoplePaste_(text, departments) {
 }
 
 function peopleImportPlan_(text) {
-  const parsed = parsePeoplePaste_(text, TASK_DEPARTMENTS);
+  const parsed = parsePeoplePaste_(text, taskDepartments_());
   if (parsed.error) throw new ApiError_("BAD_REQUEST", parsed.error);
   const seen = Object.create(null);
   taskTeam_().forEach(function (p) { seen[teamNameKey_(p.name)] = true; });
@@ -62,7 +62,7 @@ function importPeople_(session, text) {
     const plan = peopleImportPlan_(text); // validate every row and re-check duplicates inside the lock
     let nextSort = teamNextSort_(readRows_("Team"));
     plan.rows.filter(function (p) { return p.add; }).forEach(function (p) {
-      insertRow_("Team", { id: newId_("TM"), name: p.name, department: p.department,
+      insertRow_("Team", { id: newId_("TM"), name: p.name, department: p.department, departments: p.department ? [p.department] : [],
         discordId: "", active: true, sort: nextSort++ });
     });
     delete DB_.rows["Team"];

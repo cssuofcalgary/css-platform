@@ -423,6 +423,12 @@ function route_(req) {
     case "removePerson":
       return removePerson_(requireAdmin_(req.token), req.id);
 
+    case "addDepartment":
+      return addDepartment_(requireAdmin_(req.token), req.name);
+
+    case "removeDepartment":
+      return removeDepartment_(requireAdmin_(req.token), req.name);
+
     case "taskBotStatus":
       requireAdmin_(req.token);
       return taskBotStatus_();

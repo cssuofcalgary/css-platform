@@ -131,7 +131,7 @@ ok(r.v.task.status === "doing" && r.v.task.updates.length === 1 && r.v.task.upda
 ok(r.v.task.labels.join() === "AGM,Budget" && r.v.task.checklist.length === 2, "a save without labels or checklist keeps them");
 ok(fn(`saveTask_(S, { id: "${tw.id}", labels: ["1","2","3","4","5","6","7"] })`).err === "BAD_REQUEST", "more than 6 labels: refused");
 ok(fn(`saveTask_(S, { id: "${tw.id}", labels: ["${"x".repeat(25)}"] })`).err === "BAD_REQUEST", "a label over 24 characters: refused");
-ok(fn(`saveTask_(S, { id: "${tw.id}", checklist: new Array(31).fill({ text: "a" }) })`).err === "BAD_REQUEST", "more than 30 checklist items: refused");
+ok(fn(`saveTask_(S, { id: "${tw.id}", checklist: new Array(61).fill({ text: "a" }) })`).err === "BAD_REQUEST", "more than 60 checklist items: refused");
 r = fn(`setTaskStatus_(S, "${tw.id}", "blocked", "todo")`);
 ok(r.v && r.v.stale === true && r.v.task.status === "doing" && rowOf(tw.id).status === "doing", "a status tap based on an old status (from) changes nothing and says stale");
 r = fn(`setTaskStatus_(S, "${tw.id}", "blocked", "doing")`);
@@ -760,6 +760,46 @@ const multiParsed = run(`parseTaskMessage_('<@'+BOT+'> prepare together for <@66
 ok(multiParsed.assignees.length === 2 && multiParsed.title === "Prepare together", "the bot accepts multiple person mentions as assignees");
 const multiFromDiscord = run(`withLock_(function(){return applyDiscordMessages_({botId:BOT,firstRun:false,messages:[__msg(9001,{content:'<@'+BOT+'> shared Discord task for <@666666666666666661> and <@666666666666666662>',mentions:[{id:BOT},{id:'666666666666666661',username:'one'},{id:'666666666666666662',username:'two'}]})]});})`);
 ok(multiFromDiscord.created === 1 && SAME(multiFromDiscord.posts[0].userIds,["666666666666666661","666666666666666662"]) && run(`taskView_(readRows_('Tasks').filter(function(t){return t.title==='Shared Discord task';})[0],[]).owners.length`) === 2, "Discord-created shared tasks keep both people and confirm both mentions");
+
+// A task given to everyone: a checklist line per person, ticked when they've done their part.
+const taskChecks = (row) => (typeof row.checklist === "string" ? JSON.parse(row.checklist) : row.checklist).map((c) => c.done === true || c.done === "true");
+run(`savePerson_(A,{name:'Tick One',department:'Events',discordId:'666666666666666671'});
+  savePerson_(A,{name:'Tick Two',department:'Events',discordId:'666666666666666672'});
+  savePerson_(A,{name:'Tick Three',department:'Events',discordId:'666666666666666673'}); __discord('bot');`);
+const everyone = run(`saveTask_(S,{title:'Fill out availability',owners:['Tick One','Tick Two','Tick Three'],due:ymdAdd_(edmParts_(Date.now()).ymd,1),
+  checklist:[{text:'Tick One'},{text:'Tick Two'},{text:'Tick Three'}]}).task`);
+let tickPost = run(`__fetches.filter(function(f){return f.body && /Fill out availability/.test(f.body.content);}).pop().body`);
+ok(SAME(tickPost.allowed_mentions.users, ["666666666666666671", "666666666666666672", "666666666666666673"]), "a new task given to everyone tags everyone");
+run(`TBL.Tasks.forEach(function (t) { if (t.id === '${everyone.id}') t.checklist = JSON.stringify([{id:'c1',text:'Tick One',done:true},{id:'c2',text:'tick  two',done:false},{id:'c3',text:'Tick Three',done:false}]); })`);
+ok(SAME(run(`taskOwnerDiscordIds_(taskFresh_('${everyone.id}'))`), ["666666666666666672", "666666666666666673"]), "someone who ticked their name isn't tagged any more (any capitals or spacing)");
+ok(!/666666666666666671/.test(run(`taskDiscordWho_(taskFresh_('${everyone.id}'))`)), "…and isn't listed as still to do it");
+run(`__fetches=[]; remindTasksOnDiscord_(S)`);
+tickPost = run(`__fetches.filter(function(f){return f.body && /Fill out availability/.test(f.body.content);}).pop().body`);
+ok(!tickPost.allowed_mentions.users.includes("666666666666666671") && tickPost.allowed_mentions.users.includes("666666666666666672"), "Remind on Discord tags only the people who haven't ticked their name");
+run(`var __allTasks = TBL.Tasks; TBL.Tasks = __allTasks.filter(function (t) { return t.id === '${everyone.id}'; }); delete DB_.rows["Tasks"]; __fetches = []; remindTasksOnDiscord_(S);
+  TBL.Tasks = __allTasks; delete DB_.rows["Tasks"];`);
+tickPost = run(`__fetches.filter(function(f){return f.body && /Task check-in/.test(f.body.content);}).pop().body`);
+ok(SAME(tickPost.allowed_mentions.users, ["666666666666666672", "666666666666666673"]), "Remind on Discord with one task for many people tags all of them (not just one per line)");
+run(`var tickRaw = taskFresh_('${everyone.id}'); tickRaw.remind=[{n:0,unit:'days',at:'09:00'}]; tickRaw.remindSent=[]; var tickDue = taskReminderAt_(tickRaw.due,tickRaw.remind[0]);`);
+const tickReminder = run(`withLock_(function(){return takeDueReminders_(tickDue+1000);}).filter(function(p){return p.taskId==='${everyone.id}';})[0]`);
+ok(tickReminder && SAME(tickReminder.userIds, ["666666666666666672", "666666666666666673"]), "scheduled reminders also skip people who ticked their name");
+const tickMsg = run(`taskFresh_('${everyone.id}').discordMessageId`);
+const tickReply = (n, who, text) => run(`withLock_(function(){return applyDiscordMessages_({botId:BOT,firstRun:false,messages:[__msg(${n},{content:'${text}',author:{id:'${who}',username:'u${n}'},message_reference:{message_id:'${tickMsg}'}})]});})`);
+tickReply(9101, "666666666666666672", "done");
+let tickRow = run(`taskFresh_('${everyone.id}')`);
+ok(tickRow.status !== "done" && taskChecks(tickRow).join() === "true,true,false", "Discord: 'done' from someone on the list ticks their name, not the whole task");
+ok(run(`readRows_('TaskUpdates').filter(function(u){return u.discordMessageId===__msg(9101).id;})[0].status`) === "", "…their reply shows in the updates without changing the status");
+tickReply(9102, "666666666666666672", "done");
+ok(taskChecks(run(`taskFresh_('${everyone.id}')`)).join() === "true,true,false" && run(`taskFresh_('${everyone.id}').status`) !== "done", "saying done again changes nothing more");
+tickReply(9103, "666666666666666673", "done!");
+tickRow = run(`taskFresh_('${everyone.id}')`);
+ok(tickRow.status === "done" && taskChecks(tickRow).every(Boolean), "the last person to say done ticks their name and finishes the task");
+const plainTask = run(`saveTask_(S,{title:'One person job',owners:['Tick One','Tick Two']}).task`);
+run(`TBL.Tasks.forEach(function (t) { if (t.id === '${plainTask.id}') t.discordMessageId = '300000000000009200'; })`);
+run(`withLock_(function(){return applyDiscordMessages_({botId:BOT,firstRun:false,messages:[__msg(9201,{content:'done',author:{id:'666666666666666671',username:'one'},message_reference:{message_id:'300000000000009200'}})]});})`);
+ok(run(`taskFresh_('${plainTask.id}').status`) === "done", "a task without name lines: 'done' finishes it, as before");
+ok(SAME(run(`taskOwnerDiscordIds_({assignees:[{name:'Tick One',discordId:'666666666666666671'}],checklist:[{text:'Tick One',done:true}]})`), ["666666666666666671"]), "everyone ticked but not Done yet: everyone is tagged again, as for any task");
+ok(run(`saveTask_(S,{id:'${plainTask.id}',checklist:new Array(60).fill({text:'a'})}).task.checklist.length`) === 60, "a checklist can have a line for up to 60 people");
 
 // Routes exist
 ["listTasks", "saveTask", "setTaskStatus", "addTaskUpdate", "removeTask", "remindTasksOnDiscord"].forEach((a) => {

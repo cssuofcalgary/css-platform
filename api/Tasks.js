@@ -7,18 +7,97 @@
  */
 
 const TASK_STATUSES = ["todo", "doing", "blocked", "done"];
-const TASK_DEPARTMENTS = ["Events", "Marketing", "Internal", "External", "Finance", "General"];
+const TASK_DEPARTMENTS_BUILT_IN = ["Events", "Marketing", "Internal", "External", "Finance"];   // always there; General is always last
+const TASK_DEPARTMENTS_ADDED_MAX = 20;
+const TASK_PERSON_DEPARTMENTS_MAX = 10;
 const TASK_DONE_SHOWN_DAYS = 30;
+
+// ---- Departments: the five built in, the ones added in Settings → People, then General ----------------
+
+/** The departments added in Settings → People (Script Property TASK_DEPARTMENTS_EXTRA, a JSON list of names). */
+function taskAddedDepartments_() {
+  let list = [];
+  try { list = JSON.parse(PropertiesService.getScriptProperties().getProperty("TASK_DEPARTMENTS_EXTRA") || "[]"); } catch (e) { list = []; }
+  return Array.isArray(list) ? list.map(function (d) { return memberText_(d, 24); }).filter(Boolean) : [];
+}
+
+/** Every department, in order. */
+function taskDepartments_() {
+  return TASK_DEPARTMENTS_BUILT_IN.concat(taskAddedDepartments_(), ["General"]);
+}
+
+/** A department as the list spells it ("events" = "Events"), or "" when it isn't one. depts: taskDepartments_(), read once by the caller. */
+function taskDepartmentName_(value, depts) {
+  const key = teamNameKey_(value);
+  return key ? (depts || taskDepartments_()).filter(function (d) { return d.toLowerCase() === key; })[0] || "" : "";
+}
+
+/** A person's departments (still on the list), the first one first. Older rows have just one, in the department column. */
+function teamDepartmentsOf_(r, depts) {
+  const saved = taskList_(r && r.departments);
+  const out = [];
+  (saved.length ? saved : r && r.department ? [r.department] : []).forEach(function (d) {
+    const name = taskDepartmentName_(d, depts);
+    if (name && out.indexOf(name) === -1) out.push(name);
+  });
+  return out;
+}
+
+/** The department a task gets from the person it's given to: their first one, otherwise General. */
+function teamTaskDepartment_(r, depts) {
+  return teamDepartmentsOf_(r, depts)[0] || "General";
+}
+
+/** Admin (Settings → People): adds a department of the club's own. */
+function addDepartment_(session, name) {
+  const raw = String(name === undefined || name === null ? "" : name).replace(/\s+/g, " ").trim();
+  const clean = memberText_(raw, 24);
+  if (!clean || raw.length > 24) throw new ApiError_("BAD_REQUEST", "Write the department's name (up to 24 characters).");
+  if (/[,"]/.test(clean)) throw new ApiError_("BAD_REQUEST", "A department's name can't have a comma or quote marks in it.");
+  if (["everyone", "mine", "all", "my tasks"].indexOf(clean.toLowerCase()) !== -1) throw new ApiError_("BAD_REQUEST", "\"" + clean + "\" can't be a department's name. Pick another name.");
+  return withLock_(function () {
+    const added = taskAddedDepartments_();
+    const same = taskDepartmentName_(clean);
+    if (same) throw new ApiError_("BAD_REQUEST", same + " is already a department.");
+    if (added.length >= TASK_DEPARTMENTS_ADDED_MAX) throw new ApiError_("BAD_REQUEST", "You can add up to " + TASK_DEPARTMENTS_ADDED_MAX + " departments. Remove one you no longer use first.");
+    added.push(clean);
+    PropertiesService.getScriptProperties().setProperty("TASK_DEPARTMENTS_EXTRA", JSON.stringify(added));
+    log_(session.name, "department.added", "", { name: clean });
+    return { ok: true, departments: taskDepartments_(), team: taskTeam_() };
+  });
+}
+
+/**
+ * Admin: removes a department that was added in Settings → People (the five built in stay). People keep their other
+ * departments, and tasks keep the department name they were saved with. Adding the same name again brings it back for
+ * the people who had it.
+ */
+function removeDepartment_(session, name) {
+  const key = teamNameKey_(name);
+  if (TASK_DEPARTMENTS_BUILT_IN.concat(["General"]).some(function (d) { return d.toLowerCase() === key; })) {
+    throw new ApiError_("BAD_REQUEST", "The main departments can't be removed. Only ones that were added can.");
+  }
+  return withLock_(function () {
+    const added = taskAddedDepartments_();
+    const left = added.filter(function (d) { return d.toLowerCase() !== key; });
+    if (!key || left.length === added.length) throw new ApiError_("NOT_FOUND", "That department is no longer there. Refresh the page.");
+    PropertiesService.getScriptProperties().setProperty("TASK_DEPARTMENTS_EXTRA", JSON.stringify(left));
+    log_(session.name, "department.removed", "", { name: added.filter(function (d) { return d.toLowerCase() === key; })[0] });
+    return { ok: true, departments: taskDepartments_(), team: taskTeam_() };
+  });
+}
 
 // ---- Team (who tasks can be given to) ------------------------------------------------------------
 
-function teamView_(r) {
-  return { id: r.id, name: r.name, department: TASK_DEPARTMENTS.indexOf(r.department) !== -1 ? r.department : "", discordId: String(r.discordId || ""), active: isOn_(r.active), sort: Number(r.sort) || 0, passwordSet: !!r.passwordHash };
+function teamView_(r, depts) {
+  const departments = teamDepartmentsOf_(r, depts);
+  return { id: r.id, name: r.name, department: departments[0] || "", departments: departments, discordId: String(r.discordId || ""), active: isOn_(r.active), sort: Number(r.sort) || 0, passwordSet: !!r.passwordHash };
 }
 
 /** The whole team list (on and off), in its saved order. */
 function taskTeam_() {
-  return readRows_("Team").map(teamView_).sort(function (a, b) { return a.sort - b.sort || a.name.localeCompare(b.name); });
+  const depts = taskDepartments_();
+  return readRows_("Team").map(function (r) { return teamView_(r, depts); }).sort(function (a, b) { return a.sort - b.sort || a.name.localeCompare(b.name); });
 }
 
 /** A name as it is compared: any capitals, extra spaces ignored ("  amy   LEE " = "Amy Lee"). */
@@ -40,7 +119,8 @@ function teamNextSort_(rows) {
 
 /** Puts a new person at the end of the People list. Returns the row. Callers check the name isn't there already. */
 function teamInsert_(name, department) {
-  const row = { id: newId_("TM"), name: memberText_(name, 60), department: TASK_DEPARTMENTS.indexOf(department) !== -1 && department !== "General" ? department : "",
+  const dept = taskDepartmentName_(department);
+  const row = { id: newId_("TM"), name: memberText_(name, 60), department: dept !== "General" ? dept : "", departments: dept && dept !== "General" ? [dept] : [],
     discordId: "", active: true, sort: teamNextSort_(readRows_("Team")) };
   insertRow_("Team", row);
   return row;
@@ -73,14 +153,21 @@ function teamAddOnSignIn_(name) {
   } catch (err) { /* never stops anyone signing in */ }
 }
 
-/** Admin (Settings → People): add (no id) or edit one person. Names are unique, ignoring capitals and spacing. */
+/**
+ * Admin (Settings → People): add (no id) or edit one person. Names are unique, ignoring capitals and spacing.
+ * departments: the person's departments, the first one first (an older page sends one department). Unknown ones are left out.
+ */
 function savePerson_(session, input) {
   input = input || {};
   const name = memberText_(input.name, 60);
   if (!name) throw new ApiError_("BAD_REQUEST", "Write the person's name.");
   const discordId = String(input.discordId === undefined || input.discordId === null ? "" : input.discordId).replace(/\s+/g, "");
   if (discordId && !/^\d{17,20}$/.test(discordId)) throw new ApiError_("BAD_REQUEST", "The Discord ID for " + name + " should be 17 to 20 digits (or left blank).");
-  const department = TASK_DEPARTMENTS.indexOf(input.department) !== -1 ? input.department : "";
+  const wanted = Array.isArray(input.departments) ? input.departments : input.department ? [input.department] : [];
+  if (wanted.length > TASK_PERSON_DEPARTMENTS_MAX || wanted.some(function (d) { return typeof d !== "string"; })) {
+    throw new ApiError_("BAD_REQUEST", "A person can be in up to " + TASK_PERSON_DEPARTMENTS_MAX + " departments.");
+  }
+  const departments = teamDepartmentsOf_({ departments: wanted }, taskDepartments_());
   const active = input.active === undefined || input.active === null ? true : (input.active === true || String(input.active).toLowerCase() === "true");
   const id = String(input.id || "");
   return withLock_(function () {
@@ -94,7 +181,7 @@ function savePerson_(session, input) {
     if (sameName) throw new ApiError_("BAD_REQUEST", String(sameName.name).trim() + " is already on the list.");
     const sameDiscord = discordId && rows.filter(function (r) { return r.id !== id && String(r.discordId || "") === discordId; })[0];
     if (sameDiscord) throw new ApiError_("BAD_REQUEST", "That Discord ID is already saved for " + String(sameDiscord.name).trim() + ".");
-    const fields = { name: name, department: department, discordId: discordId, active: active };
+    const fields = { name: name, department: departments[0] || "", departments: departments, discordId: discordId, active: active };
     let saved;
     if (row) {
       updateRow_("Team", row.id, fields, row._row);
@@ -105,7 +192,7 @@ function savePerson_(session, input) {
     }
     log_(session.name, "person.saved", saved.id, { name: name, added: !row });
     delete DB_.rows["Team"];
-    return { ok: true, person: teamView_(saved), team: taskTeam_() };
+    return { ok: true, person: teamView_(saved, taskDepartments_()), team: taskTeam_() };
   });
 }
 
@@ -147,12 +234,42 @@ function taskAssigneeDiscordId_(person) {
   return /^\d{17,20}$/.test(String(person.discordId || "")) ? String(person.discordId) : teamDiscordId_(taskTeamByName_(person.name));
 }
 
+/**
+ * The assignees still to do it. A task given to everyone (or a department) has a checklist line with each person's name:
+ * people who have ticked their name are left out of Discord pings and reminders. When every name is ticked (but the
+ * task isn't Done yet), all of them, as for any other task.
+ */
+function taskAssigneesToDo_(task) {
+  const people = taskAssignees_(task);
+  const ticked = {};
+  taskChecklistOf_(task).forEach(function (c) { if (c.done) ticked[teamNameKey_(c.text)] = true; });
+  const left = people.filter(function (p) { return !ticked[teamNameKey_(p.name)]; });
+  return left.length ? left : people;
+}
+
+/**
+ * CALL WHILE HOLDING THE SCRIPT LOCK (or inside the Discord read). An assignee saying "done" on a task with their name in
+ * the checklist ticks their name instead of finishing the task for everyone (saying it again changes nothing).
+ * Returns { checklist, changed, allDone }, or null when their name isn't in the checklist (then "done" finishes the
+ * task, as before).
+ */
+function taskTickName_(task, name) {
+  const key = teamNameKey_(name);
+  if (!key || !taskAssignees_(task).some(function (p) { return teamNameKey_(p.name) === key; })) return null;
+  const list = taskChecklistOf_(task);
+  const lines = list.filter(function (c) { return teamNameKey_(c.text) === key; });
+  if (!lines.length) return null;
+  const changed = lines.some(function (c) { return !c.done; });
+  lines.forEach(function (c) { c.done = true; });
+  return { checklist: list, changed: changed, allDone: list.every(function (c) { return c.done; }) };
+}
+
 function taskOwnerDiscordIds_(task) {
-  return taskAssignees_(task).map(taskAssigneeDiscordId_).filter(function (id, i, ids) { return id && ids.indexOf(id) === i; });
+  return taskAssigneesToDo_(task).map(taskAssigneeDiscordId_).filter(function (id, i, ids) { return id && ids.indexOf(id) === i; });
 }
 
 function taskDiscordWho_(task) {
-  return taskAssignees_(task).map(function (p) { return discordWho_(p.name, taskAssigneeDiscordId_(p)); }).join(", ") || discordWho_("", "");
+  return taskAssigneesToDo_(task).map(function (p) { return discordWho_(p.name, taskAssigneeDiscordId_(p)); }).join(", ") || discordWho_("", "");
 }
 
 /** Resolve portal names under the save lock; never accept Discord IDs from the browser. */
@@ -175,7 +292,7 @@ function taskResolveAssignees_(names, previous, session, department) {
 function saveTeam_(session, list) {
   if (!Array.isArray(list)) throw new ApiError_("BAD_REQUEST", "Send the team list.");
   if (list.length > 100) throw new ApiError_("BAD_REQUEST", "The team list can have up to 100 people.");
-  const clean = [], names = {};
+  const clean = [], names = {}, depts = taskDepartments_();
   list.forEach(function (input) {
     input = input || {};
     const name = memberText_(input.name, 60);
@@ -188,7 +305,8 @@ function saveTeam_(session, list) {
     if (names[name.toLowerCase()]) throw new ApiError_("BAD_REQUEST", name + " is on the list twice.");
     names[name.toLowerCase()] = true;
     const active = input.active === undefined || input.active === null ? true : (input.active === true || String(input.active).toLowerCase() === "true");
-    clean.push({ id: String(input.id || ""), name: name, department: TASK_DEPARTMENTS.indexOf(input.department) !== -1 ? input.department : "General", discordId: discordId, active: active });
+    const departments = teamDepartmentsOf_({ departments: Array.isArray(input.departments) ? input.departments.slice(0, TASK_PERSON_DEPARTMENTS_MAX) : [], department: input.department }, depts);
+    clean.push({ id: String(input.id || ""), name: name, department: departments[0] || "General", departments: departments, discordId: discordId, active: active });
   });
   // An empty list would wipe the whole Team tab (for example if the page hadn't loaded the team yet): refuse it.
   if (!clean.length) throw new ApiError_("BAD_REQUEST", "The team list can't be empty. Add at least one person.");
@@ -198,7 +316,7 @@ function saveTeam_(session, list) {
     readRows_("Team").forEach(function (r) { existing[r.id] = r; });
     const keep = {};
     clean.forEach(function (t, i) {
-      const fields = { name: t.name, department: t.department, discordId: t.discordId, active: t.active, sort: i + 1 };
+      const fields = { name: t.name, department: t.department, departments: t.departments, discordId: t.discordId, active: t.active, sort: i + 1 };
       const row = t.id && existing[t.id];
       if (row) { updateRow_("Team", row.id, fields, row._row); keep[row.id] = true; }
       else insertRow_("Team", Object.assign({ id: newId_("TM") }, fields));
@@ -258,7 +376,7 @@ function listTasks_(session) {
   }).map(function (t) { return taskView_(t, byTask[t.id]); })
     .sort(function (a, b) { return (a.due || "9999") .localeCompare(b.due || "9999") || String(a.createdAt).localeCompare(String(b.createdAt)); });
   return {
-    ok: true, tasks: tasks, team: taskTeam_(),
+    ok: true, tasks: tasks, team: taskTeam_(), departments: taskDepartments_(),
     discord: { ready: setup.posting && setup.reading, posting: setup.posting, reading: setup.reading, synced: sync.synced, error: sync.error }
   };
 }
@@ -316,7 +434,7 @@ function taskCleanLink_(value) {
   return /^https?:\/\//i.test(link) ? link : "https://" + link;
 }
 
-const TASK_CHECKLIST_MAX = 30;
+const TASK_CHECKLIST_MAX = 60;   // room for a line per person on a task given to everyone
 const TASK_LABELS_MAX = 6;
 
 /** The saved checklist as [{ id, text, done }] (anything odd in the cell is skipped). */
@@ -331,7 +449,7 @@ function taskLabelsOf_(task) {
   return taskList_(task.labels).map(function (l) { return String(l || "").trim(); }).filter(Boolean);
 }
 
-/** A checklist sent with a save: up to 30 items of up to 200 characters. Items without an id get one. */
+/** A checklist sent with a save: up to 60 items of up to 200 characters. Items without an id get one. */
 function taskCleanChecklist_(value) {
   if (value === undefined || value === null || value === "") return [];
   if (!Array.isArray(value) || value.length > TASK_CHECKLIST_MAX) throw new ApiError_("BAD_REQUEST", "A checklist can have up to " + TASK_CHECKLIST_MAX + " items.");
@@ -427,7 +545,8 @@ function saveTask_(session, input) {
   if (!editing || has("checklist")) clean.checklist = taskCleanChecklist_(input.checklist);
   if (!editing || has("labels")) clean.labels = taskCleanLabels_(input.labels);
   const newStatus = editing && has("status") && input.status !== "" ? taskCleanStatus_(input.status) : "";
-  const department = TASK_DEPARTMENTS.indexOf(input.department) !== -1 ? input.department : "";
+  const depts = taskDepartments_();
+  const department = taskDepartmentName_(input.department, depts);
 
   if (!editing) {
     // The page names a new task itself (saved in the background, and sent again if the connection dropped): the same name
@@ -442,7 +561,7 @@ function saveTask_(session, input) {
       }
       delete DB_.rows["Team"];
       const owner = taskTeamByName_(clean.owner);
-      clean.department = department || (owner && TASK_DEPARTMENTS.indexOf(owner.department) !== -1 ? owner.department : "General");
+      clean.department = department || teamTaskDepartment_(owner, depts);
       clean.assignees = taskResolveAssignees_(names, null, session, clean.department);
       clean.owner = clean.assignees.length ? clean.assignees[0].name : "";
       clean.ownerDiscordId = clean.assignees.length ? clean.assignees[0].discordId : "";
@@ -468,7 +587,9 @@ function saveTask_(session, input) {
     const changes = Object.assign({}, clean);
     delete DB_.rows["Team"];
     const owner = taskTeamByName_(assigning ? clean.owner : task.owner);
-    changes.department = department || (input.department === undefined && task.department) || (owner && TASK_DEPARTMENTS.indexOf(owner.department) !== -1 ? owner.department : "General");
+    // A department that was removed from the list since: the task keeps it while the page sends it back unchanged.
+    const kept = input.department && task.department && teamNameKey_(input.department) === teamNameKey_(task.department) ? task.department : "";
+    changes.department = department || kept || (input.department === undefined && task.department) || teamTaskDepartment_(owner, depts);
     if (assigning) {
       changes.assignees = taskResolveAssignees_(names, task, session, changes.department);
       changes.owner = changes.assignees.length ? changes.assignees[0].name : "";
@@ -626,9 +747,9 @@ function remindTasksOnDiscord_(session) {
     return t.status === "blocked" || (t.due && t.due <= soon);
   }).sort(function (a, b) { return (a.due || "9999").localeCompare(b.due || "9999"); });
   if (!list.length) return { ok: true, posted: false, count: 0 };
-  const ids = [];   // Only assigned people may be pinged.
+  const lineIds = [];   // Only assigned people may be pinged: the people on each line.
   const lines = list.map(function (t) {
-    taskOwnerDiscordIds_(t).forEach(function (id) { ids.push(id); });
+    lineIds.push(taskOwnerDiscordIds_(t));
     let when = "no due date";
     if (t.due && t.due < today) {
       const days = Math.round((edmAt_(today, 12, 0) - edmAt_(t.due, 12, 0)) / 86400000);
@@ -645,7 +766,9 @@ function remindTasksOnDiscord_(session) {
     content += "\n" + lines[i];
     shown++;
   }
-  const post = discordSend_(content, ids.slice(0, shown));   // only people whose line made it into the message are pinged
+  // Only people whose line made it into the message are pinged (every person on those lines, however many share a task).
+  const ids = [].concat.apply([], lineIds.slice(0, shown));
+  const post = discordSend_(content, ids);
   log_(session.name, "task.remind", "", { count: list.length, posted: !!post.ok });
   const out = { ok: true, posted: !!post.ok, count: list.length };
   if (!post.ok) out.error = post.error;

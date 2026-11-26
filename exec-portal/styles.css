@@ -694,19 +694,32 @@ button.all-row:hover { border-color: var(--border-2); }
 }
 /* Settings → People */
 .people-list { display: grid; gap: 6px; }
-.people-row { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1.2fr) 44px 120px 32px; gap: 6px; align-items: center; }
+.people-row { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1.2fr) 44px 120px 32px; gap: 6px; align-items: center; }
+.people-row:not(.people-head) { padding-bottom: 8px; border-bottom: 1px dashed var(--border); }
 .people-row.saving { opacity: .6; }
 .people-row .toggle { justify-self: center; }
 .people-row .people-remove { margin-left: 0; }
 .people-head { font-size: 11px; letter-spacing: .5px; text-transform: uppercase; color: var(--muted); }
-.people-head span:nth-child(4) { text-align: center; }
+.people-head span:nth-child(3) { text-align: center; }
+.people-depts { grid-column: 1 / -1; grid-row: 2; display: flex; flex-wrap: wrap; align-items: center; gap: 4px; min-width: 0; }
+.people-depts .chip { padding: 3px 9px; font-size: 13px; font-weight: 500; white-space: nowrap; }
+.people-depts .people-dept-add { width: auto; min-width: 0; max-width: 100%; padding: 3px 8px; font-size: 13px; }
+.dept-title { margin-top: 18px; }
+.dept-list .dept-chip { padding: 4px 11px; font-size: 13px; font-weight: 500; }
+.dept-list span.dept-chip { cursor: default; }
+.dept-add-row { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+.dept-add-row input { flex: 1; min-width: 0; max-width: 260px; }
+.task-groups { margin-top: 6px; }
+.task-groups:empty { display: none; }
+.task-groups .chip { padding: 4px 11px; font-size: 13px; }
+.task-groups .chip:disabled { opacity: .45; cursor: default; }
 @media (max-width: 560px) {
   .task-actions { width: 100%; }
   .task-actions #task-new-button { margin-left: auto; }
   .people-head { display: none; }
-  .people-row { grid-template-columns: minmax(0, 1fr) 44px 32px; padding-bottom: 8px; border-bottom: 1px dashed var(--border); }
+  .people-row { grid-template-columns: minmax(0, 1fr) 44px 32px; }
   .people-row .people-name { grid-column: 1; }
-  .people-row .people-dept, .people-row .people-discord { grid-column: 1 / -1; }
+  .people-row .people-discord { grid-column: 1 / -1; }
   .people-row .toggle { grid-column: 2; grid-row: 1; }
   .people-row .people-remove { grid-column: 3; grid-row: 1; }
   .people-row .people-reset { grid-column: 1 / -1; justify-self: start; }

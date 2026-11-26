@@ -142,7 +142,7 @@ function discordBotRoles_(setup, botId) {
 /** The message for a brand-new task made in the portal, @mentioning its assignees. */
 function discordTaskMessage_(task, ownerDiscordId) {
   return "📌 **" + discordEscape_(task.title) + "** — " + taskDiscordWho_(task) +
-    " · due " + taskDayText_(task.due, "no due date") + " · " + (task.department || "General") +
+    " · due " + taskDayText_(task.due, "no due date") + " · " + discordEscape_(task.department || "General") +
     "\nReply to this message with how it's going. Say **done** when it's finished.";
 }
 
@@ -376,10 +376,20 @@ function applyDiscordMessages_(pull) {
         const status = discordReplyStatus_(raw, task.status);
         setStatus = status && status !== task.status ? status : "";
       }
+      // A task given to everyone: "done" from someone whose name is in the checklist ticks their name. The task is done
+      // only when that was the last thing left to tick.
+      const tick = setStatus === "done" && authorRow ? taskTickName_(task, authorRow.name) : null;
+      if (tick && !tick.allDone) setStatus = "";
       insertRow_("TaskUpdates", { id: newId_("TU"), taskId: taskId, text: text, by: authorName, source: "discord", status: setStatus, createdAt: when.toISOString(), discordMessageId: id });
       seen[id] = true;
       byMessage[id] = taskId;   // someone may reply to this reply
       out.added++;
+      if (tick && tick.changed) {
+        const ticked = { checklist: tick.checklist, updatedBy: authorName + " (Discord)", updatedAt: new Date().toISOString() };
+        updateRow_("Tasks", task.id, ticked, task._row);
+        Object.assign(task, ticked);
+        log_(authorName + " (Discord)", "task.ticked", task.id, { title: task.title, name: String(authorRow.name || "").trim(), source: "discord" });
+      }
       if (setStatus) {
         const changes = taskStatusChanges_(task, setStatus, authorName + " (Discord)");
         updateRow_("Tasks", task.id, changes, task._row);
@@ -414,7 +424,7 @@ function applyDiscordMessages_(pull) {
     });
     const task = taskNewRow_({ title: parsed.title, owner: ownerName, ownerDiscordId: ownerDiscordId, due: parsed.due, remind: parsed.remind,
       assignees: assignees,
-      department: ownerRow && TASK_DEPARTMENTS.indexOf(ownerRow.department) !== -1 ? ownerRow.department : "General",
+      department: teamTaskDepartment_(ownerRow, taskDepartments_()),
       by: authorName + " (Discord)", discordMessageId: id, now: when });
     insertRow_("Tasks", task);
     tasks[task.id] = task;

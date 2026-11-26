@@ -18,6 +18,10 @@ Choose **New task**, enter what needs doing, then add people under **Who**. Pick
 
 Discord task posts and reminders tag everyone assigned who has a Discord ID. When creating a task with the bot, mention several people to assign them together.
 
+**Give a task to everyone, or a whole department:** under **Who**, press **+ Everyone** or a department button (for example **+ Events**). Everyone active in it is added, and the task gets a checklist line with each person's name. Each person ticks their own name when they've done their part (or replies **done** to the task on Discord, which ticks their name). Reminders only tag the people who haven't ticked their name yet. The task shows how many have ticked (for example 3/12); mark it **Done** when everyone has, or it finishes by itself when the last person says done on Discord. Take someone off with their **×** and their name line goes too. The same buttons appear under **+ Add person** in an open task.
+
+**Departments:** in **Settings → People**, each person can be in more than one department: press **+ Add** on their line to add one, or the **×** on a department to take it off. Under **Departments** at the bottom, type a new name and press **Add** to make your own (for example Photography). Departments you added have an **×** to remove them again; people keep their other departments and tasks keep their department name. The five main ones (Events, Marketing, Internal, External, Finance) and General always stay.
+
 ## Members tab: sign-ups, payments and search
 Membership costs the fee set in **Settings → Membership** for the school year (September to August). People join on their own at **member.ucalgarycss.ca/create** (this replaces the Google Form), or an exec adds them here. Both end up as one row on the Membership sheet.
 

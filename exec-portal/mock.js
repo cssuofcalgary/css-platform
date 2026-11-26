@@ -71,11 +71,15 @@ const MockApi = (() => {
   const day = (n) => { const d = new Date(new Date().toLocaleDateString("en-CA", { timeZone: "America/Edmonton" }) + "T12:00:00Z"); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
   const ago = (mins) => new Date(Date.now() - mins * 60000).toISOString();
   let taskTeam = [
-    { id: "tm1", name: "Gordon", department: "Internal", discordId: "123456789012345678", active: true, sort: 1 },
-    { id: "tm2", name: "Bella Chen", department: "Events", discordId: "223456789012345678", active: true, sort: 2 },
-    { id: "tm3", name: "Chris Li", department: "Marketing", discordId: "", active: true, sort: 3 },
-    { id: "tm4", name: "Emily Chan", department: "Finance", discordId: "323456789012345678", active: true, sort: 4 }
+    { id: "tm1", name: "Gordon", department: "Internal", departments: ["Internal"], discordId: "123456789012345678", active: true, sort: 1 },
+    { id: "tm2", name: "Bella Chen", department: "Events", departments: ["Events", "Marketing"], discordId: "223456789012345678", active: true, sort: 2 },
+    { id: "tm3", name: "Chris Li", department: "Marketing", departments: ["Marketing"], discordId: "", active: true, sort: 3 },
+    { id: "tm4", name: "Emily Chan", department: "Finance", departments: ["Finance"], discordId: "323456789012345678", active: true, sort: 4 }
   ];
+  // Departments: the five built in, any added in Settings → People, then General
+  let addedDepts = [];
+  const demoDepts = () => ["Events", "Marketing", "Internal", "External", "Finance", ...addedDepts, "General"];
+  const deptName = (d) => demoDepts().find((x) => x.toLowerCase() === String(d || "").trim().toLowerCase()) || "";
   let taskSeq = 10;
   const mkTask = (id, title, owner, department, status, due, mins, updates, extra) => ({
     id, title, owner, owners: [owner], department, status, due, notes: "", link: "", remind: [], nextReminder: "", checklist: [], labels: [],
@@ -103,7 +107,10 @@ const MockApi = (() => {
   // People: one list for sign-in names and "Who" (matched ignoring case and extra spaces)
   const nameKey = (s) => String(s || "").trim().replace(/\s+/g, " ").toLowerCase();
   const findPerson = (name) => taskTeam.find((p) => nameKey(p.name) === nameKey(name));
-  const demoTeam = () => taskTeam.map((p) => ({ ...p, passwordSet: !!accountHashes[p.id] }));
+  const demoTeam = () => taskTeam.map((p) => {
+    const departments = (p.departments || (p.department ? [p.department] : [])).filter((d) => demoDepts().includes(d));
+    return { ...p, department: departments[0] || "", departments, passwordSet: !!accountHashes[p.id] };
+  });
   function demoSignIn(name, role, person) {
     const token = (role === "admin" ? "demo-admin-" : "demo-") + Math.random().toString(36).slice(2);
     sessions.add(token);
@@ -112,7 +119,7 @@ const MockApi = (() => {
     return { ok: true, token, name, role };
   }
   function demoImport(text, save) {
-    const parsed = parsePeoplePaste_(text, TASK_DEPTS);
+    const parsed = parsePeoplePaste_(text, demoDepts());
     if (parsed.error) return { ok: false, error: "BAD_REQUEST", message: parsed.error };
     const seen = new Set(taskTeam.map((p) => nameKey(p.name)));
     let added = 0;
@@ -127,7 +134,7 @@ const MockApi = (() => {
   function addPerson(name, department) {
     const clean = String(name || "").trim().replace(/\s+/g, " ");
     if (!clean || findPerson(clean)) return;
-    taskTeam.push({ id: "tm" + (++taskSeq), name: clean, department: department || "", discordId: "", active: true, sort: taskTeam.length + 1 });
+    taskTeam.push({ id: "tm" + (++taskSeq), name: clean, department: department || "", departments: department ? [department] : [], discordId: "", active: true, sort: taskTeam.length + 1 });
   }
 
   // Reminders: [{ n, unit: "days"|"weeks", at: "HH:MM" }] before the due date, Calgary time
@@ -155,7 +162,7 @@ const MockApi = (() => {
     switch (req.action) {
       case "listTasks":
         tasks.forEach(withReminders);
-        return { ok: true, tasks: JSON.parse(JSON.stringify(tasks)), team: demoTeam(),
+        return { ok: true, tasks: JSON.parse(JSON.stringify(tasks)), team: demoTeam(), departments: demoDepts(),
           discord: { ready: true, posting: true, reading: true, synced: 0, error: "" } };
       case "saveTask": {
         const input = req.task || {};
@@ -174,7 +181,7 @@ const MockApi = (() => {
         const person = findPerson(owners[0] || "");
         const fields = { title, owner: owners[0] || "", owners, due: input.due || "", department: input.department || (person && person.department) || "General",
           notes: input.notes || "", link: input.link || "", remind: cleanRemind(input.remind), updatedBy: me, updatedAt: new Date().toISOString(),
-          checklist: (Array.isArray(input.checklist) ? input.checklist : []).slice(0, 30).map((c, i) => ({ id: c.id || "ck" + (++taskSeq), text: String(c.text || "").trim().slice(0, 200), done: c.done === true })).filter((c) => c.text),
+          checklist: (Array.isArray(input.checklist) ? input.checklist : []).slice(0, 60).map((c, i) => ({ id: c.id || "ck" + (++taskSeq), text: String(c.text || "").trim().slice(0, 200), done: c.done === true })).filter((c) => c.text),
           labels: [...new Set((Array.isArray(input.labels) ? input.labels : []).map((l) => String(l).trim().slice(0, 24)).filter(Boolean))].slice(0, 6) };
         if (input.id) {
           const t = find(input.id);
@@ -207,8 +214,9 @@ const MockApi = (() => {
         let row = p.id && taskTeam.find((x) => x.id === p.id);
         if (p.id && !row) return { ok: false, error: "NOT_FOUND", message: "That person isn't on the list any more." };
         if (!row) { row = { id: "tm" + (++taskSeq), sort: taskTeam.length + 1 }; taskTeam.push(row); }
-        Object.assign(row, { name, department: p.department || "", discordId, active: p.active !== false });
-        return { ok: true, person: { ...row, passwordSet: !!accountHashes[row.id] }, team: demoTeam() };
+        const departments = [...new Set((Array.isArray(p.departments) ? p.departments : p.department ? [p.department] : []).map(deptName).filter(Boolean))];
+        Object.assign(row, { name, department: departments[0] || "", departments, discordId, active: p.active !== false });
+        return { ok: true, person: demoTeam().find((x) => x.id === row.id), team: demoTeam() };
       }
       case "previewPeopleImport": case "importPeople":
         if (!isAdmin) return { ok: false, error: "ADMIN_ONLY" };
@@ -225,6 +233,21 @@ const MockApi = (() => {
         if (!isAdmin) return { ok: false, error: "ADMIN_ONLY" };
         taskTeam = taskTeam.filter((p) => p.id !== req.id);
         return { ok: true, team: demoTeam() };
+      case "addDepartment": {
+        if (!isAdmin) return { ok: false, error: "ADMIN_ONLY" };
+        const name = String(req.name || "").trim().replace(/\s+/g, " ");
+        if (!name || name.length > 24) return { ok: false, error: "BAD_REQUEST", message: "Write the department's name (up to 24 characters)." };
+        if (deptName(name)) return { ok: false, error: "BAD_REQUEST", message: deptName(name) + " is already a department." };
+        addedDepts.push(name);
+        return { ok: true, departments: demoDepts(), team: demoTeam() };
+      }
+      case "removeDepartment": {
+        if (!isAdmin) return { ok: false, error: "ADMIN_ONLY" };
+        const left = addedDepts.filter((d) => d.toLowerCase() !== String(req.name || "").trim().toLowerCase());
+        if (left.length === addedDepts.length) return { ok: false, error: "BAD_REQUEST", message: "The main departments can't be removed. Only ones that were added can." };
+        addedDepts = left;
+        return { ok: true, departments: demoDepts(), team: demoTeam() };
+      }
       case "setTaskStatus": {
         const t = find(req.id);
         if (!t) return { ok: false, error: "NOT_FOUND", message: "That task isn't there any more." };
@@ -397,7 +420,7 @@ const MockApi = (() => {
       }
       case "listTasks": case "saveTask": case "setTaskStatus": case "addTaskUpdate": case "removeTask":
       case "remindTasksOnDiscord": case "saveTeam": case "taskBotStatus": case "savePerson": case "removePerson":
-      case "previewPeopleImport": case "importPeople": case "resetPersonPassword":
+      case "previewPeopleImport": case "importPeople": case "resetPersonPassword": case "addDepartment": case "removeDepartment":
         if (!sessions.has(req.token)) return { ok: false, error: "NOT_LOGGED_IN" };
         return taskReply(req);
       case "listPaymentNotes": case "addPaymentNote": case "removePaymentNote":
