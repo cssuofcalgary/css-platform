@@ -339,11 +339,10 @@ function renderBoard() {
 }
 
 function boardCard(t, today) {
-  const people = taskOwners(t);
   return `<li class="board-card st-${escapeHtml(t.status)}${taskIsOverdue(t, today) ? " overdue" : ""}" data-task-id="${escapeHtml(t.id)}" tabindex="0" draggable="true">
     ${taskLabels(t).length ? `<div class="board-labels">${taskLabels(t).map(labelChip).join("")}</div>` : ""}
     <div class="task-title">${escapeHtml(t.title)}</div>
-    <div class="task-meta">${notSentChip(t)}${dueChip(t)}${checkChip(t)}<span class="board-people">${escapeHtml(people.join(", ") || T.taskNobody)}</span></div>
+    <div class="task-meta">${notSentChip(t)}${dueChip(t)}${checkChip(t)}<span class="board-people">${escapeHtml(ownersShort(t) || T.taskNobody)}</span></div>
   </li>`;
 }
 
@@ -671,9 +670,12 @@ function taskOwners(task) {
   return Array.isArray(task.owners) ? task.owners : task.owner ? [task.owner] : [];
 }
 
-/** "Amy, Bella, Chris +9" on the list, so a task given to everyone stays one line. */
+/** Names A to Z, ignoring capitals. */
+const byName = (a, b) => String(a).localeCompare(String(b), undefined, { sensitivity: "base" });
+
+/** "Amy, Bella, Chris +9" (A to Z) on the list and the board, so a task given to everyone stays one line. */
 function ownersShort(task) {
-  const names = taskOwners(task);
+  const names = taskOwners(task).slice().sort(byName);
   return names.length > 3 ? T.taskOwnersMore(names.slice(0, 3).join(", "), names.length - 3) : names.join(", ");
 }
 
@@ -703,6 +705,19 @@ function groupButtonsHtml(owners, checklist) {
   }).join("");
 }
 
+/**
+ * People A to Z, and the checklist's name lines A to Z too (other checklist items keep their places).
+ * Changes both lists in place.
+ */
+function sortPeople(owners, checklist) {
+  owners.sort(byName);
+  if (!checklist) return;
+  const slots = [];
+  checklist.forEach((c, i) => { if (owners.some((o) => sameName(o, c.text))) slots.push(i); });
+  const lines = slots.map((i) => checklist[i]).sort((a, b) => byName(a.text, b.text));
+  slots.forEach((i, k) => { checklist[i] = lines[k]; });
+}
+
 /** Adds a group's people, and a checklist line with each one's name. */
 function addGroup(owners, checklist, key) {
   const group = taskGroups().find((g) => g.key === key);
@@ -713,6 +728,7 @@ function addGroup(owners, checklist, key) {
     if (checklist.some((c) => sameName(c.text, n))) return;
     if (checklist.length < CHECK_MAX) checklist.push({ id: "", text: n, done: false }); else full = true;
   });
+  sortPeople(owners, checklist);
   if (full) showToast(T.taskTooManyItems);
 }
 
@@ -790,6 +806,7 @@ function pickOwner(name) {
   if (!taskState.owners.some((picked) => sameName(picked, canonical))) {
     addNameLine(taskState.owners, taskState.checklist, canonical);
     taskState.owners.push(canonical);
+    sortPeople(taskState.owners, taskState.checklist);
   }
   $("tk-owner").value = "";
   renderSelectedOwners();
@@ -915,6 +932,7 @@ function openTaskDialog(task, due) {
   taskState.owners = task ? taskOwners(task).slice() : [me ? me.name.trim() : String(state.name || "").trim()].filter(Boolean);
   // The checklist isn't shown here, but Everyone / a department adds a line per person to it.
   taskState.checklist = task ? taskChecklist(task).map((c) => ({ id: c.id || "", text: c.text, done: !!c.done })) : [];
+  sortPeople(taskState.owners, taskState.checklist);   // shown A to Z; only sent when something else changes them
   taskState.checklistBase = JSON.stringify(taskState.checklist);
   $("tk-owner").value = "";
   renderSelectedOwners();
@@ -994,8 +1012,10 @@ async function onTaskSubmit(event) {
  * Closing it any other way (Close, Escape, a tap outside it) with changes asks first. Posting an update is saved at once.
  */
 function draftOf(task) {
-  return { status: task.status, owners: taskOwners(task).slice(), labels: taskLabels(task).slice(),
+  const draft = { status: task.status, owners: taskOwners(task).slice(), labels: taskLabels(task).slice(),
     checklist: taskChecklist(task).map((c) => ({ id: c.id || "", text: c.text, done: !!c.done })) };
+  sortPeople(draft.owners, draft.checklist);   // shown A to Z (the draft's starting point is sorted too, so this alone isn't a change)
+  return draft;
 }
 const draftChanged = () => !!taskState.draft && JSON.stringify(taskState.draft) !== taskState.draftBase;
 
@@ -1098,6 +1118,7 @@ function draftAddPerson(typed) {
   if (!d.owners.some((n) => sameName(n, name))) {
     addNameLine(d.owners, d.checklist, name);
     d.owners.push(name);
+    sortPeople(d.owners, d.checklist);
   }
   $("td-person").value = "";
   renderTaskDetail();

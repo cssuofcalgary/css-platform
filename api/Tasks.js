@@ -272,7 +272,7 @@ function taskDiscordWho_(task) {
   return taskAssigneesToDo_(task).map(function (p) { return discordWho_(p.name, taskAssigneeDiscordId_(p)); }).join(", ") || discordWho_("", "");
 }
 
-/** Resolve portal names under the save lock; never accept Discord IDs from the browser. */
+/** Resolve portal names under the save lock; never accept Discord IDs from the browser. Saved A to Z. */
 function taskResolveAssignees_(names, previous, session, department) {
   const seen = {}, old = taskAssignees_(previous || {});
   return names.map(function (name) { return memberText_(name, 60); }).filter(function (name) {
@@ -285,7 +285,7 @@ function taskResolveAssignees_(names, previous, session, department) {
     const saved = old.filter(function (p) { return teamNameKey_(p.name) === teamNameKey_(name); })[0];
     if (!person) taskAddOwner_(session, name, department);
     return { name: person ? String(person.name).trim() : name, discordId: teamDiscordId_(person) || (saved ? String(saved.discordId || "") : "") };
-  });
+  }).sort(function (a, b) { return teamNameKey_(a.name).localeCompare(teamNameKey_(b.name)); });
 }
 
 /** Admin: replaces the team list. Rows left out are deleted from the Team tab (tasks keep the person's name). */

@@ -762,6 +762,7 @@ const multiFromDiscord = run(`withLock_(function(){return applyDiscordMessages_(
 ok(multiFromDiscord.created === 1 && SAME(multiFromDiscord.posts[0].userIds,["666666666666666661","666666666666666662"]) && run(`taskView_(readRows_('Tasks').filter(function(t){return t.title==='Shared Discord task';})[0],[]).owners.length`) === 2, "Discord-created shared tasks keep both people and confirm both mentions");
 
 // A task given to everyone: a checklist line per person, ticked when they've done their part.
+const SAMESET = (a, b) => SAME([...a].sort(), [...b].sort());
 const taskChecks = (row) => (typeof row.checklist === "string" ? JSON.parse(row.checklist) : row.checklist).map((c) => c.done === true || c.done === "true");
 run(`savePerson_(A,{name:'Tick One',department:'Events',discordId:'666666666666666671'});
   savePerson_(A,{name:'Tick Two',department:'Events',discordId:'666666666666666672'});
@@ -769,9 +770,11 @@ run(`savePerson_(A,{name:'Tick One',department:'Events',discordId:'6666666666666
 const everyone = run(`saveTask_(S,{title:'Fill out availability',owners:['Tick One','Tick Two','Tick Three'],due:ymdAdd_(edmParts_(Date.now()).ymd,1),
   checklist:[{text:'Tick One'},{text:'Tick Two'},{text:'Tick Three'}]}).task`);
 let tickPost = run(`__fetches.filter(function(f){return f.body && /Fill out availability/.test(f.body.content);}).pop().body`);
-ok(SAME(tickPost.allowed_mentions.users, ["666666666666666671", "666666666666666672", "666666666666666673"]), "a new task given to everyone tags everyone");
+ok(SAMESET(tickPost.allowed_mentions.users, ["666666666666666671", "666666666666666672", "666666666666666673"]), "a new task given to everyone tags everyone");
+ok(SAME(everyone.owners, ["Tick One", "Tick Three", "Tick Two"]) && everyone.owner === "Tick One", "people are saved A to Z, whatever order they were added in");
+ok(SAME(run(`saveTask_(S,{title:'Order check',owners:['zed person','Amy Lee','  bob  ']}).task.owners`), ["Amy Lee", "bob", "zed person"]), "A to Z ignores capitals and extra spaces");
 run(`TBL.Tasks.forEach(function (t) { if (t.id === '${everyone.id}') t.checklist = JSON.stringify([{id:'c1',text:'Tick One',done:true},{id:'c2',text:'tick  two',done:false},{id:'c3',text:'Tick Three',done:false}]); })`);
-ok(SAME(run(`taskOwnerDiscordIds_(taskFresh_('${everyone.id}'))`), ["666666666666666672", "666666666666666673"]), "someone who ticked their name isn't tagged any more (any capitals or spacing)");
+ok(SAMESET(run(`taskOwnerDiscordIds_(taskFresh_('${everyone.id}'))`), ["666666666666666672", "666666666666666673"]), "someone who ticked their name isn't tagged any more (any capitals or spacing)");
 ok(!/666666666666666671/.test(run(`taskDiscordWho_(taskFresh_('${everyone.id}'))`)), "…and isn't listed as still to do it");
 run(`__fetches=[]; remindTasksOnDiscord_(S)`);
 tickPost = run(`__fetches.filter(function(f){return f.body && /Fill out availability/.test(f.body.content);}).pop().body`);
@@ -779,10 +782,10 @@ ok(!tickPost.allowed_mentions.users.includes("666666666666666671") && tickPost.a
 run(`var __allTasks = TBL.Tasks; TBL.Tasks = __allTasks.filter(function (t) { return t.id === '${everyone.id}'; }); delete DB_.rows["Tasks"]; __fetches = []; remindTasksOnDiscord_(S);
   TBL.Tasks = __allTasks; delete DB_.rows["Tasks"];`);
 tickPost = run(`__fetches.filter(function(f){return f.body && /Task check-in/.test(f.body.content);}).pop().body`);
-ok(SAME(tickPost.allowed_mentions.users, ["666666666666666672", "666666666666666673"]), "Remind on Discord with one task for many people tags all of them (not just one per line)");
+ok(SAMESET(tickPost.allowed_mentions.users, ["666666666666666672", "666666666666666673"]), "Remind on Discord with one task for many people tags all of them (not just one per line)");
 run(`var tickRaw = taskFresh_('${everyone.id}'); tickRaw.remind=[{n:0,unit:'days',at:'09:00'}]; tickRaw.remindSent=[]; var tickDue = taskReminderAt_(tickRaw.due,tickRaw.remind[0]);`);
 const tickReminder = run(`withLock_(function(){return takeDueReminders_(tickDue+1000);}).filter(function(p){return p.taskId==='${everyone.id}';})[0]`);
-ok(tickReminder && SAME(tickReminder.userIds, ["666666666666666672", "666666666666666673"]), "scheduled reminders also skip people who ticked their name");
+ok(tickReminder && SAMESET(tickReminder.userIds, ["666666666666666672", "666666666666666673"]), "scheduled reminders also skip people who ticked their name");
 const tickMsg = run(`taskFresh_('${everyone.id}').discordMessageId`);
 const tickReply = (n, who, text) => run(`withLock_(function(){return applyDiscordMessages_({botId:BOT,firstRun:false,messages:[__msg(${n},{content:'${text}',author:{id:'${who}',username:'u${n}'},message_reference:{message_id:'${tickMsg}'}})]});})`);
 tickReply(9101, "666666666666666672", "done");

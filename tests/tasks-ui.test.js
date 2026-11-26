@@ -35,7 +35,7 @@ async function main() {
   element("tk-title").value = "Shared task";
   await run("onTaskSubmit({preventDefault(){}})");
   await new Promise((r) => setTimeout(r, 0));
-  ok(run("calls[0].details.task.owners.join()") === "Marcus,Kevin", "saving includes a typed name even if Add was not pressed");
+  ok(run("calls[0].details.task.owners.join()") === "Kevin,Marcus", "saving includes a typed name even if Add was not pressed (people A to Z)");
   run(`taskState.tasks=[{id:'both',owners:['Kevin','Marcus']},{id:'old',owner:'Kevin'},{id:'other',owners:['Someone else']}];taskState.filter='mine';`);
   ok(run("filteredTasks().map(t=>t.id).join()") === "both,old", "My tasks includes shared and legacy tasks for the first person");
   run("state.name=' marcus '");
@@ -103,6 +103,17 @@ async function everyone() {
   run("openTaskDialog({id:'odd',title:'Odd',owners:['Kevin'],department:'A <b>'})");
   ok(element("tk-dept").innerHTML.includes("A &lt;b&gt;"), "department names are escaped in the choices");
   ok(run("ownersShort({owners:['A','B','C','D','E']})") === "A, B, C +2" && run("ownersShort({owners:['A','B']})") === "A, B", "the list shows up to three names, then +N");
+  ok(run("ownersShort({owners:['zed','Amy','bob','Cara']})") === "Amy, bob, Cara +1", "the list and board show names A to Z (any capitals), even on older tasks");
+  ok(/class="board-people">Amy, bob, Cara \+1</.test(run("boardCard({id:'b1',title:'Board',status:'todo',owners:['zed','Amy','bob','Cara']},'2026-11-23')")), "Board cards use the short A to Z names too, so they fit their column");
+
+  // A to Z as people are added, and the name lines with them (other checklist items keep their places)
+  run(`taskState.team.push({name:'Aaron',department:'Internal',active:true});
+    openTaskDialog({id:'az',title:'A to Z',owners:['Marcus','Kevin'],department:'Events',checklist:[{id:'x',text:'Book room',done:false},{id:'m',text:'Marcus',done:false},{id:'k',text:'Kevin',done:true}]})`);
+  ok(run("taskState.owners.join()") === "Kevin,Marcus" && texts(run("taskState.checklist")) === "Book room,Kevin✓,Marcus", "opening a task shows its people and name lines A to Z");
+  ok(run("taskFormSnapshot()") === run("taskState.formBase"), "…which alone doesn't count as a change");
+  run("pickOwner('Aaron')");
+  ok(run("taskState.owners.join()") === "Aaron,Kevin,Marcus" && texts(run("taskState.checklist")) === "Book room,Aaron,Kevin✓,Marcus", "someone added goes in A to Z order, with their name line");
+  run("taskState.team.pop()");
 
   // The task window: the same buttons under "+ Add person"
   run(`calls.length=0; taskState.tasks=[{id:'tw',title:'Window',owners:['Kevin'],department:'Events',status:'todo',checklist:[],labels:[],updates:[]}];
