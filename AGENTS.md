@@ -88,5 +88,12 @@ git add <files> && git commit -m "…" && git push origin main
 - New email defaults apply to all upcoming events. Refunds work per person. Old refunded orders show "return not recorded" in grey. The full payment-exception workflow exists.
 - Offline ticket copy, help-desk alerts, scan log, undo for volunteers (own check-in, 10 minutes) are in.
 
+## Workboard decisions (API 0.28.0 source)
+- Task `priority` is urgent/high/normal/low; older blank cells mean normal. Partial edits preserve fields omitted by the caller. List and Board sort priority, due date, then title. People summarises workload without changing task data.
+- Task links use `?task=TK…` and always require the normal sign-in. Discord new-task posts and bot confirmations keep this link even when the message is shortened. `EXEC_PORTAL_URL` is the public portal URL in `api/Config.js`.
+- Teams is presidents-only: every tracker action checks the active Team person and their Presidents department (case-insensitive). Admin status alone does not grant access. The menu is hidden until this server check succeeds.
+- Trackers and TrackerRows are platform-owned tables with stable field/option IDs and unique JSON column names. Record edits merge changed cells under the lock; removal is soft. Client IDs prevent repeated creation after a lost reply.
+- Approved library copies: SortableJS, Tabulator and FullCalendar standard (MIT), pinned and kept with licences under `exec-portal/vendor/`; no runtime CDN requests. Pinned versions: SortableJS 1.15.7, Tabulator 6.7.1, FullCalendar 6.1.22 (version 6 on purpose: the calendar code uses its API). SortableJS loads with the page (Tasks board drag on phones); Tabulator and FullCalendar load only when a president first opens Teams. The plain fallbacks run only if a library fails to load.
+
 ## Still open
 Department permissions (needs Gordon's decision), department-first landing after sign-in (e.g. Kevin B → Events, Marcus → Internal; personal passwords and departments are already stored), a reusable question builder and standalone surveys, load measurement for bigger events, a plain-language handover guide, real-device checks of the newest flows.

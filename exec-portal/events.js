@@ -7,6 +7,8 @@ const eventsState = { events: [], editing: null, loaded: false, showArchived: fa
 // ---- Tabs -------------------------------------------------------------------
 
 async function switchTab(name) {
+  if (name === "teams" && (typeof tmState === "undefined" || !tmState.access)) name = "tasks";
+  if (typeof tmLeave === "function" && !(await tmLeave(name))) return;
   if (!(await leaveEventEditor())) return;
   document.querySelectorAll(".tab").forEach((b) => b.classList.toggle("active", b.dataset.tab === name));
   $("tab-overview").hidden = name !== "overview";
@@ -17,7 +19,8 @@ async function switchTab(name) {
   $("tab-door").hidden = name !== "door";
   $("tab-activity").hidden = name !== "activity";
   $("tab-settings").hidden = name !== "settings";
-  $("crumb").textContent = { overview: T.tabOverview, members: T.tabMembers, partners: T.tabPartners, events: T.tabEvents, payments: T.tabPayments, door: T.tabDoor, activity: T.tabActivity, settings: T.tabSettings }[name] || "";
+  if ($("tab-teams")) $("tab-teams").hidden = name !== "teams";
+  $("crumb").textContent = { overview: T.tabOverview, members: T.tabMembers, partners: T.tabPartners, events: T.tabEvents, payments: T.tabPayments, door: T.tabDoor, activity: T.tabActivity, settings: T.tabSettings, teams: T.tmTitle }[name] || "";
   document.body.classList.remove("nav-open");
   try { if (!SCANNER_MODE) sessionStorage.setItem("css_tab", name); } catch (e) { /* private window: the tab just isn't remembered */ }
   window.scrollTo(0, 0);
@@ -30,6 +33,7 @@ async function switchTab(name) {
   if (name === "settings") openSettingsTab();
   if (name === "members") openMembersTab();
   if (name === "partners") loadPartners();
+  if (name === "teams") openTeamsTab();
 }
 
 // ---- List -------------------------------------------------------------------

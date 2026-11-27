@@ -19,7 +19,8 @@ const MockApi = (() => {
 
   let ready = null;
   function loadLogic() {
-    ready = ready || Promise.all(["Members.js", "People.js", "Bcrypt.js", "Practice.js"].map((file) => new Promise((resolve, reject) => {
+    // TaskBot.js: only constants and functions at the top, so quick add reads a line exactly like the real API does
+    ready = ready || Promise.all(["Members.js", "People.js", "Bcrypt.js", "Practice.js", "Trackers.js", "TaskBot.js"].map((file) => new Promise((resolve, reject) => {
       const s = document.createElement("script");
       s.src = "../api/" + file;
       s.onload = resolve;
@@ -71,32 +72,32 @@ const MockApi = (() => {
   const day = (n) => { const d = new Date(new Date().toLocaleDateString("en-CA", { timeZone: "America/Edmonton" }) + "T12:00:00Z"); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
   const ago = (mins) => new Date(Date.now() - mins * 60000).toISOString();
   let taskTeam = [
-    { id: "tm1", name: "Gordon", department: "Internal", departments: ["Internal"], discordId: "123456789012345678", active: true, sort: 1 },
+    { id: "tm1", name: "Gordon", department: "Presidents", departments: ["Presidents", "Internal"], discordId: "123456789012345678", active: true, sort: 1 },
     { id: "tm2", name: "Bella Chen", department: "Events", departments: ["Events", "Marketing"], discordId: "223456789012345678", active: true, sort: 2 },
     { id: "tm3", name: "Chris Li", department: "Marketing", departments: ["Marketing"], discordId: "", active: true, sort: 3 },
     { id: "tm4", name: "Emily Chan", department: "Finance", departments: ["Finance"], discordId: "323456789012345678", active: true, sort: 4 }
   ];
   // Departments: the five built in, any added in Settings → People, then General
-  let addedDepts = [];
+  let addedDepts = ["Presidents"];
   const demoDepts = () => ["Events", "Marketing", "Internal", "External", "Finance", ...addedDepts, "General"];
   const deptName = (d) => demoDepts().find((x) => x.toLowerCase() === String(d || "").trim().toLowerCase()) || "";
   let taskSeq = 10;
   const mkTask = (id, title, owner, department, status, due, mins, updates, extra) => ({
-    id, title, owner, owners: [owner], department, status, due, notes: "", link: "", remind: [], nextReminder: "", checklist: [], labels: [],
+    id, title, owner, owners: [owner], department, status, priority: "normal", due, notes: "", link: "", remind: [], nextReminder: "", checklist: [], labels: [],
     createdBy: owner, createdAt: ago(mins), updatedAt: ago(mins), doneAt: status === "done" ? ago(60) : "", updates: updates || [], ...(extra || {})
   });
   let tasks = [
     mkTask("tk1", "Book MacHall room for AGM", "Gordon", "Internal", "doing", day(-2), 6000,
-      [{ id: "u1", text: "Emailed the booking office, waiting to hear back", by: "Gordon", source: "discord", status: "doing", createdAt: ago(180) }]),
+      [{ id: "u1", text: "Emailed the booking office, waiting to hear back", by: "Gordon", source: "discord", status: "doing", createdAt: ago(180) }], { priority: "urgent" }),
     mkTask("tk2", "Make reel for badminton night", "Chris Li", "Marketing", "todo", day(0), 3000, [], { remind: [{ n: 1, unit: "days", at: "09:00" }] }),
     mkTask("tk3", "Order snacks for Lunar New Year", "Bella Chen", "Events", "blocked", day(3), 4000,
       [{ id: "u2", text: "Stuck: waiting on the budget sign-off", by: "Bella Chen", source: "discord", status: "blocked", createdAt: ago(45) }],
-      { remind: [{ n: 2, unit: "days", at: "09:00" }, { n: 0, unit: "days", at: "18:00" }], labels: ["Lunar New Year", "Budget"],
+      { priority: "high", remind: [{ n: 2, unit: "days", at: "09:00" }, { n: 0, unit: "days", at: "18:00" }], labels: ["Lunar New Year", "Budget"],
         checklist: [{ id: "c1", text: "Get quotes from 2 stores", done: true }, { id: "c2", text: "Budget sign-off", done: false }, { id: "c3", text: "Place the order", done: false }] }),
     mkTask("tk7", "Print posters for the AGM", "Bella Chen", "Events", "todo", day(3), 2000, [], { labels: ["AGM"], owners: ["Bella Chen", "Chris Li"] }),
     mkTask("tk8", "Confirm DJ for the formal", "Gordon", "Events", "doing", day(3), 2500, []),
     mkTask("tk9", "Send sponsor thank-you emails", "Emily Chan", "External", "todo", day(3), 2600, []),
-    mkTask("tk4", "Reimburse Clubs Week receipts", "Emily Chan", "Finance", "todo", day(12), 1000, []),
+    mkTask("tk4", "Reimburse Clubs Week receipts", "Emily Chan", "Finance", "todo", day(12), 1000, [], { priority: "low" }),
     mkTask("tk5", "Update the sponsor deck", "Gordon", "External", "todo", "", 500,
       [{ id: "u3", text: "Started a draft in the shared drive", by: "Gordon", source: "portal", status: "doing", createdAt: ago(20) }]),
     mkTask("tk6", "Post Halloween recap on Instagram", "Chris Li", "Marketing", "done", day(-5), 9000,
@@ -169,6 +170,9 @@ const MockApi = (() => {
         const title = String(input.title === undefined && input.id ? (find(input.id) || {}).title || "" : input.title || "").trim();
         if (!title) return { ok: false, error: "BAD_REQUEST", message: "Say what the task is." };
         if (title.length > 140) return { ok: false, error: "BAD_REQUEST", message: "Keep the task under 140 characters." };
+        if (input.priority !== undefined && input.priority !== null && typeof input.priority !== "string") return { ok: false, error: "BAD_REQUEST", message: "Pick a priority: Urgent, High, Normal or Low." };
+        const priority = String(input.priority === undefined || input.priority === null ? "" : input.priority).trim().toLowerCase() || "normal";
+        if (!["urgent", "high", "normal", "low"].includes(priority)) return { ok: false, error: "BAD_REQUEST", message: "Pick a priority: Urgent, High, Normal or Low." };
         const owners = [];
         (Array.isArray(input.owners) ? input.owners : [input.owner || ""]).forEach((raw) => {
           const typed = String(raw).trim().replace(/\s+/g, " ");
@@ -179,14 +183,14 @@ const MockApi = (() => {
           if (!owners.some((n) => n.toLowerCase() === name.toLowerCase())) owners.push(name);
         });
         const person = findPerson(owners[0] || "");
-        const fields = { title, owner: owners[0] || "", owners, due: input.due || "", department: input.department || (person && person.department) || "General",
+        const fields = { title, owner: owners[0] || "", owners, priority, due: input.due || "", department: input.department || (person && person.department) || "General",
           notes: input.notes || "", link: input.link || "", remind: cleanRemind(input.remind), updatedBy: me, updatedAt: new Date().toISOString(),
           checklist: (Array.isArray(input.checklist) ? input.checklist : []).slice(0, 60).map((c, i) => ({ id: c.id || "ck" + (++taskSeq), text: String(c.text || "").trim().slice(0, 200), done: c.done === true })).filter((c) => c.text),
           labels: [...new Set((Array.isArray(input.labels) ? input.labels : []).map((l) => String(l).trim().slice(0, 24)).filter(Boolean))].slice(0, 6) };
         if (input.id) {
           const t = find(input.id);
           if (!t) return { ok: false, error: "NOT_FOUND", message: "That task isn't there any more." };
-          ["owner", "owners", "due", "department", "notes", "link", "remind", "checklist", "labels"].forEach((k) => { if (input[k] === undefined && !(k === "owner" && input.owners)) delete fields[k]; });
+          ["owner", "owners", "priority", "due", "department", "notes", "link", "remind", "checklist", "labels"].forEach((k) => { if (input[k] === undefined && !(k === "owner" && input.owners)) delete fields[k]; });
           if (input.department === undefined) delete fields.department;
           if (input.status && input.status !== t.status && !(input.from && input.from !== t.status)) {
             t.status = input.status;
@@ -201,6 +205,17 @@ const MockApi = (() => {
         const t = { id: input.clientId || "tk" + (++taskSeq), status: input.status || "todo", createdBy: me, createdAt: new Date().toISOString(), doneAt: "", updates: [], ...fields };
         tasks.push(t);
         return { ok: true, task: plain(t), discordPosted: true };
+      }
+      case "quickAddTask": {   // the same reading as the API (parseQuickTask_ in ../api/TaskBot.js), then saved like New task
+        const text = typeof req.text === "string" ? req.text.trim() : "";
+        if (!text || text.length > 300) return { ok: false, error: "BAD_REQUEST", message: "Write what needs doing (up to 300 characters)." };
+        const parsed = parseQuickTask_(text, new Date(), demoTeam());
+        if (!parsed.title) return { ok: false, error: "BAD_REQUEST", message: "Write what needs doing." };
+        if (parsed.titleTooLong) return { ok: false, error: "BAD_REQUEST", message: "Keep what needs doing under 140 characters." };
+        const owners = parsed.owners.length ? parsed.owners : [(findPerson(me) || { name: me }).name];
+        const reply = taskReply({ ...req, action: "saveTask", task: { title: parsed.title, owners, due: parsed.due, remind: parsed.remind, priority: parsed.priority, clientId: req.clientId } });
+        if (!reply.ok) return reply;
+        return { ...reply, quick: { title: reply.task.title, owners: reply.task.owners, due: reply.task.due, priority: reply.task.priority, remindNeedsDue: !!parsed.remindNeedsDue } };
       }
       case "savePerson": {
         if (!isAdmin) return { ok: false, error: "ADMIN_ONLY" };
@@ -287,6 +302,82 @@ const MockApi = (() => {
       case "taskBotStatus":
         if (!req.token.startsWith("demo-admin")) return { ok: false, error: "ADMIN_ONLY" };
         return { ok: true, timer: true, lastTick: new Date().toISOString(), posting: true, reading: true, botName: "taskbot" };
+    }
+    return { ok: false, error: "UNKNOWN_ACTION" };
+  }
+
+  // ---- Teams (made-up trackers, never connected to the live API) ----
+  const demoTrackers = [], demoTrackerRows = [];
+  const trackerClone = (value) => JSON.parse(JSON.stringify(value));
+  function trackerReply(req) {
+    const person = sessionPeople[req.token] ? taskTeam.find((p) => p.id === sessionPeople[req.token].id) : findPerson(sessionNames[req.token]);
+    // Only departments still on the list count (removing Presidents in Settings → People ends Teams access)
+    if (!person || person.active === false || !(person.departments || [person.department]).map(deptName).some((d) => nameKey(d) === "presidents")) {
+      return { ok: false, error: "NOT_PRESIDENT", message: "Only presidents can use Teams for now." };
+    }
+    const me = sessionNames[req.token], now = new Date().toISOString();
+    const missing = () => ({ ok: false, error: "NOT_FOUND", message: "That tracker or record is no longer there. Refresh Teams." });
+    const bad = (message) => ({ ok: false, error: "BAD_REQUEST", message });
+    const activeRows = (id) => demoTrackerRows.filter((r) => r.trackerId === id && !r.removedAt);
+    const rowView = (r, t) => {
+      const values = {};
+      t.fields.forEach((f) => {
+        if (!(f.id in r.values)) return;
+        const value = r.values[f.id];
+        values[f.id] = f.type === "choice" ? (f.options || []).some((o) => o.id === value) ? value : ""
+          : f.type === "checkbox" ? value === true : f.type === "number" || f.type === "money" ? typeof value === "number" ? value : "" : typeof value === "string" ? value : "";
+      });
+      return trackerClone({ id: r.id, values, sort: r.sort, createdBy: r.createdBy, createdAt: r.createdAt, updatedBy: r.updatedBy, updatedAt: r.updatedAt });
+    };
+    const templates = trackerTemplates_();
+    if (req.action === "teamSpaces") return trackerClone({ ok: true, departments: demoDepts(), trackers: demoTrackers.filter((t) => !t.removedAt).map((t) => ({ id: t.id, department: t.department, name: t.name, template: t.template, rowCount: activeRows(t.id).length, updatedAt: t.updatedAt })), templates: templates.map(({ key, name, department }) => ({ key, name, department })), team: demoTeam().map(({ name, departments, active }) => ({ name, departments, active })) });
+    if (req.action === "saveTracker") {
+      const input = req.tracker || {};
+      let t = input.id ? demoTrackers.find((x) => x.id === input.id && !x.removedAt) : null;
+      if (input.id && !t) return missing();
+      const repeated = !input.id && input.clientId && demoTrackers.find((x) => x.id === input.clientId);
+      if (repeated) return repeated.removedAt ? missing() : { ok: true, tracker: trackerClone(repeated), repeated: true };
+      const template = templates.find((x) => x.key === (input.template || (t && t.template) || "blank"));
+      if (!template) return bad("Choose one of the tracker templates.");
+      const name = String(input.name === undefined ? t ? t.name : template.name : input.name).trim();
+      const department = deptName(input.department || (t && t.department) || template.department);
+      if (!name || name.length > 80 || !department) return bad("Give the tracker a name and choose a department.");
+      if ((!t || t.department !== department) && demoTrackers.filter((x) => !x.removedAt && x.department === department).length >= 30) return bad("A department can have up to 30 trackers. Remove one first.");
+      const fields = input.fields || (t && t.fields) || template.fields;
+      if (!Array.isArray(fields) || !fields.length || fields.length > 30) return bad("A tracker needs 1 to 30 columns.");
+      const views = trackerClone(input.views || (t && t.views) || template.views);
+      if (!fields.some((f) => f.id === views.boardField && f.type === "choice")) views.boardField = (fields.find((f) => f.type === "choice") || {}).id || "";
+      if (!fields.some((f) => f.id === views.dateField && f.type === "date")) views.dateField = (fields.find((f) => f.type === "date") || {}).id || "";
+      if ((views.default === "board" && !views.boardField) || (views.default === "calendar" && !views.dateField)) views.default = "table";
+      if (!t) { t = { id: input.clientId || "TTdemo" + (++taskSeq), template: template.key, createdBy: me, createdAt: now }; demoTrackers.push(t); }
+      Object.assign(t, { name, department, fields: trackerClone(fields), views, updatedBy: me, updatedAt: now });
+      return { ok: true, tracker: trackerClone(t) };
+    }
+    if (req.action === "removeTrackerRow") {
+      const r = demoTrackerRows.find((x) => x.id === req.id), t = r && demoTrackers.find((x) => x.id === r.trackerId && !x.removedAt);
+      if (!r || !t) return missing();
+      if (req.undo && r.removedAt && activeRows(t.id).length >= 2000) return bad("A tracker can have up to 2000 records. Remove one first.");
+      Object.assign(r, { removedAt: req.undo ? "" : now, updatedBy: me, updatedAt: now });
+      t.updatedAt = now;
+      return { ok: true, row: rowView(r, t), removed: !req.undo };
+    }
+    const t = demoTrackers.find((x) => x.id === (req.trackerId || req.id) && !x.removedAt);
+    if (!t) return missing();
+    if (req.action === "getTracker") return { ok: true, tracker: trackerClone(t), rows: activeRows(t.id).sort((a, b) => a.sort - b.sort).map((r) => rowView(r, t)) };
+    if (req.action === "removeTracker") { t.removedAt = now; return { ok: true, id: t.id }; }
+    if (req.action === "saveTrackerRow") {
+      const input = req.row || {};
+      let r = input.id ? demoTrackerRows.find((x) => x.id === input.id && x.trackerId === t.id && !x.removedAt) : null;
+      if (input.id && !r) return missing();
+      const repeated = !input.id && input.clientId && demoTrackerRows.find((x) => x.id === input.clientId);
+      if (repeated) return repeated.trackerId !== t.id || repeated.removedAt ? missing() : { ok: true, row: rowView(repeated, t), repeated: true };
+      if (!r && activeRows(t.id).length >= 2000) return bad("A tracker can have up to 2000 records. Remove some first.");
+      if (!input.values || typeof input.values !== "object" || Array.isArray(input.values) || Object.keys(input.values).some((key) => !t.fields.some((f) => f.id === key))) return bad("A column changed. Refresh before saving.");
+      if (!r) { r = { id: input.clientId || "TRdemo" + (++taskSeq), trackerId: t.id, values: {}, sort: activeRows(t.id).length + 1, createdBy: me, createdAt: now }; demoTrackerRows.push(r); }
+      Object.assign(r.values, trackerClone(input.values));
+      Object.assign(r, { updatedBy: me, updatedAt: now, ...(typeof input.sort === "number" ? { sort: input.sort } : {}) });
+      t.updatedAt = now;
+      return { ok: true, row: rowView(r, t) };
     }
     return { ok: false, error: "UNKNOWN_ACTION" };
   }
@@ -418,11 +509,14 @@ const MockApi = (() => {
         const member = findMemberById_(members, req.memberId);
         return member ? { ok: true, member } : { ok: false, error: "NOT_FOUND" };
       }
-      case "listTasks": case "saveTask": case "setTaskStatus": case "addTaskUpdate": case "removeTask":
+      case "listTasks": case "saveTask": case "quickAddTask": case "setTaskStatus": case "addTaskUpdate": case "removeTask":
       case "remindTasksOnDiscord": case "saveTeam": case "taskBotStatus": case "savePerson": case "removePerson":
       case "previewPeopleImport": case "importPeople": case "resetPersonPassword": case "addDepartment": case "removeDepartment":
         if (!sessions.has(req.token)) return { ok: false, error: "NOT_LOGGED_IN" };
         return taskReply(req);
+      case "teamSpaces": case "getTracker": case "saveTracker": case "removeTracker": case "saveTrackerRow": case "removeTrackerRow":
+        if (!sessions.has(req.token)) return { ok: false, error: "NOT_LOGGED_IN" };
+        return trackerReply(req);
       case "listPaymentNotes": case "addPaymentNote": case "removePaymentNote":
         if (!sessions.has(req.token)) return { ok: false, error: "NOT_LOGGED_IN" };
         return paymentNoteReply(req);

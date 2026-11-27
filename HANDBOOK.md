@@ -16,11 +16,49 @@ The **sun/moon button** (bottom of the menu) switches light and dark. Tap the **
 ## Tasks
 Choose **New task**, enter what needs doing, then add people under **Who**. Pick a name from the suggestions or type it and press **Add**. Each selected name has an **×** button to remove it. A task can have several people; it appears under **My tasks** for everyone assigned. Editing a task keeps all its assignees unless you remove them.
 
-Discord task posts and reminders tag everyone assigned who has a Discord ID. When creating a task with the bot, mention several people to assign them together.
+Discord task posts and reminders tag everyone assigned who has a Discord ID. When creating a task with the bot, mention several people to assign them together. You can also type names from People, like "sync with @Kevin and @Amy": the "with" and "and" are left out of the task's name. Urgent and High tasks say so at the start of the post. New-task posts and the bot's "Got it" reply end with a link that opens the task in the portal (sign in if asked).
 
 **Give a task to everyone, or a whole department:** under **Who**, press **+ Everyone** or a department button (for example **+ Events**). Everyone active in it is added, and the task gets a checklist line with each person's name. Each person ticks their own name when they've done their part (or replies **done** to the task on Discord, which ticks their name). Reminders only tag the people who haven't ticked their name yet. The task shows how many have ticked (for example 3/12); mark it **Done** when everyone has, or it finishes by itself when the last person says done on Discord. Take someone off with their **×** and their name line goes too. The same buttons appear under **+ Add person** in an open task.
 
 **Departments:** in **Settings → People**, each person can be in more than one department: press **+ Add** on their line to add one, or the **×** on a department to take it off. Under **Departments** at the bottom, type a new name and press **Add** to make your own (for example Photography). Departments you added have an **×** to remove them again; people keep their other departments and tasks keep their department name. The five main ones (Events, Marketing, Internal, External, Finance) and General always stay.
+
+**Quick add:** type one sentence in the box at the top, for example `posters for AGM by friday @Chris urgent`, and press Enter. It picks out the due date, the people (@ and their name on People; a first name is enough when only one active person has it) and the priority: **urgent**, **asap** or **!!** make it Urgent, **important** or **high priority** make it High, **low priority** makes it Low. Nobody named? It's yours. Reminders work like the bot ("remind me the day before") but need a due date. A message says what was added and whether it went to Discord. Quick add needs a connection: if it can't reach the server, your sentence stays in the box and nothing is saved. Use **New task** instead, which waits on your device until the connection is back.
+
+**Priority:** pick Urgent, High, Normal or Low under **Priority** in the New task window or in an open task. Unfinished cards show a tag for Urgent, High and Low. Within each list group and Board column, Urgent comes first, then High, Normal and Low, then the soonest due date, then the name. Done shows the most recently finished first.
+
+**Find work:** choose **List**, **Board**, **Calendar** or **People**. **Search tasks** shows tasks that contain every word you type (in the name, notes, department, people, labels or checklist). The person menu (it starts on **All people**) shows one person's tasks, or **Nobody yet** for tasks with no one on them; picking someone while on **My tasks** switches to **Everyone**, and pressing **My tasks** clears it. When nothing matches you see **No tasks match**: press **Clear filters** to see everything again.
+
+**Needs attention:** chips above the list count open tasks that are **Overdue**, **Due this week** (today and the next 6 days), **Blocked**, have **Nobody on it**, or have had **No update in 7+ days**. Only chips with tasks appear, and the counts follow your other choices (My tasks, Everyone or a department, the search and the menus). Tap one to show just those tasks; tap it again to show everything.
+
+**Board:** **+ Add task** at the bottom of To do, Doing and Blocked starts a new task in that column. Cards show initials for the people on it (up to three, then +2 and so on; point at them to see the names) and a bar for how much of the checklist is ticked. Drag a card to another column to change its status: on a computer just drag it; on a phone press and hold the card for a moment, then drag. You can also tap the card and pick a status.
+
+**People:** one row per person for your choice of My tasks, Everyone or a department, busiest first: open tasks, plus overdue, blocked, due this week and done in the last 7 days. **Nobody yet** counts open tasks with no one on them. Tap a row to see those tasks in List.
+
+**In an open task:**
+- **Duplicate** opens a New task with the same details, "(copy)" after the name, no due date and the checklist unticked. Nothing is saved until you press **Add task**.
+- **Copy link** copies a link to the task (the button says **Link copied**). If your browser won't copy, the link appears highlighted so you can copy it yourself. Anyone who opens it signs in as usual, then the task opens. A removed task shows a message instead.
+- **Add to Google Calendar** appears when the task has a due date. It opens Google Calendar in a new tab with an all-day event that day and a link back to the task; nothing is added until you save it there.
+
+## Teams (presidents)
+**Who can use it:** only active people in the **Presidents** department. To give someone access, an admin opens **Settings → People**, adds a department called **Presidents** under **Departments** (once), then presses **+ Add** on the person's line and picks it. **Teams** appears in their menu the next time they sign in or refresh. Taking Presidents off the person, or removing the Presidents department, takes Teams away. Unlocking Settings with the gear does not give access. The first visit shows "Loading." for a moment.
+
+**Trackers:** pick a department at the top to see its trackers and how many records each has. Press **+ New tracker**, choose a **Template** (Sponsorship tracker, Content tracker, Brainstorm, Tentative event dates or Blank tracker), check the name and department, then **Create tracker**. **← All trackers** goes back. To rename a tracker, type in the name box at the top and press Enter.
+
+**Views:** **Table**, **Board** (needs a Choice column) and **Calendar** (needs a Date column) show the same records; your choice is remembered on that device. **Search records** narrows them.
+- **Table:** click a cell, change it, then press Enter or click away to save (Esc cancels). **Open** (or a double-click) opens the whole record.
+- **Board:** one column per choice, plus **No status**. Drag a card (press and hold on a phone) or use the menu on the card to move it. **+ Add** in a column starts a record there.
+- **Calendar:** click a day to add a record on that day, or drag a record to another day. Records without a date are under **No date**. Phones start with a list.
+
+**Records:** **+ Add** opens a new record; fill it in and press **Save**. Closing with unsaved changes asks first. A saved record also has:
+- **Remove:** asks first, then shows **Record removed. Undo**. Press **Undo** to bring it back.
+- **Make a task:** opens a New task in Tasks with the first column as the name, the Calendar date as the due date, every person in it under **Who**, the tracker's department, and the tracker's name in the notes. Nothing is saved until you press **Add task**.
+- **Add to Google Calendar:** shown when the record has a date in its Calendar column; opens an all-day event in Google Calendar.
+
+**Columns:** rename a column, change its **Type**, move it up or down, or **Remove** it (it asks first). Choice columns list their choices with a colour each; **+ Add choice** adds one. **Add column** adds a column. Underneath, pick the **Board column**, the **Calendar column** and the **First view**, then **Save**. Changing the type of a saved column asks first, because its saved values may stop showing. Renaming keeps every record's values.
+
+**The ⋯ menu:** **Download CSV** saves the records on screen as a spreadsheet file (clear the search first to get all of them). **Remove tracker** asks first, then hides the tracker and its records. There is no Undo for this. The records are still stored, so if it was a mistake, ask whoever looks after the platform to bring it back.
+
+Limits: 30 columns, 30 choices per column, 30 trackers per department and 2,000 records per tracker.
 
 ## Members tab: sign-ups, payments and search
 Membership costs the fee set in **Settings → Membership** for the school year (September to August). People join on their own at **member.ucalgarycss.ca/create** (this replaces the Google Form), or an exec adds them here. Both end up as one row on the Membership sheet.

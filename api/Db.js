@@ -36,14 +36,16 @@ const TABLES = {
   Requests: ["id", "action", "who", "status", "plan", "reply", "createdAt", "doneAt"],
   // Exec tasks (Tasks.js). remind, remindSent and discordRefs are lists; removed tasks are kept, marked removedAt.
   Tasks: ["id", "title", "department", "owner", "status", "due", "notes", "link", "createdBy", "createdAt", "updatedBy", "updatedAt",
-          "doneAt", "discordMessageId", "removedAt", "removedBy", "remind", "remindSent", "discordRefs", "ownerDiscordId", "assignees", "checklist", "labels"],
+          "doneAt", "discordMessageId", "removedAt", "removedBy", "remind", "remindSent", "discordRefs", "ownerDiscordId", "assignees", "checklist", "labels", "priority"],
   TaskUpdates: ["id", "taskId", "text", "by", "source", "status", "createdAt", "discordMessageId"],
   Team: ["id", "name", "department", "discordId", "active", "sort", "passwordHash", "passwordSetAt", "authVersion", "departments"],
+  Trackers: ["id", "department", "name", "template", "trackerFields", "trackerViews", "sort", "createdBy", "createdAt", "updatedBy", "updatedAt", "removedAt", "removedBy"],
+  TrackerRows: ["id", "trackerId", "rowValues", "sort", "createdBy", "createdAt", "updatedBy", "updatedAt", "removedAt", "removedBy"],
   Log: ["time", "who", "action", "target", "details"]
 };
 
 /** Columns holding lists/objects; stored as JSON text. */
-const JSON_COLUMNS = { ticketTypes: true, questions: true, answers: true, summary: true, returns: true, ticketIds: true, plan: true, reply: true, remind: true, remindSent: true, discordRefs: true, assignees: true, checklist: true, labels: true, departments: true };
+const JSON_COLUMNS = { ticketTypes: true, questions: true, answers: true, summary: true, returns: true, ticketIds: true, plan: true, reply: true, remind: true, remindSent: true, discordRefs: true, assignees: true, checklist: true, labels: true, departments: true, trackerFields: true, trackerViews: true, rowValues: true };
 
 /**
  * Remembered for the rest of this one request only (each request starts fresh),
@@ -162,7 +164,7 @@ function fromCell_(column, value) {
     text = String(value === null ? "" : value);
   }
   if (JSON_COLUMNS[column]) {
-    const empty = (column === "answers" || column === "summary") ? {} : [];
+    const empty = (column === "answers" || column === "summary" || column === "trackerViews" || column === "rowValues") ? {} : [];
     if (!text) return empty;
     try { return JSON.parse(text); } catch (e) { return column === "remind" ? text : empty; }   // remind: older rows hold a word ("daybefore") or a day
   }

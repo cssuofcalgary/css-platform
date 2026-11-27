@@ -7,6 +7,7 @@
  */
 
 const TASK_STATUSES = ["todo", "doing", "blocked", "done"];
+const TASK_PRIORITIES = ["urgent", "high", "normal", "low"];
 const TASK_DEPARTMENTS_BUILT_IN = ["Events", "Marketing", "Internal", "External", "Finance"];   // always there; General is always last
 const TASK_DEPARTMENTS_ADDED_MAX = 20;
 const TASK_PERSON_DEPARTMENTS_MAX = 10;
@@ -346,7 +347,7 @@ function taskView_(t, updates) {
   return {
     id: t.id, title: t.title, department: t.department || "General", owner: t.owner || "", owners: taskAssignees_(t).map(function (p) { return p.name; }), status: TASK_STATUSES.indexOf(t.status) !== -1 ? t.status : "todo",
     due: t.due || "", notes: String(t.notes || "").replace(/^'/, ""), link: t.link || "",
-    checklist: taskChecklistOf_(t), labels: taskLabelsOf_(t),
+    checklist: taskChecklistOf_(t), labels: taskLabelsOf_(t), priority: TASK_PRIORITIES.indexOf(t.priority) !== -1 ? t.priority : "normal",
     remind: taskReminderItems_(t), reminders: taskRemindersView_(t), nextReminder: next ? taskStamp_(next) : "",
     createdBy: t.createdBy, createdAt: t.createdAt, updatedBy: t.updatedBy || "", updatedAt: t.updatedAt || "", doneAt: t.doneAt || "",
     discordMessageId: String(t.discordMessageId || ""),
@@ -398,6 +399,18 @@ function taskCleanStatus_(value) {
   const status = String(value || "").toLowerCase();
   if (TASK_STATUSES.indexOf(status) === -1) throw new ApiError_("BAD_REQUEST", "Pick a status: To do, Doing, Blocked or Done.");
   return status;
+}
+
+/** Blank on older tasks means Normal; the browser may send a priority only when it changes. */
+function taskCleanPriority_(value) {
+  if (value !== undefined && value !== null && typeof value !== "string") throw new ApiError_("BAD_REQUEST", "Pick a priority: Urgent, High, Normal or Low.");
+  const priority = String(value === undefined || value === null ? "" : value).trim().toLowerCase() || "normal";
+  if (TASK_PRIORITIES.indexOf(priority) === -1) throw new ApiError_("BAD_REQUEST", "Pick a priority: Urgent, High, Normal or Low.");
+  return priority;
+}
+
+function taskPriorityText_(task) {
+  return task.priority === "urgent" ? "🔴 Urgent" : task.priority === "high" ? "🟠 High" : "";
 }
 
 function taskCleanDue_(value) {
@@ -491,7 +504,7 @@ function taskNewRow_(f) {
     id: newId_("TK"), title: memberText_(f.title, 140), department: f.department || "General", owner: memberText_(f.owner, 60),
     ownerDiscordId: /^\d{17,20}$/.test(String(f.ownerDiscordId || "")) ? String(f.ownerDiscordId) : "", assignees: f.assignees || [], status: f.status || "todo",
     due: f.due || "", notes: f.notes || "", link: f.link || "", remind: f.remind || [], remindSent: [], discordRefs: [],
-    checklist: f.checklist || [], labels: f.labels || [],
+    checklist: f.checklist || [], labels: f.labels || [], priority: taskCleanPriority_(f.priority),
     createdBy: f.by, createdAt: now, updatedBy: f.by, updatedAt: now, doneAt: f.status === "done" ? now : "",
     discordMessageId: f.discordMessageId || "", removedAt: "", removedBy: ""
   };
@@ -544,6 +557,7 @@ function saveTask_(session, input) {
   if (!editing || has("remind")) clean.remind = taskCleanRemind_(input.remind);
   if (!editing || has("checklist")) clean.checklist = taskCleanChecklist_(input.checklist);
   if (!editing || has("labels")) clean.labels = taskCleanLabels_(input.labels);
+  if (!editing || has("priority")) clean.priority = taskCleanPriority_(input.priority);
   const newStatus = editing && has("status") && input.status !== "" ? taskCleanStatus_(input.status) : "";
   const depts = taskDepartments_();
   const department = taskDepartmentName_(input.department, depts);
@@ -611,6 +625,29 @@ function saveTask_(session, input) {
     if (stale) out.stale = true;
     return out;
   });
+}
+
+/**
+ * Exec: quick add. One line ("make reel by friday @Kevin urgent") read like a message to @taskbot (parseQuickTask_), then
+ * saved exactly like New task through saveTask_ (the lock, new names joining People, the page-made clientId so a repeat
+ * adds it once, and the Discord post). Nobody @mentioned: it is given to the person adding it.
+ * Reply: saveTask_'s, plus quick: what was understood { title, owners, due, priority, remindNeedsDue }.
+ */
+function quickAddTask_(session, text, clientId) {
+  const raw = typeof text === "string" ? text.trim() : "";
+  if (!raw || raw.length > 300) throw new ApiError_("BAD_REQUEST", "Write what needs doing (up to 300 characters).");
+  const team = readRows_("Team");
+  const parsed = parseQuickTask_(raw, new Date(), team);
+  if (!parsed.title) throw new ApiError_("BAD_REQUEST", "Write what needs doing.");
+  if (parsed.titleTooLong) throw new ApiError_("BAD_REQUEST", "Keep what needs doing under 140 characters.");
+  let owners = parsed.owners;
+  if (!owners.length) {
+    const me = (session.personId && team.filter(function (r) { return r.id === session.personId; })[0]) || taskTeamByName_(session.name);
+    owners = [me ? String(me.name).trim() : memberText_(session.name, 60)];
+  }
+  const reply = saveTask_(session, { title: parsed.title, owners: owners, due: parsed.due, remind: parsed.remind, priority: parsed.priority, clientId: clientId });
+  reply.quick = { title: reply.task.title, owners: reply.task.owners, due: reply.task.due, priority: reply.task.priority, remindNeedsDue: !!parsed.remindNeedsDue };
+  return reply;
 }
 
 const TASK_STATUS_MERGE_MS = 10 * 60000;   // the same person changing the status again within 10 minutes: one history line
@@ -756,7 +793,8 @@ function remindTasksOnDiscord_(session) {
       when = "overdue " + days + "d";
     } else if (t.due === today) when = "due today";
     else if (t.due) when = "due " + taskDayText_(t.due);
-    return "• **" + discordEscape_(t.title) + "** — " + taskDiscordWho_(t) + " · " + when + (t.status === "blocked" ? " · ⛔ blocked" : "");
+    const priority = taskPriorityText_(t);
+    return "• " + (priority ? priority + " · " : "") + "**" + discordEscape_(t.title) + "** — " + taskDiscordWho_(t) + " · " + when + (t.status === "blocked" ? " · ⛔ blocked" : "");
   });
   let content = "⏰ **Task check-in** — reply to each task's own message with how it's going.";
   let shown = 0;

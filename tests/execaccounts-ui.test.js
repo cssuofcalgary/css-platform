@@ -58,6 +58,9 @@ async function main() {
   ok(vm.runInContext("landed", browser) === "door", "door-only volunteers still open Door");
   vm.runInContext(`state.role='exec'; window.matchMedia=()=>({matches:false}); showApp();`, browser);
   ok(vm.runInContext("landed", browser) === "overview", "desktop sign-ins retain their saved tab");
+  vm.runInContext(`location.search='?task=TKlinked'; showApp();`, browser);
+  ok(vm.runInContext("landed", browser) === "tasks", "a direct task link opens Tasks instead of the saved desktop tab");
+  vm.runInContext(`location.search='';`, browser);
   const scanner = vm.createContext({ console, URLSearchParams, location: { search: "?mode=scanner" }, localStorage: storage(local), sessionStorage: storage(session),
     document: { getElementById: element, addEventListener() {}, readyState: "complete", querySelector() { return null; } },
     window: { matchMedia() { return { matches: true }; } } });

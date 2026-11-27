@@ -42,6 +42,22 @@ function discordEscape_(text) {
   return String(text || "").replace(/([\\*_~`|>])/g, "\\$1");
 }
 
+/** A task link opens the signed-in portal; it never carries a password or session. */
+function discordTaskLink_(task) {
+  return EXEC_PORTAL_URL.replace(/\/+$/, "") + "/?task=" + encodeURIComponent(String(task.id || ""));
+}
+
+/** Reserve the last line for the task link within Discord's 2000-character limit. */
+function discordFit_(content, link) {
+  const suffix = link ? "\n🔗 <" + link + ">" : "";
+  const text = String(content || "");
+  const room = Math.max(0, 2000 - suffix.length);
+  if (text.length <= room) return text + suffix;
+  let head = text.slice(0, Math.max(0, room - 1)).replace(/\s+$/, "");
+  if (/[\uD800-\uDBFF]$/.test(head)) head = head.slice(0, -1);
+  return head + "…" + suffix;
+}
+
 /** How a person shows in a message: an @mention when their Discord ID is known, otherwise their name. */
 function discordWho_(owner, discordId) {
   if (discordId) return "<@" + discordId + ">";
@@ -141,9 +157,10 @@ function discordBotRoles_(setup, botId) {
 
 /** The message for a brand-new task made in the portal, @mentioning its assignees. */
 function discordTaskMessage_(task, ownerDiscordId) {
-  return "📌 **" + discordEscape_(task.title) + "** — " + taskDiscordWho_(task) +
+  const priority = taskPriorityText_(task);
+  return discordFit_((priority ? priority + " · " : "") + "📌 **" + discordEscape_(task.title) + "** — " + taskDiscordWho_(task) +
     " · due " + taskDayText_(task.due, "no due date") + " · " + discordEscape_(task.department || "General") +
-    "\nReply to this message with how it's going. Say **done** when it's finished.";
+    "\nReply to this message with how it's going. Say **done** when it's finished.", discordTaskLink_(task));
 }
 
 /** Snowflake ids are big numbers written as text: a longer one is newer, then compare letter by letter. */
@@ -433,13 +450,13 @@ function applyDiscordMessages_(pull) {
     log_(authorName + " (Discord)", "task.created", task.id, { title: task.title, owner: task.owner, source: "discord" });
     const coming = discordComingReminders_(task);
     const dropped = tbDroppedText_(parsed.remindDropped);
-    out.posts.push({ replyTo: id, taskId: task.id, userIds: taskOwnerDiscordIds_(task), content: "✅ Got it: **" + discordEscape_(task.title) + "** · " +
+    out.posts.push({ replyTo: id, taskId: task.id, userIds: taskOwnerDiscordIds_(task), content: discordFit_("✅ Got it: **" + discordEscape_(task.title) + "** · " +
       taskDiscordWho_(task) + " · due " + taskDayText_(task.due, "no due date") + " · " +
       (parsed.remindNeedsDue ? "reminders need a due date (add one in the Tasks tab)"
         : coming.length ? (coming.length > 1 ? "reminders " : "reminder ") + coming.join("; ")
         : parsed.remind.length ? "the reminder time has already passed"
         : dropped ? "no reminder"
-        : "no reminder — say 'remind halfway' to add one") + (dropped ? "\n" + dropped : "") });
+        : "no reminder — say 'remind halfway' to add one") + (dropped ? "\n" + dropped : ""), discordTaskLink_(task)) });
   });
   if (!pull.hold) discordSaveLastSeen_(pull.newest);
   return out;

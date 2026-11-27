@@ -417,11 +417,15 @@ ok(r.reminders.every((x) => !x.sent) && r.nextReminder === "2099-11-21T06:05", "
 r = run(`saveTask_(S, { id: "${rid}", title: "Remind me task (renamed)" }).task`);
 ok(r.reminders.length === 2 && r.reminders.every((x) => !x.sent), "editing something else leaves the reminders alone");
 
-// Saving never sends a burst of old reminders: ones in the past are marked sent, except one from the last 10 minutes
-run(`var __p5 = edmParts_(Date.now() - 5 * 60000), __hm5 = ("0" + __p5.h).slice(-2) + ":" + ("0" + __p5.min).slice(-2);`);
+// Saving never sends a burst of old reminders: ones in the past are marked sent, except one from the last 10 minutes.
+// Every reminder time is worked out from now (Calgary time), so this means the same at any hour, just after midnight too:
+// 2 days and 1 week before at 9:00, a day ago, 15 minutes ago (just past the 10 minutes), and 5 minutes ago.
+run(`var __hmOf = function (p) { return ("0" + p.h).slice(-2) + ":" + ("0" + p.min).slice(-2); };
+  var __p5 = edmParts_(Date.now() - 5 * 60000), __hm5 = __hmOf(__p5), __p15 = edmParts_(Date.now() - 15 * 60000);`);
 const p5 = run(`({ ymd: __p5.ymd, hm: __hm5 })`);
-r = run(`saveTask_(S, { title: "Burst test", owner: "Kevin", due: __p5.ymd, remind: [{ n: 2, unit: "days", at: "09:00" }, { n: 1, unit: "weeks", at: "09:00" }, { n: 1, unit: "days", at: "23:59" }, { n: 0, unit: "days", at: __hm5 }] }).task`);
-ok(r.reminders.filter((x) => x.sent).length === 3 && r.reminders[3].sent === false && r.nextReminder === p5.ymd + "T" + p5.hm, "saving with reminders already in the past: those are marked sent; one from 5 minutes ago still goes out");
+r = run(`saveTask_(S, { title: "Burst test", owner: "Kevin", due: __p5.ymd, remind: [{ n: 2, unit: "days", at: "09:00" }, { n: 1, unit: "weeks", at: "09:00" },
+  { n: 1, unit: "days", at: __hm5 }, { n: ymdDiff_(__p15.ymd, __p5.ymd), unit: "days", at: __hmOf(__p15) }, { n: 0, unit: "days", at: __hm5 }] }).task`);
+ok(r.reminders.length === 5 && r.reminders.filter((x) => x.sent).length === 4 && r.reminders[4].sent === false && r.nextReminder === p5.ymd + "T" + p5.hm, "saving with reminders already in the past: those are marked sent (15 minutes ago too); one from 5 minutes ago still goes out");
 run(`__fetches = []; taskBotTick()`);
 ok(run(`__fetches.filter(function (f) { return f.body && /^⏰ Reminder/.test(f.body.content); }).length`) === 1 &&
   run(`__fetches.filter(function (f) { return f.body && /^⏰ Reminder/.test(f.body.content); })[0].body.content`).indexOf("Burst test") !== -1, "…and the timer then sends just that one, not a burst");
@@ -450,7 +454,8 @@ ok(photo && photo.owner === "Amy" && photo.due === "", "@mentioning someone make
 ok(reel.ownerDiscordId === "111111111111111111" && photo.ownerDiscordId === "222222222222222222", "Discord-made tasks save the owner's Discord ID (ownerDiscordId)");
 const posts = run(`__fetches.filter(function (f) { return f.opts.method === "post"; })`);
 const confirm = posts.find((p) => p.body.message_reference && p.body.message_reference.message_id === "200000000000002001");
-ok(confirm && /^✅ Got it: \*\*Make reel for badminton\*\* · <@111111111111111111> · due Fri, \w{3} \d+ · reminder Fri, \w{3} \d+ 11:59 PM$/.test(confirm.body.content), "the bot confirms as a reply: title, owner, due, reminder time");
+ok(confirm && /^✅ Got it: \*\*Make reel for badminton\*\* · <@111111111111111111> · due Fri, \w{3} \d+ · reminder Fri, \w{3} \d+ 11:59 PM$/.test(confirm.body.content.split("\n")[0]) &&
+  confirm.body.content.endsWith("\n🔗 <https://exec.ucalgarycss.ca/?task=" + reel.id + ">"), "the bot confirms as a reply: title, owner, due, reminder time, and a direct task link");
 ok(confirm.body.allowed_mentions.parse.length === 0 && confirm.body.allowed_mentions.users.join() === "111111111111111111" && confirm.body.allowed_mentions.replied_user === false, "the confirmation can only ping the owner");
 ok(posts.some((p) => p.body.message_reference && p.body.message_reference.message_id === "200000000000002004" && /What's the task\?/.test(p.body.content)), "a message with no task in it gets 'What's the task?'");
 ok(posts.some((p) => p.body.message_reference && p.body.message_reference.message_id === "200000000000002005" && /no reminder — say 'remind halfway'/.test(p.body.content)), "no reminder asked: the confirmation says how to add one");
@@ -804,8 +809,105 @@ ok(run(`taskFresh_('${plainTask.id}').status`) === "done", "a task without name 
 ok(SAME(run(`taskOwnerDiscordIds_({assignees:[{name:'Tick One',discordId:'666666666666666671'}],checklist:[{text:'Tick One',done:true}]})`), ["666666666666666671"]), "everyone ticked but not Done yet: everyone is tagged again, as for any task");
 ok(run(`saveTask_(S,{id:'${plainTask.id}',checklist:new Array(60).fill({text:'a'})}).task.checklist.length`) === 60, "a checklist can have a line for up to 60 people");
 
+// ---- Priority and direct task links -------------------------------------------------------------
+ok(run(`taskView_({ id: 'TK-old', status: 'todo', due: '' }, []).priority`) === "normal", "older tasks with no priority appear as Normal");
+run(`__discord('bot')`);
+const priorityTask = run(`saveTask_(S, { title: 'Priority test', priority: 'urgent', owner: 'Kevin', due: edmParts_(Date.now()).ymd }).task`);
+ok(priorityTask.priority === "urgent" && run(`taskFresh_('${priorityTask.id}').priority`) === "urgent", "Urgent is saved and returned");
+let priorityPost = run(`__fetches.filter(function (f) { return f.body; }).pop().body`);
+ok(priorityPost.content.startsWith("🔴 Urgent") && priorityPost.content.endsWith("\n🔗 <https://exec.ucalgarycss.ca/?task=" + priorityTask.id + ">"), "new-task posts include Urgent and the direct link");
+ok(run(`saveTask_(S, { id: '${priorityTask.id}', notes: 'changed notes only' }).task.priority`) === "urgent", "editing another field preserves priority when omitted");
+ok(fn(`saveTask_(S, { id: '${priorityTask.id}', priority: 'very high' })`).err === "BAD_REQUEST" && run(`taskFresh_('${priorityTask.id}').priority`) === "urgent", "unknown priority is refused without changing the task");
+ok(fn(`saveTask_(S, { title: 'Bad priority', priority: 123 })`).err === "BAD_REQUEST", "an unknown priority on a new task is refused");
+ok(fn(`saveTask_(S, { title: 'Bad priority', priority: [] })`).err === "BAD_REQUEST", "an array is refused rather than treated as blank priority");
+["high", "normal", "low", ""].forEach((p) => {
+  ok(run(`saveTask_(S, { id: '${priorityTask.id}', priority: ${JSON.stringify(p)} }).task.priority`) === (p || "normal"), "priority can be changed to " + (p || "blank (Normal)"));
+});
+ok(run(`taskNewRow_({ title: 'From Discord', by: 'TEST' }).priority`) === "normal", "tasks created from Discord default to Normal");
+run(`saveTask_(S, { id: '${priorityTask.id}', priority: 'high' }); var __beforePriorityTasks = TBL.Tasks; TBL.Tasks = [taskFresh_('${priorityTask.id}')]; __fetches = []; remindTasksOnDiscord_(S); TBL.Tasks = __beforePriorityTasks; delete DB_.rows['Tasks'];`);
+priorityPost = run(`__fetches.filter(function (f) { return f.body; }).pop().body`);
+ok(priorityPost.content.includes("🟠 High"), "manual Task check-in includes High priority");
+ok(run(`discordTaskMessage_({ id: 'TK-high', title: 'High priority', priority: 'high' }).indexOf('🟠 High')`) === 0, "new-task posts include High priority");
+ok(run(`discordTaskMessage_({ id: 'TK-low', title: 'Low priority', priority: 'low' })`).startsWith("📌 **"), "Low does not add a Discord priority label");
+const fitTask = { id: "TK-longlink", title: "x".repeat(140), priority: "urgent", assignees: Array.from({ length: 60 }, (_, i) => ({ name: "Person " + i + " " + "y".repeat(45), discordId: "" })) };
+const fitMessage = run(`discordTaskMessage_(${JSON.stringify(fitTask)})`);
+ok(fitMessage.length <= 2000 && fitMessage.endsWith("\n🔗 <https://exec.ucalgarycss.ca/?task=TK-longlink>"), "a long new-task post is shortened while keeping its complete link");
+const fitConfirmation = run(`discordFit_('Got it: ' + 'z'.repeat(2400), discordTaskLink_({id:'TK-confirm'}))`);
+ok(fitConfirmation.length <= 2000 && fitConfirmation.endsWith("\n🔗 <https://exec.ucalgarycss.ca/?task=TK-confirm>"), "a long bot confirmation keeps its complete link within Discord's limit");
+ok(run(`discordFit_('short', '')`) === "short" && run(`discordTaskLink_({id:'TK? &/#'})`) === "https://exec.ucalgarycss.ca/?task=TK%3F%20%26%2F%23", "message fitting preserves short text and task IDs are safely encoded");
+
+// ---- Quick add: one line, read like a message to @taskbot, saved like New task ----------------------
+run(`__discord("bot"); __fetches = []; __posted = 0;`);
+const QA = (text, clientId, tok = execTok) => run(`route_({ action: "quickAddTask", token: "${tok}", text: ${JSON.stringify(text)}, clientId: ${JSON.stringify(clientId || "")} })`);
+const QAtry = (text, tok = execTok) => fn(`route_({ action: "quickAddTask", token: "${tok}", text: ${JSON.stringify(text)} })`);
+const calToday = run(`edmParts_(Date.now())`);
+const addDays = (ymd, n) => { const d = new Date(ymd + "T12:00:00Z"); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
+const nextFriday = addDays(calToday.ymd, (5 - calToday.dow + 7) % 7 || 7);
+const newPosts = () => run(`__fetches.filter(function (f) { return f.opts.method === "post" && f.body && /📌/.test(f.body.content); })`);
+let qa = QA("make reel for badminton by friday @Kevin", "TKquickadd0001");
+ok(qa.ok && qa.task.title === "Make reel for badminton" && qa.task.due === nextFriday && SAME(qa.task.owners, ["Kevin"]) && qa.task.department === "Marketing" && qa.task.priority === "normal",
+  "quick add: 'make reel for badminton by friday @Kevin' → title, next Friday, Kevin (his department), Normal");
+ok(SAME(qa.quick, { title: "Make reel for badminton", owners: ["Kevin"], due: nextFriday, priority: "normal", remindNeedsDue: false }), "quick add: the reply says what was understood (quick)");
+let qaPosts = newPosts();
+ok(qa.discordPosted === true && qaPosts.length === 1 && SAME(qaPosts[0].body.allowed_mentions.users, [run("KEV")]) &&
+  qaPosts[0].body.content === run(`discordTaskMessage_(taskFresh_("TKquickadd0001"), taskFresh_("TKquickadd0001").ownerDiscordId)`) && run(`taskFresh_("TKquickadd0001").discordMessageId`) !== "",
+  "quick add: posted to Discord exactly like a new task (pings only Kevin, message id saved)");
+ok(run(`__logs.some(function (l) { return l.action === "task.created" && l.target === "TKquickadd0001"; })`), "quick add: task.created is logged");
+qa = QA("Count the cash box");
+ok(SAME(qa.quick.owners, ["TEST Exec"]) && qa.task.due === "" && qa.task.priority === "normal" && named("test exec").length === 1, "quick add with no @: given to the person adding it (who joins People, like New task)");
+ok(SAME(run(`quickAddTask_({ name: "  kEVIN ", role: "exec" }, "Order pizza", "").quick.owners`), ["Kevin"]), "…spelled as on the People list");
+qa = QA("book the room for @casey and @Multi One").quick;
+ok(SAME(qa.owners, ["Casey Ng", "Multi One"]) && qa.title === "Book the room", "quick add: '@Casey' finds Casey Ng (the only active Casey); several people can be @mentioned");
+qa = QA("ask @Multi One and @Kevin about the budget").quick;
+ok(SAME(qa.owners, ["Kevin", "Multi One"]) && qa.title === "Ask about the budget", "quick add: 'and @Kevin' is taken out of the words too; people A to Z");
+qa = QA("sync with @Nobody Here").quick;
+ok(SAME(qa.owners, ["TEST Exec"]) && qa.title === "Sync with @Nobody Here", "quick add: an @name nobody on People has stays in the words; the task is the adder's");
+[
+  ["URGENT print tickets by tomorrow", "urgent", "Print tickets"],
+  ["call the venue asap", "urgent", "Call the venue"],
+  ["Call the venue!!", "urgent", "Call the venue"],
+  ["send the budget (urgent)", "urgent", "Send the budget"],
+  ["Important: send the budget", "high", "Send the budget"],
+  ["send the budget, high priority", "high", "Send the budget"],
+  ["tidy the storage room Low-Priority", "low", "Tidy the storage room"],
+  ["low priority urgent important fix the poster", "urgent", "Fix the poster"],
+  ["fix the urgentcare link", "normal", "Fix the urgentcare link"],
+  ["unimportant chores", "normal", "Unimportant chores"]
+].forEach(([text, priority, title]) => {
+  const got = QA(text).quick;
+  ok(got.priority === priority && got.title === title, `quick add "${text}" → ${priority}, "${title}"` + (got.priority === priority && got.title === title ? "" : "  GOT " + JSON.stringify(got)));
+});
+ok(QA("URGENT print tickets by tomorrow").task.due === addDays(calToday.ymd, 1) && run(`TBL.Tasks.filter(function (t) { return t.title === "Print tickets" && t.priority === "urgent"; }).length`) === 2, "…the priority is saved on the task, and the date still works");
+qa = QA("make reel remind me 2 days before");
+ok(qa.quick.remindNeedsDue === true && qa.task.due === "" && SAME(qa.task.remind, [{ n: 2, unit: "days", at: "09:00" }]), "quick add: a reminder without a due date is kept and remindNeedsDue says it can't go out yet");
+qa = QA("make reel by friday remind me the day before at 6pm");
+ok(SAME(qa.task.remind, [{ n: 1, unit: "days", at: "18:00" }]) && qa.quick.remindNeedsDue === false, "quick add: 'remind me the day before at 6pm' becomes a reminder");
+[["", /300 characters/], ["   ", /300 characters/], ["x".repeat(301), /300 characters/], ["urgent", /^Write what needs doing\.$/], ["by friday @Kevin", /^Write what needs doing\.$/],
+  ["y".repeat(150), /140 characters/]].forEach(([text, msg]) => {
+  const x = QAtry(text);
+  ok(x.err === "BAD_REQUEST" && msg.test(x.msg), `quick add refused: ${JSON.stringify(text.length > 20 ? text.slice(0, 12) + "… (" + text.length + ")" : text)} → ${x.msg}`);
+});
+ok(fn(`route_({ action: "quickAddTask", token: "${execTok}", text: 42 })`).err === "BAD_REQUEST", "quick add: text that isn't words is refused");
+ok(QAtry("Plan the " + "z".repeat(200) + " by friday").err === "BAD_REQUEST" && QA("Plan the social " + "w".repeat(100) + " by friday @Kevin remind me 2 days before at 6pm urgent").ok, "quick add: up to 300 characters, as long as what needs doing is under 140");
+const tasksBefore = run(`TBL.Tasks.length`);
+run(`__fetches = []`);
+const qa1 = QA("order shirts @Amy", "TKquickrepeat01"), qa2 = QA("order shirts @Amy", "TKquickrepeat01");
+ok(qa1.task.id === "TKquickrepeat01" && qa2.repeated === true && qa2.task.id === "TKquickrepeat01" && run(`TBL.Tasks.length`) === tasksBefore + 1 && newPosts().length === 1 && SAME(qa2.quick.owners, ["Amy"]),
+  "quick add sent twice with the same clientId: saved once, posted once, the repeat says repeated");
+ok(fn(`route_({ action: "quickAddTask", token: "nope", text: "Book room" })`).err === "NOT_LOGGED_IN" && fn(`route_({ action: "quickAddTask", text: "Book room" })`).err === "NOT_LOGGED_IN", "quick add: signed out is refused");
+run(`var __entryQuick = entryOpenEvents_; entryOpenEvents_ = function () { return [{ id: "E1" }]; };`);
+const doorTok = run(`startSession_("Door Volunteer", "door")`);
+ok(QAtry("Book room", doorTok).err === "DOOR_ONLY" && run(`DOOR_ACTIONS.indexOf("quickAddTask")`) === -1, "quick add: door sign-ins can't use it");
+run(`entryOpenEvents_ = __entryQuick;`);
+run(`__discord("")`);
+qa = QA("print flyers @Kevin");
+ok(qa.ok && qa.discordPosted === false && run(`TBL.Tasks.some(function (t) { return t.id === "${qa.task.id}"; })`), "quick add with Discord not set up: the task is still saved");
+ok(SAME(run(`parseQuickTask_("buy cups @Kevin urgent by friday", Date.parse("2026-11-23T17:00:00Z"), [{ name: "Kevin", discordId: KEV, active: true }])`).owners, ["Kevin"]) &&
+  run(`parseQuickTask_("ask @Kevin and @Amy Lee", Date.parse("2026-11-23T17:00:00Z"), [{ name: "Kevin", active: true }, { name: "Amy Lee", active: true }]).assignees.length`) === 2,
+  "parseQuickTask_ works without a bot id, with plain-text @names (two at once too)");
+
 // Routes exist
-["listTasks", "saveTask", "setTaskStatus", "addTaskUpdate", "removeTask", "remindTasksOnDiscord"].forEach((a) => {
+["listTasks", "saveTask", "quickAddTask", "setTaskStatus", "addTaskUpdate", "removeTask", "remindTasksOnDiscord"].forEach((a) => {
   const x = fn(`route_({ action: "${a}", token: "nope" })`);
   ok(x.err === "NOT_LOGGED_IN", `${a}: needs a signed-in exec`);
 });

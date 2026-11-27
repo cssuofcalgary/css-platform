@@ -787,6 +787,36 @@ button.all-row:hover { border-color: var(--border-2); }
 .task-update-form .combo-list { top: auto; bottom: calc(100% + 4px); }
 #td-close.changed { box-shadow: 0 0 0 3px var(--accent-soft); }
 .task-waiting { font-size: 11.5px; font-weight: 600; line-height: 18px; padding: 0 8px; border-radius: 99px; background: var(--warn-bg); color: var(--warn-text); white-space: nowrap; }
+.task-search { flex: 1 1 190px; min-width: 130px; max-width: 320px; }
+.task-person-filter { flex: 0 1 190px; min-width: 130px; }
+.task-priority { display: inline-flex; align-items: center; border-radius: 99px; padding: 1px 8px; font-size: 11.5px; font-weight: 700; white-space: nowrap; }
+.priority-urgent { background: var(--bad-text); color: var(--surface); }
+.priority-high { background: var(--warn-bg); color: var(--warn-text); }
+.priority-low { background: var(--info-bg); color: var(--info-text); }
+.task-avatars { display: inline-flex; align-items: center; max-width: 100%; gap: 3px; margin-left: auto; }
+.task-avatar { display: inline-grid; place-items: center; width: 26px; height: 26px; flex: none; border-radius: 50%; background: var(--accent-soft); color: var(--accent-ink); font-size: 10px; font-weight: 700; }
+.task-avatar-more { color: var(--muted); font-size: 11px; font-weight: 700; }
+.task-progress { height: 4px; overflow: hidden; border-radius: 5px; background: var(--border); }
+.task-progress > span { display: block; height: 100%; background: var(--good-text); }
+.board-add { width: 100%; margin-top: 8px; padding: 8px 10px; border: 0; border-radius: var(--radius-sm); background: none; text-align: left; color: var(--muted); font: inherit; font-size: 13px; cursor: pointer; }
+.board-add:hover { background: var(--surface); color: var(--text); }
+#td-priority { justify-self: start; width: auto; min-width: 135px; }
+@media (max-width: 600px) { .task-search { max-width: none; flex-basis: 100%; } .task-person-filter { flex: 1 1 150px; } }
+/* Tasks: quick add, needs-attention chips, phone dragging on the Board, Add to Google Calendar */
+.task-quick-form { margin: 0 0 12px; }
+.task-quick-add { max-width: 560px; padding: 10px 14px; }
+.task-quick-add:disabled { opacity: .6; cursor: wait; }
+.task-attention { margin: -4px 0 14px; }
+.task-attention .chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 6px 4px 12px; font-size: 13px; }
+.task-attention .att-overdue:not(.active) { color: var(--bad-text); }
+.task-attention .chip.active .task-count { background: color-mix(in srgb, var(--accent-text) 22%, transparent); color: var(--accent-text); }
+.board-cards { min-height: 48px; }
+.task-board.board-dragging { scroll-snap-type: none; }
+.board-card.sortable-drag, .board-card.sortable-fallback { box-shadow: var(--shadow-2, 0 8px 24px rgba(0, 0, 0, .25)); opacity: 1; }
+@media (pointer: coarse) { .board-card { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; } }
+.task-detail-buttons .td-gcal { grid-column: 1 / -1; display: flex; align-items: center; justify-content: center; padding: 8px 14px; border: 1px solid var(--border-2, var(--border)); border-radius: var(--radius-sm, 8px); background: var(--surface); box-shadow: var(--shadow-1, none); color: var(--text); font-weight: 500; text-align: center; text-decoration: none; }
+.task-detail-buttons .td-gcal:hover { border-color: var(--muted); }
+@media (max-width: 600px) { .task-quick-add { max-width: none; font-size: 16px; } }
 
 /* Payments: comments on a payment (the bubble + newest comment on the card, and the comments window) */
 .order { grid-template-areas: "code total" "who who" "notes notes" "tickets tickets" "money money" "actions actions"; }
@@ -820,3 +850,25 @@ button.all-row:hover { border-color: var(--border-2); }
 /* "Checked it": the flag being cleared, quoted in its small window (edit.js) */
 .flag-quote { color: var(--warn-text); background: var(--warn-bg); border-radius: 8px; padding: 8px 10px; margin: 0 0 12px; overflow-wrap: anywhere; }
 [data-clear-flag] { font-size: 13px; }
+
+/* Tasks: People workload view */
+.tp-list { display: grid; gap: 8px; }
+.tp-row { display: grid; grid-template-columns: minmax(160px, 1fr) minmax(100px, .65fr) minmax(160px, 1.5fr); align-items: center; gap: 20px; width: 100%; padding: 16px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); color: var(--text); font: inherit; text-align: left; cursor: pointer; }
+.tp-row:hover { border-color: var(--accent); }
+.tp-row:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.tp-person { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.tp-name { min-width: 0; overflow-wrap: anywhere; font-weight: 600; }
+.tp-work { display: grid; gap: 6px; min-width: 0; }
+.tp-open { font-size: 14px; font-weight: 600; white-space: nowrap; }
+.tp-load { display: block; height: 5px; overflow: hidden; border-radius: 99px; background: var(--border); }
+.tp-load > span { display: block; height: 100%; border-radius: inherit; background: var(--accent); }
+.tp-metrics { display: flex; flex-wrap: wrap; gap: 6px 12px; min-width: 0; }
+.tp-metric { font-size: 12px; color: var(--muted); }
+.tp-overdue { color: var(--error); }
+.tp-blocked { padding: 1px 6px; border-radius: 99px; background: var(--warn-bg); color: var(--warn-text); }
+.tp-done { color: var(--good-text); }
+@media (max-width: 760px) {
+  .tp-row { grid-template-columns: minmax(0, 1fr) 90px; gap: 10px 16px; padding: 14px; }
+  .tp-metrics { grid-column: 1 / -1; }
+  .tp-metrics:empty { display: none; }
+}

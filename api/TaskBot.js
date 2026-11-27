@@ -258,7 +258,8 @@ function tbResolveDate_(phrase, today, dow) {
  *   - remind: a list of { n, unit, at } from every "remind (me|them)? halfway | day before | both | 2 days before | 1 week before |
  *     on the day | on <date phrase> | <date phrase>", each optionally followed by "at 6pm" / "at 18:00" (otherwise 9:00 AM);
  *     remindNeedsDue = reminders were asked for but there is no due date;
- *   - title: what's left, tidied, first letter capitalised ("" = the bot asks what the task is).
+ *   - title: what's left, tidied, first letter capitalised ("" = the bot asks what the task is), cut to 140 characters
+ *     (titleTooLong says it was longer).
  */
 function parseTaskMessage_(text, now, team, botId) {
   const nowMs = now instanceof Date ? now.getTime() : (typeof now === "number" ? now : (Date.parse(now) || Date.now()));
@@ -277,13 +278,14 @@ function parseTaskMessage_(text, now, team, botId) {
     return " ";
   });
   const rows = (team || []).filter(function (r) { return r && r.name; });
+  const nameKey = function (name) { return String(name || "").replace(/\s+/g, " ").trim().toLowerCase(); };   // as teamNameKey_ (kept here so the demo can run this in the browser)
   {   // "@Kevin" typed as plain text, for someone on the team list
     rows.slice().sort(function (a, b) { return String(b.name).length - String(a.name).length; }).forEach(function (r) {
-      const re = new RegExp("(^|\\s)(?:(?:assign(?:ed)?\\s+to|for|to)\\s+)?@" + String(r.name).replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "(?![\\w])", "i");
+      const re = new RegExp("(^|\\s)(?:(?:assign(?:ed)?\\s+to|for|to|with|and)\\s+)?@" + String(r.name).replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "(?![\\w])", "i");
       if (!re.test(s)) return;
       s = s.replace(re, " ");
       const discordId = /^\d{17,20}$/.test(String(r.discordId || "")) ? String(r.discordId) : "";
-      if (!assignees.some(function (p) { return (discordId && p.discordId === discordId) || teamNameKey_(p.name) === teamNameKey_(r.name); })) assignees.push({ name: String(r.name), discordId: discordId });
+      if (!assignees.some(function (p) { return (discordId && p.discordId === discordId) || nameKey(p.name) === nameKey(r.name); })) assignees.push({ name: String(r.name), discordId: discordId });
     });
   }
   if (assignees.length) { ownerName = assignees[0].name; ownerDiscordId = assignees[0].discordId; }
@@ -317,8 +319,49 @@ function parseTaskMessage_(text, now, team, botId) {
   }
   title = title.charAt(0).toUpperCase() + title.slice(1);
   const remind = tbRemindItems_(taken.specs, due, today, dow);
-  return { title: title.slice(0, 140), due: due, remind: remind.items, remindNeedsDue: remind.needsDue, remindDropped: remind.dropped,
+  return { title: title.slice(0, 140), titleTooLong: title.length > 140, due: due, remind: remind.items, remindNeedsDue: remind.needsDue, remindDropped: remind.dropped,
     ownerDiscordId: ownerDiscordId, ownerName: ownerName, assignees: assignees };
+}
+
+// Priority words in a quick add, the highest one wins. Whole words, any capitals ("!!" anywhere).
+const TB_PRIORITY_WORDS = [
+  ["urgent", /(^|[^\w@])(?:urgent|asap)(?![\w@])|!{2,}/gi],
+  ["high", /(^|[^\w@])(?:high[\s-]+priority|important)(?![\w@])/gi],
+  ["low", /(^|[^\w@])low[\s-]+priority(?![\w@])/gi]
+];
+
+/**
+ * Quick add (one line typed in the Tasks tab): read like a message to @taskbot, after the priority words are taken out
+ * ("urgent", "asap", "!!" → urgent; "high priority", "important" → high; "low priority" → low). "@Amy" also works for
+ * Amy Lee when she is the only active person called Amy (as in updates). Pure, so the demo runs it in the browser too.
+ * Returns parseTaskMessage_'s answer plus priority ("normal" when none was said) and owners: the People-list names of
+ * everyone @mentioned ([] = nobody; the caller then gives it to the person adding it).
+ */
+function parseQuickTask_(text, now, team) {
+  let s = " " + String(text || "") + " ", priority = "";
+  TB_PRIORITY_WORDS.forEach(function (rule) {
+    s = s.replace(rule[1], function (all, before) { priority = priority || rule[0]; return (before || "") + " "; });
+  });
+  if (priority) s = s.replace(/\(\s*\)|\[\s*\]/g, " ");   // "(urgent)" leaves "()"
+  const key = function (name) { return String(name || "").replace(/\s+/g, " ").trim().toLowerCase(); };
+  const rows = (team || []).filter(function (r) { return r && key(r.name); });
+  const on = rows.filter(function (r) { return r.active === true || String(r.active).toUpperCase() === "TRUE"; });
+  const firsts = {}, names = {};
+  rows.forEach(function (r) { names[key(r.name)] = true; });
+  on.forEach(function (r) { const f = key(r.name).split(" ")[0]; firsts[f] = (firsts[f] || 0) + 1; });
+  const byFirst = on.filter(function (r) { const f = key(r.name).split(" ")[0]; return firsts[f] === 1 && !names[f]; })
+    .map(function (r) { return { name: String(r.name).trim().split(/\s+/)[0], discordId: r.discordId, fullName: String(r.name).trim() }; });
+  const parsed = parseTaskMessage_(s, now, rows.concat(byFirst), "");
+  const owners = [];
+  parsed.assignees.forEach(function (p) {
+    const first = byFirst.filter(function (r) { return key(r.name) === key(p.name); })[0];
+    const row = !p.name && p.discordId ? rows.filter(function (r) { return String(r.discordId || "") === p.discordId; })[0] : null;
+    const name = first ? first.fullName : p.name ? String(p.name).trim() : row ? String(row.name).trim() : "";
+    if (name && !owners.some(function (n) { return key(n) === key(name); })) owners.push(name);
+  });
+  parsed.priority = priority || "normal";
+  parsed.owners = owners;
+  return parsed;
 }
 
 // ---- Reminders ---------------------------------------------------------------------------------

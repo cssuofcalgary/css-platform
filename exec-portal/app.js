@@ -328,6 +328,7 @@ async function onLogout() {
 }
 
 function signOutLocally() {
+  if (typeof tmHide === "function") tmHide();
   if (typeof stopCamera === "function") stopCamera();
   if (typeof doorState !== "undefined") clearInterval(doorState.refreshTimer);
   if (typeof deskAlertState !== "undefined") clearInterval(deskAlertState.timer);
@@ -359,6 +360,7 @@ function showApp() {
   $("who-avatar").textContent = state.name.trim().split(/\s+/).map((p) => p[0]).join("").slice(0, 2).toUpperCase();
   showSearch();
   if (typeof startMailStatus === "function") startMailStatus();
+  if (typeof tmCheckAccess === "function") tmCheckAccess();
   // Phones open Tasks. The scanner link and door-only sessions deliberately open Door.
   // (The tab code loads after this file, so on first load wait until every script has run.)
   let landing = SCANNER_MODE || state.role === "door" ? "door" : isPhone() ? "tasks" : "overview";
@@ -368,6 +370,7 @@ function showApp() {
     const button = saved && document.querySelector('.tab[data-tab="' + saved + '"]');
     if (!SCANNER_MODE && !isPhone() && state.role !== "door" && button && !button.hidden) landing = saved;
   } catch (e) { /* no storage: land on the usual tab */ }
+  if (!SCANNER_MODE && state.role !== "door" && new URLSearchParams(location.search).get("task")) landing = "tasks";
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", () => switchTab(landing));
   else switchTab(landing);
 }

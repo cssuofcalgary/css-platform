@@ -386,11 +386,32 @@ function route_(req) {
     case "removePracticeEvent":
       return removePracticeEvent_(requireSession_(req.token));
 
+    case "teamSpaces":
+      return teamSpaces_(requirePresident_(req.token));
+
+    case "getTracker":
+      return getTracker_(requirePresident_(req.token), req.id);
+
+    case "saveTracker":
+      return saveTracker_(requirePresident_(req.token), req.tracker);
+
+    case "removeTracker":
+      return removeTracker_(requirePresident_(req.token), req.id);
+
+    case "saveTrackerRow":
+      return saveTrackerRow_(requirePresident_(req.token), req.trackerId, req.row);
+
+    case "removeTrackerRow":
+      return removeTrackerRow_(requirePresident_(req.token), req.id, !!req.undo);
+
     case "listTasks":
       return listTasks_(requireSession_(req.token));
 
     case "saveTask":
       return saveTask_(requireSession_(req.token), req.task);
+
+    case "quickAddTask":   // one line, read like a message to @taskbot (Tasks.js)
+      return quickAddTask_(requireSession_(req.token), req.text, req.clientId);
 
     case "setTaskStatus":
       return setTaskStatus_(requireSession_(req.token), req.id, req.status, req.from);

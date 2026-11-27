@@ -97,5 +97,6 @@ $("mail-send-pending").addEventListener("click", async () => {
 // Opening any tab refreshes the indicator (not more than once a minute).
 if (typeof switchTab === "function") {
   const baseSwitchTab = switchTab;
-  switchTab = function (name) { baseSwitchTab(name); refreshMailStatus(false); };   // eslint-disable-line no-global-assign
+  // Returns the switch, so callers that wait for the new tab (Teams → Make a task) really wait.
+  switchTab = function (name) { const switched = baseSwitchTab(name); refreshMailStatus(false); return switched; };   // eslint-disable-line no-global-assign
 }

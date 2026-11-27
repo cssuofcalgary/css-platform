@@ -41,6 +41,8 @@ These run the API code (`api/*.js`) in Node with a fake Google (in-memory tables
 | `eventedit.test.js` | event drafts and previews, editable fields and ticket order |
 | `square.test.js` | card payments through Square (fake Square, no network): the payment page amount and capacity check, confirming and repeating, already paid by e-transfer, event full while paying, backing out, the ticket page and door scan finishing a payment after a closed tab, the webhook relay's signature check, odd card payments for Finance, Square not set up |
 | `members.test.js` | member lists, filters, counts, member ID creation and signup QR links |
+| `clearflag.test.js` | "Checked it" on a help-desk flag: any exec (not door) can clear it, the payment comment and Log line it leaves, the scan turning green, the $0 "now press Mark paid" hint, refusals (signed out, archived event, missing ticket) and the Payments/Attendees window |
+| `paymentnotes.test.js` | comments on a payment: adding (author from the sign-in, 1000-character limit, retry added once), newest-first list, removing (writer or admin, kept in the sheet), the count and newest comment on each payment card, sign-in and door refusals, Activity sentences and the comments window |
 
 ```
 node tests/core.test.js
@@ -81,12 +83,31 @@ node tests/membershipform.test.js
 node tests/membershipform-ui.test.js
 node tests/square.test.js
 node tests/departments.test.js
+node tests/clearflag.test.js
+node tests/paymentnotes.test.js
+node tests/people.test.js
+node tests/execaccounts-ui.test.js
+node tests/signin-search-ui.test.js
+node tests/tasks.test.js
+node tests/tasks-ui.test.js
+node tests/taskpeople-ui.test.js
+node tests/trackers.test.js
+node tests/teams-ui.test.js
+node tests/teams-views.test.js
+node tests/audit-finance.test.js
+node tests/ops-audit.test.js
+node tests/audit-frontend.test.js
+node tests/practice.test.js
 ```
 
-`people.test.js` covers pasted rosters, admin permissions, the registration lock, personal-password setup and sign-in, authenticated Settings unlock, hashed storage, password resets, revoked sessions and deactivation. `execaccounts-ui.test.js` covers the first-time password screen, removal of device-saved name suggestions and phone Tasks/scanner landing pages. `signin-search-ui.test.js` covers the two-letter People search, keyboard and click selection, loading and retry, and keeping dismissed results closed.
+`people.test.js` covers pasted rosters, admin permissions, the registration lock, personal-password setup and sign-in, authenticated Settings unlock, hashed storage, password resets, revoked sessions and deactivation. `execaccounts-ui.test.js` covers the first-time password screen, removal of device-saved name suggestions, phone Tasks/scanner landing pages and a `?task=` link opening Tasks instead of the saved desktop tab. `signin-search-ui.test.js` covers the two-letter People search, keyboard and click selection, loading and retry, and keeping dismissed results closed.
 `tasks-ui.test.js` covers adding/removing multiple assignees, saving typed names, editing shared tasks, My tasks for each assignee and escaping names, plus the Everyone/department buttons (a name line per person, lines following people added or taken off, kept ticked lines, a removed department staying on its tasks). `tasks.test.js` also checks shared-task Discord posts, bot creation, manual/scheduled reminders and older single-owner tasks, and that ticked names aren't tagged, that a Discord "done" ticks the person's name (the last one finishes the task) and that Remind on Discord tags everyone on a shared line. `departments.test.js` covers adding and removing the club's own departments (admin only, refused names, limits), people in several departments, older one-department rows, and what tasks and pasted lists do with them.
 
 `audit-finance.test.js` checks returned and reserved refunds, safe restores, late-payment retries, actual receipts, verified membership identity and email quota. `ops-audit.test.js` checks overnight events, archives and backups, spreadsheet booleans, scan-log privacy, failed walk-ins and sign-in revocation. `audit-frontend.test.js` checks older Safari request timeouts, trusted event previews, email-counter refresh, camera shutdown, event navigation and Practice failure screens. `practice.test.js` checks batched fake-data creation, disabled emails, interrupted writes, archived practice events, permissions and removal without affecting real events.
+
+`tasks.test.js` also checks priority (older blank tasks read as Normal, an edit without it keeps it, unknown values refused), Urgent/High labels in Discord posts and check-ins, the task link at the end of new-task posts and bot confirmations (kept whole when a long message is shortened), and `quickAddTask`: priority words (urgent, asap, `!!`, important, high/low priority), `@Casey` for the only active Casey, "with"/"and" before a typed @Name, reminders, the 300/140-character limits, a repeat added once, signed-out and door refusals, and saving when Discord isn't set up. `tasks-ui.test.js` also covers the Priority menu and tags, sorting (priority, then due date, then title; Done newest first), search across notes/labels/checklist, the Person menu (All people, Nobody yet), No tasks match with Clear filters, the Needs attention chips, the Quick add box (sent once with its own ID, never put in the waiting-to-send list, sentence kept when offline), "+ Add task" in Board columns, initials bubbles and the checklist bar on cards, Duplicate, Copy link, opening a `?task=` link, the Add to Google Calendar link, and Board dragging with and without the drag helper (Sortable). `taskpeople-ui.test.js` loads the real Tasks and People scripts to check workload counts, shared assignees, unassigned work, zero-task department members, filters and opening a person's List.
+
+`trackers.test.js` checks that every Teams action refuses signed-out people, other execs, Settings-unlocked non-presidents (`NOT_PRESIDENT`) and inactive presidents, then covers the five templates, field/value limits (30 columns, 30 choices, 30 trackers per department, 2,000 records), stable IDs, retry-safe creation, changed-cell merges, formula-looking text kept as typed, soft removal and Undo, and that removing the Presidents department ends access. `teams-ui.test.js` covers the hidden menu until the server says yes, spaces, tracker/record/column editing (a type change asks first), queued cell saves, CSV, Remove with Undo, Make a task, Add to Google Calendar, connection blips that keep the screen, and loading the libraries only on the first Teams visit (a failed library falls back to plain views). `teams-views.test.js` covers the Table/Board/Calendar views, safe display, edits/moves, failed saves putting the old value back, and the missing-library fallbacks.
 
 Each prints PASS/FAIL lines and exits with an error if anything fails. Run every suite before a deploy:
 

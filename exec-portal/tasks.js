@@ -8,6 +8,9 @@ const TASK_FILTER_KEY = "css_task_filter";
 const TASK_VIEW_KEY = "css_task_view";
 const REM_MAX = 5;
 const CHECK_MAX = 60;
+const TASK_NOBODY = "__nobody__";
+const PRIORITY_RANK = { urgent: 0, high: 1, normal: 2, low: 3 };
+const taskPriority = (task) => Object.prototype.hasOwnProperty.call(PRIORITY_RANK, task && task.priority) ? task.priority : "normal";
 
 /** The departments the server sent, General last. Changed in place, because Settings → People uses the same list. */
 function setTaskDepts(list) {
@@ -21,7 +24,7 @@ const personDepts = (p) => (p && Array.isArray(p.departments) && p.departments.l
 
 const taskState = {
   tasks: [], team: [], discord: {}, loaded: false, request: 0,
-  filter: "mine", view: "list", doneOpen: false, nodateOpen: false,
+  filter: "mine", view: "list", doneOpen: false, nodateOpen: false, search: "", person: "", newStatus: "todo", formLabels: [],
   calMonth: "",       // "yyyy-mm" on show in the calendar
   calDay: "",         // the day listed under the calendar ("yyyy-mm-dd"), or ""
   editing: null,      // the task open in the New/Edit dialog (null = new)
@@ -38,10 +41,13 @@ const taskState = {
   draftBase: "",      // the draft as it was opened, to tell whether anything changed
   formBase: "",       // the New/Edit form as it was opened
   dragId: "",         // the card being dragged on the board
+  sortables: [],      // the board's drag lists (when the drag helper is on the page); remade with each board
+  quick: "",          // the needs-attention chip picked ("" = none); not remembered between visits
+  quickSend: null,    // the quick-add sentence that didn't go through, and its name: { text, clientId }
   mention: { names: [], active: -1, start: -1 }   // the @name suggestions under the update box
 };
 try { taskState.filter = localStorage.getItem(TASK_FILTER_KEY) || "mine"; } catch (e) { /* no storage: start on My tasks */ }
-try { const v = localStorage.getItem(TASK_VIEW_KEY); taskState.view = v === "cal" || v === "board" ? v : "list"; } catch (e) { /* no storage: start on the list */ }
+try { const v = localStorage.getItem(TASK_VIEW_KEY); taskState.view = ["cal", "board", "people"].includes(v) ? v : "list"; } catch (e) { /* no storage: start on the list */ }
 
 // Listing is safe to repeat and runs quietly (the list on screen stays while it refreshes); a status tap changes the screen at once.
 if (typeof READ_ACTIONS !== "undefined") READ_ACTIONS.push("listTasks");
@@ -178,6 +184,7 @@ async function loadTasks() {
   renderOutboxWarn();
   deviceSave("tasks", { tasks: reply.tasks || [], team: reply.team || [], departments: reply.departments || [], discord: reply.discord || {} });
   showTaskList(reply);
+  openLinkedTask();
   if (outboxCount()) flushOutbox();
   if (taskState.openId && $("task-detail-dialog").open) {
     if (taskById(taskState.openId)) renderTaskDetail(); else $("task-detail-dialog").close();
@@ -227,6 +234,15 @@ function renderFilters() {
   select.hidden = !labels.length;
   select.innerHTML = `<option value="">${escapeHtml(T.taskAllLabels)}</option>` +
     labels.map((l) => `<option value="${escapeHtml(l)}"${sameName(l, taskState.label) ? " selected" : ""}>${escapeHtml(l)}</option>`).join("");
+  const names = new Map();
+  activeTeam().forEach((p) => names.set(normName(p.name), p.name));
+  taskState.tasks.forEach((t) => taskOwners(t).forEach((n) => { if (!names.has(normName(n))) names.set(normName(n), n); }));
+  const choices = [["", T.taskAllPeople], ...[...names.values()].sort(byName).map((n) => [n, n])];
+  if (taskState.tasks.some((t) => !taskOwners(t).length)) choices.push([TASK_NOBODY, T.taskNobody]);
+  if (taskState.person && !choices.some(([n]) => sameName(n, taskState.person))) taskState.person = "";
+  $("task-person-filter").innerHTML = choices.map(([n, label]) => `<option value="${escapeHtml(n)}"${sameName(n, taskState.person) ? " selected" : ""}>${escapeHtml(label)}</option>`).join("");
+  $("task-person-filter").disabled = taskState.view === "people";
+  $("task-search").value = taskState.search;
 }
 
 /** Every label used on a task, once each, A to Z. */
@@ -236,10 +252,108 @@ function allLabels() {
   return [...seen.values()].sort((a, b) => a.localeCompare(b));
 }
 
-function filteredTasks() {
+/** opts: ignorePerson (or skipPerson) leaves out the Person menu; ignoreQuick leaves out the needs-attention chip. */
+function filteredTasks(opts = {}) {
   const f = taskState.filter;
-  return taskState.tasks.filter((t) => (f === "all" ? true : f === "mine" ? taskOwners(t).some((name) => sameName(name, state.name)) : t.department === f)
-    && (!taskState.label || taskLabels(t).some((l) => sameName(l, taskState.label))));
+  const words = normName(taskState.search).split(" ").filter(Boolean);
+  const skipPerson = opts.ignorePerson || opts.skipPerson;
+  const quick = opts.ignoreQuick ? "" : taskState.quick;
+  const today = todayMountain();
+  return taskState.tasks.filter((t) => (f === "all" ? true : f === "mine" ? opts.ignoreMine || taskOwners(t).some((name) => sameName(name, state.name)) : t.department === f)
+    && (!taskState.label || taskLabels(t).some((l) => sameName(l, taskState.label)))
+    && (skipPerson || !taskState.person || (taskState.person === TASK_NOBODY ? !taskOwners(t).length : taskOwners(t).some((n) => sameName(n, taskState.person))))
+    && (!quick || taskNeeds(quick, t, today))
+    && words.every((word) => normName([t.title, t.notes, t.department, ...taskOwners(t), ...taskLabels(t), ...taskChecklist(t).map((c) => c.text)].join(" ")).includes(word)));
+}
+
+// ---- Needs attention: a chip per kind of task that needs a look (only the ones with any) ----------------
+
+const TASK_ATTENTION = ["overdue", "week", "blocked", "nobody", "quiet"];
+const QUIET_DAYS = 7;
+
+/** The newest of: last changed, newest update, made. "" when the task has none of them. */
+function taskLastTouched(t) {
+  let best = -Infinity, value = "";
+  [t.updatedAt, t.createdAt, ...(t.updates || []).map((u) => u && u.createdAt)].forEach((v) => {
+    const ms = Date.parse(v);
+    if (ms > best) { best = ms; value = v; }
+  });
+  return value;
+}
+
+/** Does an open task need this kind of attention? today = "yyyy-mm-dd". */
+function taskNeeds(key, t, today) {
+  if (!t || t.status === "done") return false;
+  const due = taskIso(t.due);
+  if (key === "overdue") return !!due && due < today;
+  if (key === "week") return !!due && due >= today && due <= isoAddDays(today, 6);
+  if (key === "blocked") return t.status === "blocked";
+  if (key === "nobody") return !taskOwners(t).length;
+  if (key === "quiet") { const last = taskLastTouched(t); return !!last && isoDaysFrom(mountainDay(last), today) >= QUIET_DAYS; }
+  return false;
+}
+
+/** How many of the tasks passing the other filters need each kind of attention. */
+function attentionCounts() {
+  const today = todayMountain();
+  const list = filteredTasks({ ignoreQuick: true, ignorePerson: taskState.view === "people" });
+  const counts = {};
+  TASK_ATTENTION.forEach((k) => { counts[k] = list.filter((t) => taskNeeds(k, t, today)).length; });
+  return counts;
+}
+
+function renderAttention() {
+  const box = $("task-attention");
+  if (!box) return;
+  const counts = attentionCounts();
+  // The picked chip stays even with none left, so it can always be tapped off.
+  const shown = TASK_ATTENTION.filter((k) => counts[k] > 0 || k === taskState.quick);
+  box.hidden = !shown.length;
+  box.innerHTML = shown.map((k) => {
+    const on = k === taskState.quick;
+    return `<button type="button" class="chip att-${k}${on ? " active" : ""}" data-task-quick="${k}" aria-pressed="${on}">${escapeHtml(T.taskAttention[k])} <span class="task-count">${counts[k]}</span></button>`;
+  }).join("");
+}
+
+function pickAttention(key) {
+  if (!TASK_ATTENTION.includes(key)) return;
+  taskState.quick = taskState.quick === key ? "" : key;
+  closeStatusMenu();
+  renderTasks();
+}
+
+function showPersonTasks(name) {
+  taskState.person = name;
+  taskState.filter = "all";
+  taskState.view = "list";
+  try { localStorage.setItem(TASK_VIEW_KEY, "list"); } catch (e) { /* no storage */ }
+  closeStatusMenu();
+  renderTasks();
+}
+
+function clearTaskFilters() {
+  taskState.search = ""; taskState.person = ""; taskState.label = ""; taskState.quick = ""; taskState.filter = "all";
+  renderTasks();
+}
+
+const taskInitials = (name) => String(name || "").trim().split(/\s+/).filter(Boolean).map((s) => s[0]).slice(0, 2).join("").toUpperCase();
+function avatarHtml(names) {
+  const list = (Array.isArray(names) ? names : [names]).filter(Boolean).slice().sort(byName);
+  if (!list.length) return `<span class="board-people">${escapeHtml(T.taskNobody)}</span>`;
+  return `<span class="task-avatars" role="img" aria-label="${escapeHtml(list.join(", "))}" title="${escapeHtml(list.join(", "))}">${list.slice(0, 3).map((n) => `<span class="task-avatar" aria-hidden="true">${escapeHtml(taskInitials(n))}</span>`).join("")}${list.length > 3 ? `<span class="task-avatar-more" aria-hidden="true">+${list.length - 3}</span>` : ""}</span>`;
+}
+function priorityChip(task) {
+  const p = taskPriority(task);
+  return p === "normal" || task.status === "done" ? "" : `<span class="task-priority priority-${p}">${escapeHtml(T.taskPriorities[p])}</span>`;
+}
+const taskByPriorityDue = (a, b) => PRIORITY_RANK[taskPriority(a)] - PRIORITY_RANK[taskPriority(b)] || (taskIso(a.due) || "9999").localeCompare(taskIso(b.due) || "9999") || String(a.title).localeCompare(String(b.title));
+/** Done: the most recently finished first. */
+const doneTime = (t) => Date.parse(t.doneAt || t.updatedAt) || 0;
+const taskByNewestDone = (a, b) => doneTime(b) - doneTime(a) || String(a.title).localeCompare(String(b.title));
+
+function fillPrioritySelect(id, priority) {
+  $(id).innerHTML = Object.keys(PRIORITY_RANK).map((p) => `<option value="${p}">${escapeHtml(T.taskPriorities[p])}</option>`).join("");
+  $(id).value = taskPriority({ priority });
 }
 
 const taskLabels = (t) => Array.isArray(t.labels) ? t.labels.filter((l) => String(l || "").trim()) : [];
@@ -274,6 +388,7 @@ function taskGroupKey(task) {
 
 function renderTasks() {
   renderFilters();
+  renderAttention();
   const d = taskState.discord || {};
   const remind = $("task-remind-button");
   remind.disabled = !d.posting;
@@ -282,22 +397,26 @@ function renderTasks() {
   $("task-discord-warn").hidden = !d.error;
   $("task-discord-warn").textContent = d.error || "";
 
-  const cal = taskState.view === "cal", board = taskState.view === "board";
-  $("task-groups").hidden = cal || board;
+  const cal = taskState.view === "cal", board = taskState.view === "board", people = taskState.view === "people";
+  $("task-groups").hidden = cal || board || people;
   $("task-cal").hidden = !cal;
   $("task-board").hidden = !board;
+  $("task-people").hidden = !people;
+  $("task-no-match").hidden = true;
+  if (!board) stopBoardSortables();
+  if (people) { $("task-empty").hidden = true; if (typeof renderTaskPeople === "function") renderTaskPeople(); return; }
   if (cal) { $("task-empty").hidden = true; return renderCalendar(); }
   if (board) { $("task-empty").hidden = true; return renderBoard(); }
 
   const list = filteredTasks();
   const groups = { overdue: [], week: [], later: [], nodate: [], done: [] };
   list.forEach((t) => groups[taskGroupKey(t)].push(t));
-  const byDue = (a, b) => taskIso(a.due).localeCompare(taskIso(b.due)) || String(a.title).localeCompare(String(b.title));
-  ["overdue", "week", "later"].forEach((k) => groups[k].sort(byDue));
-  groups.nodate.sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
-  groups.done.sort((a, b) => String(b.doneAt || b.updatedAt || "").localeCompare(String(a.doneAt || a.updatedAt || "")));
+  ["overdue", "week", "later", "nodate"].forEach((k) => groups[k].sort(taskByPriorityDue));
+  groups.done.sort(taskByNewestDone);
 
-  $("task-empty").hidden = !taskState.loaded || list.length > 0;
+  const filtersOn = !!(taskState.search || taskState.person || taskState.label || taskState.quick);
+  $("task-empty").hidden = !taskState.loaded || list.length > 0 || filtersOn;
+  $("task-no-match").hidden = !taskState.loaded || list.length > 0 || !filtersOn;
   $("task-groups").innerHTML = ["overdue", "week", "later", "nodate"].filter((k) => groups[k].length).map((k) => `
     <section class="task-group g-${k}">
       <h2 class="task-group-h">${escapeHtml(T.taskGroups[k])} <span class="task-count">${groups[k].length}</span></h2>
@@ -315,7 +434,7 @@ function taskRow(t) {
   return `<li class="task-row st-${status}" data-task-id="${escapeHtml(t.id)}" tabindex="0">
     <div class="task-main">
       <div class="task-title">${escapeHtml(t.title)}</div>
-      <div class="task-meta">${notSentChip(t)}<span>${escapeHtml(ownersShort(t) || T.taskNobody)}</span>${dueChip(t)}${reminderChip(t)}${checkChip(t)}${taskLabels(t).map(labelChip).join("")}</div>
+      <div class="task-meta">${priorityChip(t)}${notSentChip(t)}<span>${escapeHtml(ownersShort(t) || T.taskNobody)}</span>${dueChip(t)}${reminderChip(t)}${checkChip(t)}${taskLabels(t).map(labelChip).join("")}</div>
       ${note ? `<div class="task-last">${note.source === "discord" ? discordMark() : ""}<span>${escapeHtml(note.text)}</span></div>` : ""}
     </div>
     <button type="button" class="task-status st-${status}" data-status-for="${escapeHtml(t.id)}" aria-haspopup="menu">${escapeHtml(statusLabel(status))}</button>
@@ -328,21 +447,66 @@ function renderBoard() {
   const today = todayMountain();
   const cols = { todo: [], doing: [], blocked: [], done: [] };
   filteredTasks().forEach((t) => (cols[TASK_STATUSES.includes(t.status) ? t.status : "todo"]).push(t));
-  const byDue = (a, b) => (taskIso(a.due) || "9999").localeCompare(taskIso(b.due) || "9999") || String(a.title).localeCompare(String(b.title));
-  ["todo", "doing", "blocked"].forEach((s) => cols[s].sort(byDue));
-  cols.done.sort((a, b) => String(b.doneAt || b.updatedAt || "").localeCompare(String(a.doneAt || a.updatedAt || "")));
+  ["todo", "doing", "blocked"].forEach((s) => cols[s].sort(taskByPriorityDue));
+  cols.done.sort(taskByNewestDone);
+  stopBoardSortables();
   $("task-board").innerHTML = TASK_STATUSES.map((s) => `
     <section class="board-col st-${s}" data-board-status="${s}">
       <h2 class="board-h"><span class="task-status st-${s} mini">${escapeHtml(statusLabel(s))}</span> <span class="task-count">${cols[s].length}</span></h2>
-      <ul class="board-cards">${cols[s].map((t) => boardCard(t, today)).join("")}</ul>
+      <ul class="board-cards" data-board-list="${s}">${cols[s].map((t) => boardCard(t, today)).join("")}</ul>
+      ${s !== "done" ? `<button class="board-add" type="button" data-add-status="${s}">+ ${escapeHtml(T.taskAdd)}</button>` : ""}
     </section>`).join("");
+  startBoardSortables();
+}
+
+/*
+ * Dragging cards. With the drag helper (Sortable) on the page, it does the dragging, on computers and phones alike: on a
+ * phone, press and hold a card for a moment, then drag it (a quick swipe still scrolls the board). Without it, computers
+ * use the browser's own dragging (setUpBoardDrag below). Never both at once, so a card can't be moved twice.
+ */
+const hasSortable = () => typeof Sortable === "function";
+
+function stopBoardSortables() {
+  taskState.sortables.forEach((s) => { try { s.destroy(); } catch (e) { /* already gone with the old board */ } });
+  taskState.sortables = [];
+}
+
+function startBoardSortables() {
+  if (!hasSortable()) return;
+  const board = $("task-board");
+  if (!board || typeof board.querySelectorAll !== "function") return;
+  board.querySelectorAll("[data-board-list]").forEach((list) => {
+    taskState.sortables.push(Sortable.create(list, {
+      group: "task-board",
+      sort: false,                 // the order in a column is set by priority and due date
+      draggable: ".board-card",
+      filter: ".board-add",
+      preventOnFilter: false,      // "+ Add task" stays an ordinary button
+      delay: 180,
+      delayOnTouchOnly: true,
+      animation: 150,
+      ghostClass: "dragging",
+      scrollSensitivity: 60,       // near the edge of a phone screen the board scrolls to the next column
+      onStart: () => board.classList.add("board-dragging"),
+      onEnd: (evt) => {
+        board.classList.remove("board-dragging");
+        if (!evt || evt.from === evt.to || !evt.item) return;
+        const id = evt.item.getAttribute("data-task-id");
+        const status = evt.to.getAttribute("data-board-list");
+        // After the drag helper has finished; the board is then drawn again in the right order.
+        setTimeout(() => changeTaskStatus(id, status), 0);
+      }
+    }));
+  });
 }
 
 function boardCard(t, today) {
-  return `<li class="board-card st-${escapeHtml(t.status)}${taskIsOverdue(t, today) ? " overdue" : ""}" data-task-id="${escapeHtml(t.id)}" tabindex="0" draggable="true">
+  const checklist = taskChecklist(t), complete = checklist.filter((c) => c.done).length;
+  return `<li class="board-card st-${escapeHtml(t.status)}${taskIsOverdue(t, today) ? " overdue" : ""}" data-task-id="${escapeHtml(t.id)}" tabindex="0"${hasSortable() ? "" : ' draggable="true"'}>
     ${taskLabels(t).length ? `<div class="board-labels">${taskLabels(t).map(labelChip).join("")}</div>` : ""}
     <div class="task-title">${escapeHtml(t.title)}</div>
-    <div class="task-meta">${notSentChip(t)}${dueChip(t)}${checkChip(t)}<span class="board-people">${escapeHtml(ownersShort(t) || T.taskNobody)}</span></div>
+    <div class="task-meta">${priorityChip(t)}${notSentChip(t)}${dueChip(t)}${checkChip(t)}${avatarHtml(taskOwners(t))}</div>
+    ${checklist.length ? `<div class="task-progress" role="progressbar" aria-label="${escapeHtml(T.taskChecklist)}" aria-valuemin="0" aria-valuemax="${checklist.length}" aria-valuenow="${complete}"><span style="width:${Math.round(complete / checklist.length * 100)}%"></span></div>` : ""}
   </li>`;
 }
 
@@ -350,6 +514,7 @@ function setUpBoardDrag() {
   const board = $("task-board");
   const clearOver = () => board.querySelectorAll(".board-col.drop").forEach((c) => c.classList.remove("drop"));
   board.addEventListener("dragstart", (e) => {
+    if (hasSortable()) return;   // the drag helper is moving it
     const card = e.target.closest(".board-card");
     if (!card) return;
     taskState.dragId = card.dataset.taskId;
@@ -377,12 +542,14 @@ function setUpBoardDrag() {
     const col = e.target.closest("[data-board-status]");
     const id = taskState.dragId;
     clearOver();
-    if (!col || !id) return;
+    if (!col || !id || hasSortable()) return;
     e.preventDefault();
     taskState.dragId = "";
     changeTaskStatus(id, col.dataset.boardStatus);
   });
   board.addEventListener("click", (e) => {
+    const add = e.target.closest("[data-add-status]");
+    if (add) return openTaskDialog(null, "", add.dataset.addStatus);
     const card = e.target.closest("[data-task-id]");
     if (card) openTaskDetail(card.dataset.taskId);
   });
@@ -581,12 +748,12 @@ function applyLocal(item) {
     let t = taskById(f.id || f.clientId);
     if (!t) {
       if (!f.clientId) return;
-      t = { id: f.clientId, status: "todo", createdBy: state.name, createdAt: item.at, updates: [], doneAt: "", checklist: [], labels: [], remind: [] };
+      t = { id: f.clientId, status: f.status || "todo", priority: "normal", createdBy: state.name, createdAt: item.at, updates: [], doneAt: "", checklist: [], labels: [], remind: [] };
       taskState.tasks.push(t);
     }
-    ["title", "due", "department", "notes", "link", "remind", "labels", "checklist"].forEach((k) => { if (f[k] !== undefined) t[k] = f[k]; });
+    ["title", "due", "department", "priority", "notes", "link", "remind", "labels", "checklist"].forEach((k) => { if (f[k] !== undefined) t[k] = f[k]; });
     if (f.owners) { t.owners = f.owners.slice(); t.owner = f.owners[0] || ""; }
-    if (f.status && f.id) showStatus(t, f.status);
+    if (f.status) showStatus(t, f.status);
     t.sending = true;
   }
 }
@@ -918,15 +1085,18 @@ function syncQuickChips() {
 }
 
 /** task: the task to edit, or null for a new one. due: a starting due date for a new one (from the calendar). */
-function openTaskDialog(task, due) {
+function openTaskDialog(task, due, status = "todo") {
   closeStatusMenu();
   taskState.editing = task || null;
+  taskState.newStatus = TASK_STATUSES.includes(status) ? status : "todo";
+  taskState.formLabels = task ? taskLabels(task).slice() : [];
   taskState.deptTouched = !!task;
   $("task-dialog-title").textContent = task ? T.taskDialogEdit : T.taskDialogNew;
   $("tk-save").textContent = task ? T.taskSave : T.taskAdd;
   $("tk-save").disabled = false;
   $("tk-error").hidden = true;
   $("tk-title").value = task ? task.title || "" : "";
+  fillPrioritySelect("tk-priority", taskPriority(task));
   const deptFilter = TASK_DEPTS.includes(taskState.filter) ? taskState.filter : "";
   const me = teamPerson(state.name);
   taskState.owners = task ? taskOwners(task).slice() : [me ? me.name.trim() : String(state.name || "").trim()].filter(Boolean);
@@ -955,7 +1125,7 @@ function openTaskDialog(task, due) {
 /** Everything in the New/Edit form, to tell whether something was changed. */
 function taskFormSnapshot() {
   return JSON.stringify([$("tk-title").value.trim(), taskState.owners, taskState.checklist, $("tk-owner").value.trim(), $("tk-due").value, $("tk-dept").value,
-    readReminderRows(), $("tk-notes").value.trim(), $("tk-link").value.trim()]);
+    readReminderRows(), $("tk-notes").value.trim(), $("tk-link").value.trim(), $("tk-priority").value]);
 }
 
 /** Cancel, Escape or a tap outside the New/Edit form: closes it, asking first when something was changed. */
@@ -990,6 +1160,8 @@ async function onTaskSubmit(event) {
     link: $("tk-link").value.trim(),
     remind: rows.map(cleanReminder)
   };
+  if (!editing || $("tk-priority").value !== taskPriority(editing)) task.priority = $("tk-priority").value;
+  if (!editing) { task.status = taskState.newStatus; task.labels = taskState.formLabels.slice(); }
   // Name lines added with Everyone / a department (or taken off with a person): sent only when they changed.
   if (editing ? JSON.stringify(taskState.checklist) !== taskState.checklistBase : taskState.checklist.length) task.checklist = taskState.checklist.map((c) => ({ ...c }));
   // A new task gets its name here, so it can show straight away and a repeat send is never added twice.
@@ -1012,7 +1184,7 @@ async function onTaskSubmit(event) {
  * Closing it any other way (Close, Escape, a tap outside it) with changes asks first. Posting an update is saved at once.
  */
 function draftOf(task) {
-  const draft = { status: task.status, owners: taskOwners(task).slice(), labels: taskLabels(task).slice(),
+  const draft = { status: task.status, priority: taskPriority(task), owners: taskOwners(task).slice(), labels: taskLabels(task).slice(),
     checklist: taskChecklist(task).map((c) => ({ id: c.id || "", text: c.text, done: !!c.done })) };
   sortPeople(draft.owners, draft.checklist);   // shown A to Z (the draft's starting point is sorted too, so this alone isn't a change)
   return draft;
@@ -1037,6 +1209,8 @@ function openTaskDetail(id) {
   $("td-person").value = "";
   $("td-label").value = "";
   $("td-check-new").value = "";
+  $("td-copy-link").textContent = T.taskCopyLink;
+  $("td-link-fallback").hidden = true;
   renderTaskDetail();
   $("task-detail-dialog").showModal();
   // Ready to type an update on a computer; on a touch screen don't pop the keyboard up.
@@ -1066,8 +1240,14 @@ function renderTaskDetail() {
     `<span class="muted">${escapeHtml(t.department || "General")}</span>`, link].filter(Boolean).join("");
   $("td-notes").hidden = !t.notes;
   $("td-notes").textContent = t.notes || "";
+  let here = "";
+  try { here = taskLink(t.id); } catch (e) { /* no address to link back to */ }
+  const gcal = googleCalendarUrl(t.title, taskIso(t.due), here);
+  $("td-gcal").hidden = !gcal;
+  if (gcal) $("td-gcal").href = gcal; else $("td-gcal").removeAttribute("href");
   $("td-status").innerHTML = TASK_STATUSES.map((s) =>
     `<button type="button" class="chip${s === d.status ? " active" : ""}" data-detail-status="${s}" aria-pressed="${s === d.status}">${escapeHtml(statusLabel(s))}</button>`).join("");
+  fillPrioritySelect("td-priority", d.priority);
   // People and labels: a chip each (× takes it off), then "+ Add"
   $("td-people").innerHTML = d.owners.map((n, i) =>
     `<button type="button" class="chip td-chip" data-remove-person="${i}" aria-label="${escapeHtml(T.taskOwnerRemove + " " + n)}">${escapeHtml(n)} <span aria-hidden="true">×</span></button>`).join("") +
@@ -1161,7 +1341,7 @@ async function saveTaskDetail() {
   if (!draftChanged()) return $("task-detail-dialog").close();
   const base = JSON.parse(taskState.draftBase);
   const task = { id };
-  ["status", "owners", "labels", "checklist"].forEach((k) => { if (JSON.stringify(d[k]) !== JSON.stringify(base[k])) task[k] = d[k]; });
+  ["status", "priority", "owners", "labels", "checklist"].forEach((k) => { if (JSON.stringify(d[k]) !== JSON.stringify(base[k])) task[k] = d[k]; });
   if (task.status) {
     task.from = base.status;   // so it can't undo someone else's newer change
     const p = taskState.pending[id];
@@ -1261,7 +1441,155 @@ async function removeOpenTask() {
   showToast(T.taskRemoved);
 }
 
+// ---- Quick add: one sentence ("posters for AGM by friday @Chris") that the server reads ------------------
+// It needs the server to read the sentence, so it is not kept on this device and never sent again on a guess: if it
+// doesn't go through, the sentence stays in the box. (New task works without a connection.)
+
+async function sendQuickAdd(event) {
+  if (event && event.preventDefault) event.preventDefault();
+  const box = $("task-quick-add");
+  const text = String(box.value || "").trim().replace(/\s+/g, " ");
+  if (!text || box.disabled) return;
+  // The same sentence sent again after a failure keeps its name, so the server can never add it twice.
+  const again = taskState.quickSend && taskState.quickSend.text === text;
+  const clientId = again ? taskState.quickSend.clientId : newLocalId("TK");
+  taskState.quickSend = { text, clientId };
+  box.disabled = true;
+  let reply;
+  try { reply = await api("quickAddTask", { text, clientId }); } catch (e) { reply = null; } finally { box.disabled = false; }
+  reply = reply || { ok: false, error: "DEFAULT" };
+  if (!reply.ok) {
+    if (taskSignedOut(reply)) return;
+    showToast(reply.error === "NETWORK" ? T.taskQuickOffline : errorText(reply));
+    box.focus();
+    return;
+  }
+  taskState.quickSend = null;
+  box.value = "";
+  const saved = reply.task;
+  if (saved && saved.id) {
+    const i = taskState.tasks.findIndex((t) => t.id === saved.id);
+    const task = { updates: [], ...saved };
+    if (i >= 0) taskState.tasks[i] = task; else taskState.tasks.push(task);
+  }
+  if (Array.isArray(reply.team)) taskState.team = reply.team;
+  renderTasks();
+  showToast(quickAddedText(reply), "success");
+  if (!matchMedia("(pointer: coarse)").matches) box.focus();   // ready for the next one (a phone keeps its keyboard down)
+}
+
+/** "Task added: Posters for AGM · Chris · Fri, Nov 28. Posted on Discord." */
+function quickAddedText(reply) {
+  const q = reply.quick || {}, t = reply.task || {};
+  const title = String(q.title || t.title || "").trim();
+  const owners = Array.isArray(q.owners) ? q.owners : taskOwners(t);
+  const due = taskIso(q.due !== undefined ? q.due : t.due);
+  const when = due ? isoText(due, { weekday: "short", month: "short", day: "numeric" }) : T.taskQuickNoDate;
+  const parts = [T.taskQuickAdded(title, ownersShort({ owners }) || T.taskNobody, when)];
+  if (reply.discordPosted) parts.push(T.taskQuickPosted);
+  else if ((taskState.discord || {}).posting) parts.push(T.taskQuickNotPosted);
+  if (q.remindNeedsDue) parts.push(T.taskQuickRemindNeedsDue);
+  return parts.join(" ");
+}
+
 // ---- Remind on Discord ---------------------------------------------------------------------------------
+
+/**
+ * The New task window filled in from a task-like object (Duplicate, or a preset from Teams): a NEW task, To do, with
+ * the checklist unticked. Nothing is saved until Add task. keepDept: the department stays when people are picked.
+ */
+function openNewTaskFrom(source, keepDept = true) {
+  openTaskDialog(source);
+  taskState.editing = null;
+  taskState.newStatus = "todo";
+  taskState.deptTouched = keepDept;
+  taskState.checklist = taskChecklist(source).map((c) => ({ id: "", text: c.text, done: false }));
+  sortPeople(taskState.owners, taskState.checklist);
+  taskState.checklistBase = "[]";
+  $("task-dialog-title").textContent = T.taskDialogNew;
+  $("tk-save").textContent = T.taskAdd;
+  syncQuickChips();
+  taskState.formBase = taskFormSnapshot();   // closing it untouched doesn't ask
+}
+
+/** Duplicate saved details into a new task (no due date, "(copy)" on the name); nothing is saved until Add task. */
+async function duplicateOpenTask() {
+  const t = taskById(taskState.openId);
+  if (!t || !(await closeTaskDetail())) return;
+  openNewTaskFrom({ ...t, title: String(t.title || "").slice(0, 140 - T.taskCopySuffix.length) + T.taskCopySuffix, due: "", remind: remindersOf(t) });
+}
+
+/**
+ * For other tabs (Teams): go to Tasks and open the New task window filled in from
+ * preset { title, due, owners, department, notes, priority, labels, checklist } (any can be left out).
+ * Nothing is saved until Add task. Answers whether the window opened (not when leaving the other tab was cancelled).
+ */
+async function newTaskFrom(preset) {
+  const p = preset && typeof preset === "object" ? preset : {};
+  const tab = document.querySelector('.tab[data-tab="tasks"]');
+  if (typeof switchTab === "function") await switchTab("tasks");
+  else if (tab && typeof tab.click === "function") tab.click();
+  if (tab && tab.classList && typeof tab.classList.contains === "function" && !tab.classList.contains("active")) return false;
+  const clean = (v, max) => String(v == null ? "" : v).trim().replace(/\s+/g, " ").slice(0, max);
+  const unique = (list) => [...new Map(list.map((x) => [normName(x), x])).values()];
+  // The people given (spelled as on People), A to Z. Nobody given: you, as with New task.
+  const me = teamPerson(state.name);
+  const given = unique((Array.isArray(p.owners) ? p.owners : []).map((n) => clean(n, 60)).filter(Boolean)
+    .map((n) => { const person = teamPerson(n); return person ? person.name.trim() : n; }));
+  const owners = given.length ? given : [me ? me.name.trim() : clean(state.name, 60)].filter(Boolean);
+  const deptGiven = clean(p.department, 60) !== "";
+  const deptFilter = TASK_DEPTS.includes(taskState.filter) ? taskState.filter : "";
+  const department = deptGiven ? TASK_DEPTS.find((d) => sameName(d, p.department)) || "General" : deptFilter || deptFor(owners[0]);
+  const labels = unique((Array.isArray(p.labels) ? p.labels : []).map((l) => clean(l, 24)).filter(Boolean)
+    .map((l) => allLabels().find((x) => sameName(x, l)) || l)).slice(0, 6);
+  const checklist = (Array.isArray(p.checklist) ? p.checklist : []).map((c) => clean(c && typeof c === "object" ? c.text : c, 200))
+    .filter(Boolean).slice(0, CHECK_MAX).map((text) => ({ id: "", text, done: false }));
+  openNewTaskFrom({ title: clean(p.title, 140), due: taskIso(p.due), owners, department, notes: String(p.notes == null ? "" : p.notes).trim().slice(0, 1000),
+    link: "", remind: [], priority: taskPriority(p), labels, checklist }, deptGiven || !!deptFilter);
+  return true;
+}
+
+/** A Google Calendar "add event" link: an all-day event on that day ("yyyy-mm-dd"), or "" for anything else. Teams uses it too. */
+function googleCalendarUrl(title, day, details) {
+  const iso = String(day == null ? "" : day);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return "";
+  const start = isoDate(iso);
+  if (isNaN(start) || start.toISOString().slice(0, 10) !== iso) return "";   // e.g. Feb 30
+  const dates = iso.replace(/-/g, "") + "/" + isoAddDays(iso, 1).replace(/-/g, "");
+  return "https://calendar.google.com/calendar/render?action=TEMPLATE&text=" + encodeURIComponent(String(title == null ? "" : title)) +
+    "&dates=" + encodeURIComponent(dates) + (details ? "&details=" + encodeURIComponent(String(details)) : "");
+}
+
+function taskLink(id) {
+  const url = new URL(location.href);
+  url.search = ""; url.hash = "";
+  url.searchParams.set("task", id);
+  return url.href;
+}
+async function copyTaskLink() {
+  if (!taskState.openId) return;
+  const url = taskLink(taskState.openId);
+  try {
+    await navigator.clipboard.writeText(url);
+    $("td-copy-link").textContent = T.taskLinkCopied;
+  } catch (e) {
+    $("td-link-fallback").value = url;
+    $("td-link-fallback").hidden = false;
+    $("td-link-fallback").focus();
+    if ($("td-link-fallback").select) $("td-link-fallback").select();
+    $("td-copy-link").textContent = T.taskLinkSelect;
+  }
+}
+
+/** Only called after a fresh successful list, so a stale saved copy cannot say a task is gone. */
+function openLinkedTask() {
+  let id = "";
+  try { id = new URLSearchParams(location.search).get("task") || ""; } catch (e) { return; }
+  if (!id) return;
+  try { const url = new URL(location.href); url.searchParams.delete("task"); history.replaceState(null, "", url.href); } catch (e) { /* still opens the task */ }
+  if (taskById(id)) openTaskDetail(id);
+  else showToast(T.taskGone);
+}
 
 async function remindOnDiscord() {
   if (!(await askConfirm(T.taskRemindConfirm, T.taskRemindYes))) return;
@@ -1301,11 +1629,30 @@ function onTaskListKey(e) {
   $("task-empty-new").addEventListener("click", () => openTaskDialog(null));
   $("task-refresh").addEventListener("click", loadTasks);
   $("task-remind-button").addEventListener("click", remindOnDiscord);
+  $("task-search").placeholder = T.taskSearch;
+  $("task-search").setAttribute("aria-label", T.taskSearch);
+  $("task-search").addEventListener("input", () => { taskState.search = $("task-search").value; closeStatusMenu(); renderTasks(); });
+  $("task-person-filter").setAttribute("aria-label", T.taskPersonFilter);
+  $("task-person-filter").addEventListener("change", () => {
+    taskState.person = $("task-person-filter").value;
+    if (taskState.person && taskState.filter === "mine") taskState.filter = "all";
+    closeStatusMenu(); renderTasks();
+  });
+  $("task-clear-filters").addEventListener("click", clearTaskFilters);
+  $("task-quick-add").placeholder = T.taskQuickPlaceholder;
+  $("task-quick-add").setAttribute("aria-label", T.taskQuickLabel);
+  $("task-quick-form").addEventListener("submit", sendQuickAdd);
+  $("task-attention").setAttribute("aria-label", T.taskAttentionLabel);
+  $("task-attention").addEventListener("click", (e) => {
+    const chip = e.target.closest("[data-task-quick]");
+    if (chip) pickAttention(chip.dataset.taskQuick);
+  });
 
   $("task-filters").addEventListener("click", (e) => {
     const chip = e.target.closest("[data-task-filter]");
     if (!chip) return;
     taskState.filter = chip.dataset.taskFilter;
+    if (taskState.filter === "mine") taskState.person = "";
     try { localStorage.setItem(TASK_FILTER_KEY, taskState.filter); } catch (err) { /* not remembered: fine */ }
     closeStatusMenu();
     renderTasks();
@@ -1456,6 +1803,10 @@ function onTaskListKey(e) {
     openTaskDialog(t);
   });
   $("td-remove").addEventListener("click", removeOpenTask);
+  $("td-duplicate").addEventListener("click", duplicateOpenTask);
+  $("td-copy-link").addEventListener("click", copyTaskLink);
+  $("td-link-fallback").setAttribute("aria-label", T.taskCopyLink);
+  $("td-priority").addEventListener("change", () => { if (taskState.draft) { taskState.draft.priority = $("td-priority").value; renderDraftButton(); } });
   $("td-status").addEventListener("click", (e) => {
     const b = e.target.closest("[data-detail-status]");
     if (!b || !taskState.draft) return;
